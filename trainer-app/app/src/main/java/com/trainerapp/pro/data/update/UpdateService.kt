@@ -57,6 +57,44 @@ class UpdateService(private val context: Context) {
     suspend fun checkForUpdates(): Result<UpdateCheckResult> = withContext(Dispatchers.IO) {
         try {
             val currentVersionName = getCurrentVersionName()
+
+            // 1. Приоритетно проверяем обновление через Google Диск (AES-256)
+            try {
+                val endpoint = com.trainerapp.pro.data.sync.CloudSecurityManager.getEndpointUrl()
+                val secretKey = com.trainerapp.pro.data.sync.CloudSecurityManager.getSecretKey()
+                val encodedKey = java.net.URLEncoder.encode(secretKey, "UTF-8")
+                val gDriveUrl = "$endpoint?key=$encodedKey"
+
+                val rawCloud = httpGet(gDriveUrl)
+                val decryptedJson = com.trainerapp.pro.data.sync.CloudSecurityManager.decryptPayload(rawCloud)
+
+                if (decryptedJson.isNotBlank() && decryptedJson != "{}") {
+                    val root = com.google.gson.JsonParser.parseString(decryptedJson).asJsonObject
+                    if (root.has("updates")) {
+                        val updatesNode = root.getAsJsonObject("updates")
+                        val remoteVersion = updatesNode.get("trainerVersion")?.asString?.removePrefix("v")?.trim() ?: ""
+                        val downloadUrl = updatesNode.get("trainerUrl")?.asString
+                        val notes = updatesNode.get("notes")?.asString ?: "Новое обновление доступно на Google Диске"
+
+                        if (remoteVersion.isNotBlank()) {
+                            val isNewer = isVersionNewer(remoteVersion, currentVersionName)
+                            return@withContext Result.success(
+                                UpdateCheckResult(
+                                    isUpdateAvailable = isNewer,
+                                    currentVersion = currentVersionName,
+                                    latestVersion = remoteVersion,
+                                    releaseNotes = notes,
+                                    downloadUrl = downloadUrl
+                                )
+                            )
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // Если Google Диск недоступен, выполняем переключение на GitHub API
+            }
+
+            // 2. Резервный источник: GitHub API
             val apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
             val url = URL(apiUrl)
             val conn = url.openConnection() as HttpURLConnection
@@ -96,6 +134,33 @@ class UpdateService(private val context: Context) {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun httpGet(urlStr: String): String {
+        var currentUrl = urlStr
+        var redirects = 0
+        while (redirects < 5) {
+            val conn = URL(currentUrl).openConnection() as HttpURLConnection
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            conn.instanceFollowRedirects = true
+            conn.requestMethod = "GET"
+
+            val code = conn.responseCode
+            if (code in 300..308) {
+                val loc = conn.getHeaderField("Location") ?: break
+                currentUrl = loc
+                redirects++
+                continue
+            }
+
+            return if (code in 200..299) {
+                conn.inputStream.bufferedReader().readText()
+            } else {
+                ""
+            }
+        }
+        return ""
     }
 
     fun downloadAndInstallApk(downloadUrl: String) {
