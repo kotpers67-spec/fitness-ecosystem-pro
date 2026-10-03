@@ -24,7 +24,7 @@ function escapeHtml(str) {
 
 // 2. Anti-SQL Injection Defense: Strict Input Validation Patterns
 const VALIDATION_PATTERNS = {
-  username: /^[a-zA-Z0-9_\-\.]{3,30}$/,
+  username: /^[\p{L}\p{N}_\-\.]{3,30}$/u,
   pairingCode: /^\d{6}$/,
   emailOrPhone: /^[a-zA-Z0-9_\-\.\+@]{3,60}$/,
   safeString: /^[\p{L}\p{N}\s\-_,\.!?()#+]{1,120}$/u,

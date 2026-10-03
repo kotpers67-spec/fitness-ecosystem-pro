@@ -97,16 +97,19 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/register' && req.method === 'POST') {
         const body = await parseJsonBody(req);
         const { username, password, role, fullName, phone } = body;
+        const cleanUsername = String(username || '').trim();
+        const cleanFullName = String(fullName || '').trim();
+        const cleanPhone = phone ? String(phone).trim() : '';
 
         // Anti-Injection & Strict Validation
-        if (!username || !password || !role || !fullName) {
+        if (!cleanUsername || !password || !role || !cleanFullName) {
           return sendError(res, 400, 'Заполните все обязательные поля');
         }
-        if (hasSqlInjectionVector(username) || hasSqlInjectionVector(fullName)) {
+        if (hasSqlInjectionVector(cleanUsername) || hasSqlInjectionVector(cleanFullName)) {
           return sendError(res, 400, 'Обнаружены недопустимые символы или попытка инъекции.');
         }
-        if (!VALIDATION_PATTERNS.username.test(username)) {
-          return sendError(res, 400, 'Логин должен содержать от 3 до 30 латинских букв или цифр');
+        if (!VALIDATION_PATTERNS.username.test(cleanUsername)) {
+          return sendError(res, 400, 'Логин должен содержать от 3 до 30 букв или цифр (латиница или кириллица)');
         }
         if (typeof password !== 'string' || password.length < 6) {
           return sendError(res, 400, 'Пароль должен быть не короче 6 символов');
@@ -115,7 +118,7 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 400, 'Роль должна быть athlete или trainer');
         }
 
-        const existing = db.findUserByUsername(username);
+        const existing = db.findUserByUsername(cleanUsername);
         if (existing) {
           return sendError(res, 409, 'Пользователь с таким логином уже существует');
         }
@@ -127,17 +130,17 @@ const server = http.createServer(async (req, res) => {
         }
 
         const passwordHash = hashPassword(password);
-        const cleanFullName = escapeHtml(fullName.trim());
-        const cleanPhone = phone ? escapeHtml(phone.trim()) : '';
+        const escapedFullName = escapeHtml(cleanFullName);
+        const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
 
-        const userId = db.createUser(username, passwordHash, role, cleanFullName, cleanPhone, pairingCode);
+        const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode);
         const token = generateToken();
         db.createAuthToken(token, userId);
 
         return sendJson(res, 201, {
           success: true,
           token,
-          user: { id: userId, username, role, fullName: cleanFullName, phone: cleanPhone, pairingCode }
+          user: { id: userId, username: cleanUsername, role, fullName: escapedFullName, phone: escapedPhone, pairingCode }
         });
       }
 
@@ -145,15 +148,16 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/login' && req.method === 'POST') {
         const body = await parseJsonBody(req);
         const { username, password } = body;
+        const cleanUsername = String(username || '').trim();
 
-        if (!username || !password) {
+        if (!cleanUsername || !password) {
           return sendError(res, 400, 'Введите логин и пароль');
         }
-        if (hasSqlInjectionVector(username)) {
+        if (hasSqlInjectionVector(cleanUsername)) {
           return sendError(res, 400, 'Некорректный логин');
         }
 
-        const user = db.findUserByUsername(username);
+        const user = db.findUserByUsername(cleanUsername);
         if (!user || !verifyPassword(password, user.password_hash)) {
           return sendError(res, 401, 'Неверный логин или пароль');
         }
@@ -204,32 +208,9 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true });
       }
 
-      // SWITCH USER ROLE
+      // SWITCH USER ROLE (FORBIDDEN - roles are strictly immutable as in mobile apps)
       if (pathname === '/api/user/role' && req.method === 'POST') {
-        const body = await parseJsonBody(req);
-        const { role: newRole } = body;
-        if (newRole !== 'athlete' && newRole !== 'trainer') {
-          return sendError(res, 400, 'Роль должна быть athlete или trainer');
-        }
-        db.updateUserRole(user.id, newRole);
-        let pairingCode = user.pairing_code;
-        if (newRole === 'athlete' && (!pairingCode || pairingCode.length !== 6)) {
-          pairingCode = String(Math.floor(100000 + Math.random() * 900000));
-          db.regeneratePairingCode(user.id, pairingCode);
-        }
-        const updatedUser = db.findUserById(user.id);
-        return sendJson(res, 200, {
-          success: true,
-          user: {
-            id: updatedUser.id,
-            username: updatedUser.username,
-            role: updatedUser.role,
-            fullName: updatedUser.full_name,
-            phone: updatedUser.phone,
-            pairingCode: updatedUser.pairing_code,
-            isPrivate: Boolean(updatedUser.is_private)
-          }
-        });
+        return sendError(res, 403, 'Смена роли запрещена: права строго фиксированы как в мобильном приложении');
       }
 
       // REGENERATE PIN (Athlete)

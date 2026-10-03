@@ -78,11 +78,22 @@ class AppDatabase {
   }
 
   findUserByUsername(username) {
+    const clean = String(username || '').trim();
     const stmt = this.db.prepare(`
       SELECT id, username, password_hash, role, full_name, phone, pairing_code, is_private, created_at
-      FROM users WHERE username = ?
+      FROM users WHERE username = ? OR LOWER(username) = LOWER(?)
     `);
-    return stmt.get(username) || null;
+    let user = stmt.get(clean, clean);
+    if (!user) {
+      const allStmt = this.db.prepare(`
+        SELECT id, username, password_hash, role, full_name, phone, pairing_code, is_private, created_at
+        FROM users
+      `);
+      const all = allStmt.all();
+      const targetLower = clean.toLowerCase();
+      user = all.find(u => u.username && u.username.toLowerCase() === targetLower) || null;
+    }
+    return user || null;
   }
 
   findUserById(id) {

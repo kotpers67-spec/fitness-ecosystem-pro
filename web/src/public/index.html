@@ -2,314 +2,471 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0d0d0d">
-  <meta name="description" content="Fitness Ecosystem Pro — Swiss Clean UI Workout Tracker & Coaching Portal">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Fitness Ecosystem Pro</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <!-- Header Shell -->
-  <header class="app-header">
-    <div class="header-inner">
-      <a href="#" class="brand" id="brand-link">
-        <span class="brand-badge">PRO</span>
-        <span class="brand-title">FITNESS ECOSYSTEM</span>
-      </a>
+  <div class="mobile-app-shell">
 
-      <div class="header-actions" id="header-auth-actions" style="display: none;">
-        <div class="user-badge">
-          <span id="user-display-name" class="truncate" style="max-width: 160px; font-weight: 600;">Пользователь</span>
-          <span id="user-role-pill" class="role-pill athlete">Атлет</span>
+    <!-- Top App Bar (Jetpack Compose TopAppBar Style) -->
+    <header class="app-topbar">
+      <div class="topbar-left">
+        <div class="avatar-circle" id="topbar-avatar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+          </svg>
         </div>
-        <button id="btn-toggle-role" class="btn btn-secondary btn-sm" title="Сменить роль">
-          Сменить роль
-        </button>
-        <button id="btn-logout" class="btn btn-secondary btn-sm" title="Выйти из аккаунта">
-          Выйти
+        <div class="topbar-info">
+          <span class="topbar-app-name" id="topbar-title">FITNESS PRO</span>
+          <span class="topbar-user-name truncate" id="topbar-user-name">Гость</span>
+        </div>
+      </div>
+      <div class="topbar-right" id="topbar-actions">
+        <span class="role-badge" id="topbar-role-badge"></span>
+        <button id="btn-logout-header" class="icon-btn" title="Выйти" style="display: none;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+          </svg>
         </button>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <!-- Main Container -->
-  <main class="main-content">
+    <!-- Main Content Area (Scrollable viewport) -->
+    <main class="app-main-viewport">
 
-    <!-- 1. AUTH SCREEN (Unauthenticated) -->
-    <section id="auth-section" class="bento-grid" style="display: none; justify-content: center; margin-top: 40px;">
-      <div class="bento-col-12" style="max-width: 440px; margin: 0 auto;">
-        <div class="bento-card">
-          <div class="bento-header" style="justify-content: center; margin-bottom: 24px;">
-            <div style="text-align: center;">
-              <h1 class="bento-title" style="font-size: 22px; margin-bottom: 6px;">Вход в систему</h1>
-              <p class="label-micro">Безопасная локальная экосистема</p>
-            </div>
+      <!-- ================= 1. AUTH SCREEN ================= -->
+      <section id="screen-auth" class="screen-container">
+        <div class="auth-hero">
+          <div class="app-logo-badge">PRO</div>
+          <h1 class="auth-title">FITNESS ECOSYSTEM</h1>
+          <p class="auth-subtitle">Экосистема для атлетов и персональных тренеров</p>
+        </div>
+
+        <div class="auth-card">
+          <!-- Switcher tabs: Вход / Регистрация -->
+          <div class="auth-tab-row">
+            <button id="tab-login" class="auth-tab active">Вход</button>
+            <button id="tab-register" class="auth-tab">Регистрация</button>
           </div>
 
-          <!-- Auth Mode Switcher -->
-          <div class="nav-tabs" style="margin-bottom: 20px; justify-content: center;">
-            <button id="tab-login" class="tab-btn active">Вход</button>
-            <button id="tab-register" class="tab-btn">Регистрация</button>
-          </div>
-
-          <!-- Login Form -->
+          <!-- Form: Login -->
           <form id="form-login">
-            <div style="margin-bottom: 14px;">
-              <label for="login-username" class="label-micro" style="display: block; margin-bottom: 6px;">Логин</label>
-              <input type="text" id="login-username" class="input-field" placeholder="athlete_pro" autocomplete="username" required>
+            <div class="form-group">
+              <label for="login-username" class="field-label">Логин</label>
+              <input type="text" id="login-username" class="app-input" placeholder="Введите логин (латиница или кириллица)" autocomplete="username" required>
             </div>
-            <div style="margin-bottom: 20px;">
-              <label for="login-password" class="label-micro" style="display: block; margin-bottom: 6px;">Пароль</label>
-              <input type="password" id="login-password" class="input-field" placeholder="••••••••" autocomplete="current-password" required>
+            <div class="form-group">
+              <label for="login-password" class="field-label">Пароль</label>
+              <input type="password" id="login-password" class="app-input" placeholder="••••••••" autocomplete="current-password" required>
             </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Войти</button>
+            <button type="submit" class="app-btn btn-primary" style="margin-top: 8px;">Войти в аккаунт</button>
           </form>
 
-          <!-- Register Form -->
+          <!-- Form: Register -->
           <form id="form-register" style="display: none;">
-            <div style="margin-bottom: 12px;">
-              <label for="reg-username" class="label-micro" style="display: block; margin-bottom: 6px;">Логин</label>
-              <input type="text" id="reg-username" class="input-field" placeholder="pro_lifter" autocomplete="username" required>
-            </div>
-            <div style="margin-bottom: 12px;">
-              <label for="reg-fullname" class="label-micro" style="display: block; margin-bottom: 6px;">Имя и Фамилия</label>
-              <input type="text" id="reg-fullname" class="input-field" placeholder="Алексей Смирнов" required>
-            </div>
-            <div style="margin-bottom: 12px;">
-              <label for="reg-phone" class="label-micro" style="display: block; margin-bottom: 6px;">Телефон (опционально)</label>
-              <input type="tel" id="reg-phone" class="input-field" placeholder="+7 999 000-00-00">
-            </div>
-            <div style="margin-bottom: 12px;">
-              <label for="reg-role" class="label-micro" style="display: block; margin-bottom: 6px;">Роль</label>
-              <select id="reg-role" class="input-field" style="cursor: pointer;">
-                <option value="athlete">Атлет (Дневник, QR, PIN)</option>
-                <option value="trainer">Тренер (Клиенты, Тоннаж)</option>
+            <div class="form-group">
+              <label for="reg-role" class="field-label">Тип аккаунта</label>
+              <select id="reg-role" class="app-input app-select" required>
+                <option value="athlete">Атлет (Дневник, QR-код, PIN для тренера)</option>
+                <option value="trainer">Тренер (База подопечных, сопряжение, программы)</option>
               </select>
+              <span class="field-hint">Роль фиксируется при создании аккаунта</span>
             </div>
-            <div style="margin-bottom: 20px;">
-              <label for="reg-password" class="label-micro" style="display: block; margin-bottom: 6px;">Пароль (от 6 символов)</label>
-              <input type="password" id="reg-password" class="input-field" placeholder="••••••••" autocomplete="new-password" required>
+            <div class="form-group">
+              <label for="reg-username" class="field-label">Логин</label>
+              <input type="text" id="reg-username" class="app-input" placeholder="ivan_pro" autocomplete="username" required>
             </div>
-            <button type="submit" class="btn btn-emerald" style="width: 100%;">Создать аккаунт</button>
+            <div class="form-group">
+              <label for="reg-fullname" class="field-label">Имя и Фамилия</label>
+              <input type="text" id="reg-fullname" class="app-input" placeholder="Иван Петров" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-phone" class="field-label">Телефон</label>
+              <input type="tel" id="reg-phone" class="app-input" placeholder="+7 999 123-45-67">
+            </div>
+            <div class="form-group">
+              <label for="reg-password" class="field-label">Пароль (от 6 символов)</label>
+              <input type="password" id="reg-password" class="app-input" placeholder="••••••••" autocomplete="new-password" required>
+            </div>
+            <button type="submit" class="app-btn btn-primary" style="margin-top: 8px;">Зарегистрироваться</button>
           </form>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- 2. DASHBOARD SHELL (Authenticated) -->
-    <div id="dashboard-section" style="display: none;">
+      <!-- ================= 2. ATHLETE SCREENS ================= -->
 
-      <!-- Nav Tabs -->
-      <nav class="nav-tabs" id="main-nav-tabs">
-        <!-- Dynamically rendered based on active role -->
-      </nav>
+      <!-- Athlete Screen 1: ТРЕНИРОВКА (Today) -->
+      <section id="screen-athlete-workout" class="screen-container" style="display: none;">
+        <!-- Date Bar -->
+        <div class="date-navigator">
+          <button class="icon-nav-btn" id="btn-date-prev">◀</button>
+          <div class="date-center">
+            <span class="date-label" id="athlete-date-display">Сегодня</span>
+            <input type="date" id="athlete-date-picker" class="date-picker-hidden">
+          </div>
+          <button class="icon-nav-btn" id="btn-date-next">▶</button>
+        </div>
 
-      <!-- VIEW A: ATHLETE WORKOUTS -->
-      <section id="view-athlete-workouts" class="bento-grid">
-        <!-- Logger Card -->
-        <div class="bento-col-5">
-          <div class="bento-card">
-            <div class="bento-header">
-              <h2 class="bento-title">Запись подхода</h2>
-              <input type="date" id="workout-date-picker" class="input-field" style="max-width: 160px; min-height: 36px; padding: 4px 10px;">
-            </div>
-
-            <div class="chips-container" id="quick-exercise-chips">
-              <button type="button" class="chip" data-exercise="Жим лёжа">Жим лёжа</button>
-              <button type="button" class="chip" data-exercise="Приседания">Приседания</button>
-              <button type="button" class="chip" data-exercise="Становая тяга">Становая тяга</button>
-              <button type="button" class="chip" data-exercise="Подтягивания">Подтягивания</button>
-              <button type="button" class="chip" data-exercise="Жим стоя">Жим стоя</button>
-              <button type="button" class="chip" data-exercise="Брусья">Брусья</button>
-            </div>
-
-            <!-- Previous workout stats banner -->
-            <div id="last-stats-banner" style="display: none; margin-bottom: 16px; padding: 8px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 12px; color: var(--accent-emerald);">
-              <!-- Rendered dynamically -->
-            </div>
-
-            <form id="form-add-set">
-              <div style="margin-bottom: 12px;">
-                <label for="input-exercise-name" class="label-micro" style="display: block; margin-bottom: 6px;">Упражнение</label>
-                <input type="text" id="input-exercise-name" class="input-field" placeholder="Название упражнения" required>
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 18px;">
-                <div>
-                  <label for="input-weight" class="label-micro" style="display: block; margin-bottom: 6px;">Вес (кг)</label>
-                  <input type="number" step="0.5" min="0" id="input-weight" class="input-field tabular-nums" placeholder="80" required>
-                </div>
-                <div>
-                  <label for="input-reps" class="label-micro" style="display: block; margin-bottom: 6px;">Повторения</label>
-                  <input type="number" step="1" min="1" id="input-reps" class="input-field tabular-nums" placeholder="10" required>
-                </div>
-                <div>
-                  <label for="input-rpe" class="label-micro" style="display: block; margin-bottom: 6px;">RPE (1-10)</label>
-                  <input type="number" step="0.5" min="1" max="10" id="input-rpe" class="input-field tabular-nums" value="8.0" placeholder="8.0">
-                </div>
-              </div>
-
-              <button type="submit" class="btn btn-emerald" style="width: 100%;">
-                <span>+ Добавить подход</span>
-              </button>
-            </form>
+        <!-- Coach permission status banner -->
+        <div class="status-card-banner">
+          <div class="status-icon-circle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="status-title">Самостоятельная тренировка разрешена</div>
+            <div class="status-sub">Отмечайте фактически выполненные веса и повторения</div>
           </div>
         </div>
 
-        <!-- Sets List Card -->
-        <div class="bento-col-7">
-          <div class="bento-card">
-            <div class="bento-header">
+        <!-- Season Goal Card -->
+        <div class="app-card goal-card">
+          <div class="goal-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
+            </svg>
+            <span>ЦЕЛЬ НА СЕЗОН</span>
+          </div>
+          <div class="goal-text" id="athlete-season-goal">Регулярные силовые тренировки и стабильный прогресс весов</div>
+        </div>
+
+        <!-- Add Set Box -->
+        <div class="app-card">
+          <div class="card-title">Запись подхода</div>
+
+          <!-- Quick chips -->
+          <div class="chip-scroll-row" id="athlete-chips">
+            <button class="app-chip" data-name="Жим штанги лёжа">Жим лёжа</button>
+            <button class="app-chip" data-name="Приседания со штангой">Приседания</button>
+            <button class="app-chip" data-name="Становая тяга">Становая</button>
+            <button class="app-chip" data-name="Подтягивания">Подтягивания</button>
+            <button class="app-chip" data-name="Жим гантелей">Жим гантелей</button>
+            <button class="app-chip" data-name="Тяга блока">Тяга блока</button>
+          </div>
+
+          <form id="form-athlete-add-set">
+            <div class="form-group" style="margin-bottom: 10px;">
+              <input type="text" id="athlete-input-exercise" class="app-input" placeholder="Название упражнения" required>
+            </div>
+            <div class="triple-input-grid">
               <div>
-                <h2 class="bento-title">Подходы на дату</h2>
-                <span id="daily-tonnage-label" class="label-micro" style="color: var(--accent-emerald);">Тоннаж: 0 кг</span>
+                <label class="field-label">Вес (кг)</label>
+                <input type="number" step="0.5" min="0" id="athlete-input-weight" class="app-input tabular-nums" placeholder="80" required>
+              </div>
+              <div>
+                <label class="field-label">Повторы</label>
+                <input type="number" step="1" min="1" id="athlete-input-reps" class="app-input tabular-nums" placeholder="10" required>
+              </div>
+              <div>
+                <label class="field-label">RPE</label>
+                <input type="number" step="0.5" min="1" max="10" id="athlete-input-rpe" class="app-input tabular-nums" value="8.0">
               </div>
             </div>
+            <button type="submit" class="app-btn btn-primary" style="margin-top: 10px;">Добавить подход</button>
+          </form>
+        </div>
 
-            <div id="sets-container" class="sets-list">
-              <!-- Rendered dynamically -->
-            </div>
+        <!-- Exercise Matrix Lists -->
+        <div id="athlete-workout-matrix" class="workout-matrix">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- Athlete Screen 2: ПРОГРЕСС (History) -->
+      <section id="screen-athlete-history" class="screen-container" style="display: none;">
+        <h2 class="screen-heading">ПРОГРЕСС И ИСТОРИЯ</h2>
+
+        <div class="app-card">
+          <label class="field-label">Выберите упражнение</label>
+          <select id="athlete-history-exercise-select" class="app-input app-select">
+            <option value="">Все упражнения</option>
+          </select>
+        </div>
+
+        <div class="history-list" id="athlete-history-list">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- Athlete Screen 3: СОСТЯЗАНИЯ (Leaderboard) -->
+      <section id="screen-athlete-leaderboard" class="screen-container" style="display: none;">
+        <div class="competitions-header">
+          <h2 class="screen-heading">СОСТЯЗАНИЯ</h2>
+          <button id="btn-refresh-leaderboard" class="icon-nav-btn" title="Обновить">↻</button>
+        </div>
+
+        <!-- Metrics Bento -->
+        <div class="metrics-bento bento-grid">
+          <div class="metric-card">
+            <span class="metric-value tabular-nums" id="user-metric-workouts">0</span>
+            <span class="metric-label">Тренировок</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value tabular-nums" id="user-metric-tonnage">0 т</span>
+            <span class="metric-label">Тоннаж</span>
+          </div>
+          <div class="metric-card highlight">
+            <span class="metric-value tabular-nums" id="user-metric-points">0</span>
+            <span class="metric-label">Очков</span>
+          </div>
+        </div>
+
+        <!-- Leaderboard Table -->
+        <div class="app-card" style="padding: 12px 14px;">
+          <div class="card-subtitle" style="margin-bottom: 12px;">РЕЙТИНГ АТЛЕТОВ (ТОЛЬКО РЕАЛЬНЫЕ ДАННЫЕ)</div>
+          <div class="leaderboard-container" id="leaderboard-list">
+            <!-- Dynamic rows -->
           </div>
         </div>
       </section>
 
-      <!-- VIEW B: ATHLETE PAIRING & QR -->
-      <section id="view-athlete-pairing" class="bento-grid" style="display: none;">
-        <!-- QR & PIN Card -->
-        <div class="bento-col-6">
-          <div class="bento-card">
-            <div class="bento-header">
-              <h2 class="bento-title">QR-код и 6-значный PIN</h2>
-              <span class="label-micro">Для тренера</span>
-            </div>
+      <!-- Athlete Screen 4: ПРОФИЛЬ (Settings, Pairing & QR) -->
+      <section id="screen-athlete-profile" class="screen-container" style="display: none;">
+        <h2 class="screen-heading">ПРОФИЛЬ АТЛЕТА</h2>
 
-            <div class="qr-container" id="athlete-qr-container">
-              <!-- Clean Pure Vector SVG rendered by qr.js -->
-            </div>
-
-            <div class="pin-display-wrapper">
-              <div class="label-micro" style="margin-bottom: 6px;">Код сопряжения</div>
-              <div id="athlete-pin-code" class="pin-code-large tabular-nums">------</div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-              <button id="btn-copy-pin" class="btn btn-secondary">
-                <span>Скопировать PIN</span>
-              </button>
-              <button id="btn-copy-link" class="btn btn-secondary">
-                <span>Скопировать ссылку</span>
-              </button>
-            </div>
-
-            <button id="btn-regenerate-pin" class="btn btn-secondary" style="width: 100%;">
-              <span>Перегенерировать PIN</span>
-            </button>
+        <!-- Card: User Info -->
+        <div class="app-card user-profile-card">
+          <div class="profile-avatar-large">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+          </div>
+          <div class="profile-details">
+            <h3 class="profile-name" id="profile-full-name">Атлет</h3>
+            <span class="profile-sub" id="profile-username">@username</span>
+            <span class="profile-sub" id="profile-phone">+7 999 000-00-00</span>
           </div>
         </div>
 
-        <!-- Coach Status & Privacy Card -->
-        <div class="bento-col-6">
-          <!-- Coach Status -->
-          <div class="bento-card" style="margin-bottom: 16px;">
-            <div class="bento-header">
-              <h2 class="bento-title">Привязанный тренер</h2>
-            </div>
-            <div id="coach-info-container">
-              <!-- Rendered dynamically -->
+        <!-- Card: 6-Digit PIN & QR CODE (No links!) -->
+        <div class="app-card pairing-card">
+          <div class="card-title">СВЯЗЬ С ТРЕНЕРОМ</div>
+          <p class="card-desc">Покажите QR-код тренеру или продиктуйте 6 цифр кода</p>
+
+          <!-- 6-Digit PIN Display -->
+          <div class="pin-display-box">
+            <span class="pin-label">КОД ПОДКЛЮЧЕНИЯ (6 ЦИФР)</span>
+            <span class="pin-code-large tabular-nums" id="athlete-pairing-pin">------</span>
+            <span class="pin-instruction">Вводится тренером слитно, без дефиса</span>
+          </div>
+
+          <!-- Clean QR Code Display -->
+          <div class="qr-canvas-box">
+            <div id="athlete-qr-container" class="qr-svg-wrapper">
+              <!-- Rendered as vector SVG without links -->
             </div>
           </div>
 
-          <!-- Privacy Settings -->
-          <div class="bento-card">
-            <div class="bento-header">
-              <h2 class="bento-title">Приватность профиля</h2>
+          <button id="btn-regenerate-pin" class="app-btn btn-secondary">
+            ↻ Сгенерировать новый код
+          </button>
+        </div>
+
+        <!-- Privacy Switcher -->
+        <div class="app-card">
+          <div class="privacy-row">
+            <div>
+              <div class="privacy-title">ПРИВАТНОСТЬ В СОСТЯЗАНИЯХ</div>
+              <div class="privacy-desc" id="privacy-status-text">Вы участвуете в состязаниях и ваш рейтинг виден</div>
             </div>
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
-              <div>
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Публичный лидерборд</div>
-                <div style="font-size: 12px; color: var(--text-muted);">
-                  Отображать ваши тренировки и тоннаж в общем рейтинге атлетов.
-                </div>
+            <label class="switch-toggle">
+              <input type="checkbox" id="profile-privacy-toggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Paired Coach Card -->
+        <div class="app-card" id="card-paired-coach" style="display: none;">
+          <div class="card-title">ВАШ ТРЕНЕР</div>
+          <div class="coach-info-row">
+            <div class="coach-avatar-small">Т</div>
+            <div>
+              <div class="coach-name" id="paired-coach-name">Алексей Романов</div>
+              <div class="coach-phone" id="paired-coach-phone">+7 (999) 123-45-67</div>
+            </div>
+          </div>
+          <button id="btn-unpair-coach" class="app-btn btn-danger" style="margin-top: 12px;">
+            Отвязаться от тренера
+          </button>
+        </div>
+
+        <!-- Logout Button -->
+        <button id="btn-logout-athlete" class="app-btn btn-danger" style="margin-top: 8px;">
+          Выйти из аккаунта
+        </button>
+      </section>
+
+      <!-- ================= 3. TRAINER SCREENS ================= -->
+
+      <!-- Trainer Screen 1: ПОДОПЕЧНЫЕ (Home) -->
+      <section id="screen-trainer-home" class="screen-container" style="display: none;">
+        <h2 class="screen-heading">ТЕКУЩИЙ ПОДОПЕЧНЫЙ</h2>
+
+        <!-- Active Client Card & Selector -->
+        <div class="app-card client-picker-card">
+          <div class="client-picker-row">
+            <div class="picker-left">
+              <div class="avatar-circle">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
               </div>
-              <label style="position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0;">
-                <input type="checkbox" id="privacy-toggle-checkbox" style="opacity: 0; width: 0; height: 0;">
-                <span id="privacy-toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #262626; border: 1px solid var(--border-subtle); border-radius: 24px; transition: 0.2s;"></span>
+              <div>
+                <div class="active-client-name" id="trainer-active-client-name">Выберите подопечного</div>
+                <div class="active-client-phone" id="trainer-active-client-phone">—</div>
+              </div>
+            </div>
+            <select id="trainer-client-select" class="app-input app-select" style="max-width: 140px;">
+              <option value="">Выбрать...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Pair Client Button & Form Box -->
+        <div class="app-card">
+          <div class="card-title">ПРИВЯЗАТЬ ПОДОПЕЧНОГО</div>
+          <p class="card-desc">Введите 6 цифр кода подопечного (слитно, без дефиса) или загрузите фото QR</p>
+
+          <form id="form-trainer-pair">
+            <div class="form-group" style="margin-bottom: 10px;">
+              <input type="text" id="input-pair-code" class="app-input tabular-nums" placeholder="739102 (6 цифр)" maxlength="6" pattern="\d{6}" required>
+            </div>
+
+            <div class="pair-actions-row">
+              <label class="file-upload-btn">
+                <span>Загрузить QR из фото</span>
+                <input type="file" id="input-qr-file" accept="image/*" style="display: none;">
               </label>
+              <button type="submit" class="app-btn btn-primary" style="flex: 1;">Связать</button>
             </div>
+          </form>
+        </div>
+
+        <!-- Clients List Card -->
+        <div class="app-card">
+          <div class="card-title">СПИСОК ПОДОПЕЧНЫХ</div>
+          <div class="clients-list" id="trainer-clients-list">
+            <!-- Dynamic client items -->
           </div>
         </div>
       </section>
 
-      <!-- VIEW C: TRAINER CLIENTS -->
-      <section id="view-trainer-clients" class="bento-grid" style="display: none;">
-        <!-- Quick Pair Input Card -->
-        <div class="bento-col-12">
-          <div class="bento-card">
-            <div class="bento-header">
+      <!-- Trainer Screen 2: ТРЕНИРОВКА (Workout Logging) -->
+      <section id="screen-trainer-workout" class="screen-container" style="display: none;">
+        <h2 class="screen-heading">ТРЕНИРОВКА ПОДОПЕЧНОГО</h2>
+
+        <!-- Active Client Notice -->
+        <div class="notice-card" id="trainer-workout-target-notice">
+          Подопечный не выбран. Выберите подопечного во вкладке «Подопечные».
+        </div>
+
+        <!-- Date Bar -->
+        <div class="date-navigator">
+          <button class="icon-nav-btn" id="btn-trainer-date-prev">◀</button>
+          <div class="date-center">
+            <span class="date-label" id="trainer-date-display">Сегодня</span>
+            <input type="date" id="trainer-date-picker" class="date-picker-hidden">
+          </div>
+          <button class="icon-nav-btn" id="btn-trainer-date-next">▶</button>
+        </div>
+
+        <!-- Add Set for Client -->
+        <div class="app-card" id="trainer-add-set-box">
+          <div class="card-title">Назначить подход</div>
+
+          <form id="form-trainer-add-set">
+            <div class="form-group" style="margin-bottom: 10px;">
+              <input type="text" id="trainer-input-exercise" class="app-input" placeholder="Название упражнения" required>
+            </div>
+            <div class="triple-input-grid">
               <div>
-                <h2 class="bento-title">Мгновенная привязка подопечного</h2>
-                <p class="label-micro" style="margin-top: 4px;">Введите 6 цифр из приложения или экрана атлета (без дефисов)</p>
+                <label class="field-label">Вес (кг)</label>
+                <input type="number" step="0.5" min="0" id="trainer-input-weight" class="app-input tabular-nums" placeholder="80" required>
+              </div>
+              <div>
+                <label class="field-label">Повторы</label>
+                <input type="number" step="1" min="1" id="trainer-input-reps" class="app-input tabular-nums" placeholder="10" required>
+              </div>
+              <div>
+                <label class="field-label">RPE</label>
+                <input type="number" step="0.5" min="1" max="10" id="trainer-input-rpe" class="app-input tabular-nums" value="8.0">
               </div>
             </div>
-            <form id="form-trainer-pair" style="display: flex; gap: 12px; max-width: 500px;">
-              <input type="text" id="trainer-pair-code" class="input-field tabular-nums" placeholder="739102" maxlength="6" style="font-size: 18px; font-weight: 700; letter-spacing: 0.1em;" required>
-              <button type="submit" class="btn btn-primary" style="flex-shrink: 0;">Привязать атлета</button>
-            </form>
-          </div>
+            <button type="submit" class="app-btn btn-primary" style="margin-top: 10px;">Сохранить подход</button>
+          </form>
         </div>
 
-        <!-- Clients Grid -->
-        <div class="bento-col-12">
-          <div class="bento-card">
-            <div class="bento-header">
-              <h2 class="bento-title">Список подопечных</h2>
-            </div>
-            <div id="trainer-clients-container" class="bento-grid">
-              <!-- Rendered dynamically -->
-            </div>
-          </div>
+        <!-- Client's sets for today -->
+        <div id="trainer-workout-matrix" class="workout-matrix">
+          <!-- Rendered dynamically -->
         </div>
       </section>
 
-      <!-- VIEW D: LEADERBOARD (Competitions - Zero Mocks) -->
-      <section id="view-leaderboard" class="bento-grid" style="display: none;">
-        <div class="bento-col-12">
-          <div class="bento-card">
-            <div class="bento-header">
-              <div>
-                <h2 class="bento-title">Таблица лидеров (Рейтинг)</h2>
-                <p class="label-micro" style="margin-top: 4px;">100% реальные данные SQLite — честные результаты</p>
-              </div>
-              <button id="btn-refresh-leaderboard" class="btn btn-secondary btn-sm">Обновить</button>
-            </div>
+      <!-- Trainer Screen 3: ИСТОРИЯ (Client History) -->
+      <section id="screen-trainer-history" class="screen-container" style="display: none;">
+        <h2 class="screen-heading">ИСТОРИЯ И ПРОГРЕСС</h2>
 
-            <div class="table-wrapper">
-              <table class="swiss-table">
-                <thead>
-                  <tr>
-                    <th style="width: 70px;">Место</th>
-                    <th>Атлет</th>
-                    <th style="text-align: right;">Тренировок</th>
-                    <th style="text-align: right;">Тоннаж (кг)</th>
-                    <th style="text-align: right;">Очки</th>
-                  </tr>
-                </thead>
-                <tbody id="leaderboard-tbody">
-                  <!-- Rendered dynamically from real SQLite -->
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div class="app-card">
+          <label class="field-label">Упражнение</label>
+          <select id="trainer-history-exercise-select" class="app-input app-select">
+            <option value="">Все упражнения</option>
+          </select>
+        </div>
+
+        <div class="history-list" id="trainer-history-list">
+          <!-- Rendered dynamically -->
         </div>
       </section>
 
-    </div>
-  </main>
+      <!-- Trainer Screen 4: НАСТРОЙКИ (Trainer Settings) -->
+      <section id="screen-trainer-settings" class="screen-container" style="display: none;">
+        <h2 class="screen-heading">НАСТРОЙКИ ТРЕНЕРА</h2>
 
-  <!-- Toast Notification Container -->
-  <div class="toast-container" id="toast-container"></div>
+        <div class="app-card user-profile-card">
+          <div class="profile-avatar-large">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+          </div>
+          <div class="profile-details">
+            <h3 class="profile-name" id="trainer-profile-name">Тренер</h3>
+            <span class="profile-sub" id="trainer-profile-username">@trainer</span>
+            <span class="profile-sub" id="trainer-profile-phone">+7 999 123-45-67</span>
+          </div>
+        </div>
 
-  <!-- Scripts -->
+        <div class="app-card">
+          <div class="card-title">ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ</div>
+          <p class="card-desc">Локальная база данных SQLite активна. Все данные защищены сквозным шифрованием.</p>
+          <div class="status-indicator-row">
+            <span class="pulse-dot"></span>
+            <span class="status-text">Локальный сервер в сети</span>
+          </div>
+        </div>
+
+        <button id="btn-logout-trainer" class="app-btn btn-danger" style="margin-top: 8px;">
+          Выйти из аккаунта
+        </button>
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar (Jetpack Compose NavigationBar Style) -->
+    <nav class="app-bottom-nav" id="app-bottom-nav" style="display: none;">
+      <!-- Dynamic navigation items for Athlete or Trainer -->
+    </nav>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+  </div>
+
   <script src="/qr.js"></script>
   <script src="/app.js"></script>
 </body>
