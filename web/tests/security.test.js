@@ -671,4 +671,64 @@ describe('Fitness Ecosystem Pro - Security Test Suite', () => {
       assert.ok([403, 404].includes(res.statusCode));
     });
   });
+
+  // ==========================================
+  // 7. TELEGRAM AUTHENTICATION SECURITY
+  // ==========================================
+  describe('7. Telegram Authentication Security', () => {
+    it('blocks SQL injection payloads in Telegram username parameter', async () => {
+      const res = await request('POST', '/api/auth/telegram', {}, {
+        username: "durov'; DROP TABLE users;--",
+        requestedRole: 'athlete'
+      });
+      assert.equal(res.statusCode, 400);
+      assert.ok(res.body.error);
+    });
+
+    it('escapes HTML and script tags in Telegram user full name preventing XSS', async () => {
+      const res = await request('POST', '/api/auth/telegram', {}, {
+        telegramUser: {
+          id: 11223344,
+          first_name: '<script>alert("XSS")</script>',
+          last_name: 'Дуров',
+          username: 'xss_tester'
+        },
+        requestedRole: 'athlete'
+      });
+      assert.equal(res.statusCode, 200);
+      assert.ok(res.body.token);
+      assert.ok(!res.body.user.fullName.includes('<script>'));
+      assert.ok(res.body.user.fullName.includes('&lt;script&gt;'));
+    });
+
+    it('rejects forged Telegram HMAC signature when BOT_TOKEN is verified', async () => {
+      process.env.BOT_TOKEN = '123456:FAKE_BOT_TOKEN_FOR_SECURITY_TEST';
+      const fakeInitData = 'auth_date=1616239000&query_id=AAHdF6IQAAAAAN0XohDhrOrc&user=%7B%22id%22%3A279058397%2C%22first_name%22%3A%22Vladislav%22%7D&hash=invalid_forged_hash_12345';
+      const res = await request('POST', '/api/auth/telegram', {}, {
+        initData: fakeInitData
+      });
+      assert.equal(res.statusCode, 401);
+      assert.ok(res.body.error.includes('подпись'));
+      delete process.env.BOT_TOKEN;
+    });
+
+    it('triggers HTTP 429 Too Many Requests on Telegram auth brute-force attempts', async () => {
+      let rateLimited = false;
+      for (let i = 0; i < 20; i++) {
+        const res = await request('POST', '/api/auth/telegram', {}, {
+          username: `spam_tg_${i}_${Date.now()}`
+        });
+        if (res.statusCode === 429) {
+          rateLimited = true;
+          break;
+        }
+      }
+      assert.ok(rateLimited, 'Rate limiter must trigger 429 on /api/auth/telegram');
+    });
+
+    it('guarantees database integrity and user table health after Telegram security tests', () => {
+      const check = db.findUserByUsername(athleteUser);
+      assert.ok(check, 'Database remains consistent and accessible');
+    });
+  });
 });
