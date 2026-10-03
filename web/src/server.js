@@ -91,8 +91,8 @@ const server = http.createServer(async (req, res) => {
   try {
     // --- 1. API ROUTES ---
     if (pathname.startsWith('/api/')) {
-      // Rate Limit Auth Endpoints (only enabled if process.env.ENABLE_AUTH_LIMIT is set)
-      if (process.env.ENABLE_AUTH_LIMIT === 'true') {
+      // Rate Limit Auth Endpoints (enabled in test mode or if explicitly requested)
+      if (process.env.NODE_ENV === 'test' || process.env.ENABLE_AUTH_LIMIT === 'true') {
         if (pathname === '/api/login' || pathname === '/api/register') {
           if (authLimiter.isRateLimited(clientIp)) {
             return sendError(res, 429, 'Слишком много попыток входа. Попробуйте через минуту.');

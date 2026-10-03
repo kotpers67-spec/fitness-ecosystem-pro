@@ -452,6 +452,17 @@ class AppDatabase {
     `);
     stmt.run(token);
   }
+
+  getWorkoutSets(athleteId, date) {
+    const session = this.getWorkoutSessionWithSets(athleteId, date);
+    return session ? session.sets : [];
+  }
+
+  close() {
+    try {
+      this.db.close();
+    } catch (_) {}
+  }
 }
 
 module.exports = AppDatabase;
