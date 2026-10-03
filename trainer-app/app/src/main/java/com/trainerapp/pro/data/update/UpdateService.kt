@@ -75,7 +75,8 @@ class UpdateService(private val context: Context) {
                         val updatesNode = root.getAsJsonObject("updates")
                         val remoteVersion = updatesNode.get("trainerVersion")?.asString?.removePrefix("v")?.trim() ?: ""
                         val downloadUrl = updatesNode.get("trainerUrl")?.asString
-                        val notes = updatesNode.get("notes")?.asString ?: "Новое обновление доступно на Google Диске"
+                            ?: "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.2/trainer-pro-v1.0.2.apk"
+                        val notes = updatesNode.get("notes")?.asString ?: "Новое обновление Trainer Pro 1.0.2 доступно на Google Диске"
 
                         if (remoteVersion.isNotBlank()) {
                             val isNewer = isVersionNewer(remoteVersion, currentVersionName)
@@ -92,46 +93,51 @@ class UpdateService(private val context: Context) {
                     }
                 }
             } catch (_: Exception) {
-                // Если Google Диск недоступен, подключаем резервный GitHub API
+                // Игнорируем ошибку обращения к Google Диску и переходим к резервным источникам
             }
 
-            // 2. Резервный источник: GitHub API
-            val apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
-            val url = URL(apiUrl)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
-            conn.setRequestProperty("User-Agent", "TrainerPro-App")
-            conn.connectTimeout = 8000
-            conn.readTimeout = 8000
+            // 2. Резервный источник: GitHub API / По умолчанию актуальная версия v1.0.2
+            try {
+                val apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
+                val url = URL(apiUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.setRequestProperty("Accept", "application/vnd.github+json")
+                conn.setRequestProperty("User-Agent", "TrainerPro-App")
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
 
-            if (conn.responseCode == 200) {
-                val json = conn.inputStream.bufferedReader().readText()
-                val release = gson.fromJson(json, GitHubRelease::class.java)
-                val cleanTag = release.tag_name.removePrefix("v").trim()
-                val apkAsset = release.assets.find { it.name.contains("trainer", ignoreCase = true) && it.name.endsWith(".apk") }
-                    ?: release.assets.find { it.name.endsWith(".apk") }
+                if (conn.responseCode == 200) {
+                    val json = conn.inputStream.bufferedReader().readText()
+                    val release = gson.fromJson(json, GitHubRelease::class.java)
+                    val cleanTag = release.tag_name.removePrefix("v").trim()
+                    val apkAsset = release.assets.find { it.name.contains("trainer", ignoreCase = true) && it.name.endsWith(".apk") }
+                        ?: release.assets.find { it.name.endsWith(".apk") }
 
-                val isNewer = isVersionNewer(cleanTag, currentVersionName)
-                Result.success(
-                    UpdateCheckResult(
-                        isUpdateAvailable = isNewer,
-                        currentVersion = currentVersionName,
-                        latestVersion = cleanTag,
-                        releaseNotes = release.body ?: "Новая версия доступна",
-                        downloadUrl = apkAsset?.browser_download_url
+                    val isNewer = isVersionNewer(cleanTag, currentVersionName)
+                    return@withContext Result.success(
+                        UpdateCheckResult(
+                            isUpdateAvailable = isNewer,
+                            currentVersion = currentVersionName,
+                            latestVersion = cleanTag,
+                            releaseNotes = release.body ?: "Новая версия доступна",
+                            downloadUrl = apkAsset?.browser_download_url
+                        )
                     )
+                }
+            } catch (_: Exception) {}
+
+            // Резервный фолбэк для v1.0.2 release
+            val fallbackVersion = "1.0.2"
+            val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
+            Result.success(
+                UpdateCheckResult(
+                    isUpdateAvailable = isFallbackNewer,
+                    currentVersion = currentVersionName,
+                    latestVersion = fallbackVersion,
+                    releaseNotes = "Версия $fallbackVersion доступна на Google Диске",
+                    downloadUrl = "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.2/trainer-pro-v1.0.2.apk"
                 )
-            } else {
-                Result.success(
-                    UpdateCheckResult(
-                        isUpdateAvailable = false,
-                        currentVersion = currentVersionName,
-                        latestVersion = currentVersionName,
-                        releaseNotes = "Установлена актуальная версия ($currentVersionName)",
-                        downloadUrl = null
-                    )
-                )
-            }
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -140,12 +146,13 @@ class UpdateService(private val context: Context) {
     private fun httpGet(urlStr: String): String {
         var currentUrl = urlStr
         var redirects = 0
-        while (redirects < 5) {
+        while (redirects < 8) {
             val conn = URL(currentUrl).openConnection() as HttpURLConnection
-            conn.connectTimeout = 10000
-            conn.readTimeout = 10000
+            conn.connectTimeout = 25000
+            conn.readTimeout = 25000
             conn.instanceFollowRedirects = true
             conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
 
             val code = conn.responseCode
             if (code in 300..308) {
@@ -197,8 +204,10 @@ class UpdateService(private val context: Context) {
                         input.copyTo(output)
                     }
                 }
-                if (targetFile.length() > 100000) {
+                if (targetFile.length() > 2000000L && isValidZipApk(targetFile)) {
                     return@withContext targetFile
+                } else {
+                    targetFile.delete()
                 }
             }
             null
@@ -207,11 +216,24 @@ class UpdateService(private val context: Context) {
         }
     }
 
+    fun isValidZipApk(file: File): Boolean {
+        return try {
+            if (!file.exists()) return false
+            java.io.FileInputStream(file).use { fis ->
+                val header = ByteArray(4)
+                val read = fis.read(header)
+                read == 4 && header[0] == 0x50.toByte() && header[1] == 0x4B.toByte() && header[2] == 0x03.toByte() && header[3] == 0x04.toByte()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun downloadAndInstallApk(downloadUrl: String) {
         // Fallback or explicit trigger: try direct HTTP download first, then launch installer
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             val apkFile = downloadApkDirectly(downloadUrl)
-            if (apkFile != null) {
+            if (apkFile != null && isValidZipApk(apkFile)) {
                 withContext(Dispatchers.Main) {
                     launchApkInstallation(apkFile)
                 }
@@ -229,7 +251,7 @@ class UpdateService(private val context: Context) {
 
     fun launchApkInstallation(apkFile: File) {
         try {
-            if (!apkFile.exists()) return
+            if (!apkFile.exists() || !isValidZipApk(apkFile)) return
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!context.packageManager.canRequestPackageInstalls()) {

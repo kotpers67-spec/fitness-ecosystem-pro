@@ -1,6 +1,10 @@
 package com.trainerapp.pro.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -17,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import com.trainerapp.pro.data.local.entities.ClientEntity
 import com.trainerapp.pro.data.local.entities.ExerciseEntity
 import com.trainerapp.pro.data.update.UpdateCheckResult
@@ -25,6 +30,11 @@ import com.trainerapp.pro.ui.i18n.AppLanguage
 import com.trainerapp.pro.ui.i18n.AppStrings
 import com.trainerapp.pro.ui.theme.AppThemePreset
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +50,61 @@ fun SettingsScreen(
     val activeClient by viewModel.activeClient.collectAsState()
 
     val lang = settings.language
+
+    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val jsonText = context.contentResolver.openInputStream(uri)?.use { 
+                        it.bufferedReader().readText() 
+                    }
+                    if (!jsonText.isNullOrBlank()) {
+                        val res = viewModel.backupManager.importFromJson(jsonText)
+                        res.onSuccess { count ->
+                            Toast.makeText(context, "Импортировано из файла! Записей: $count", Toast.LENGTH_LONG).show()
+                        }.onFailure {
+                            Toast.makeText(context, "Ошибка импорта файла: ${it.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Не удалось прочитать файл: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    fun exportAndShareFile() {
+        scope.launch {
+            try {
+                val jsonText = viewModel.backupManager.exportToJson()
+                val dateStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                val fileName = "TrainerPro_Backup_$dateStr.json"
+                val file = File(context.cacheDir, fileName)
+                FileOutputStream(file).use { os ->
+                    os.write(jsonText.toByteArray(Charsets.UTF_8))
+                }
+
+                val contentUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, contentUri)
+                    putExtra(Intent.EXTRA_SUBJECT, "Резервная копия Trainer Pro")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                val chooser = Intent.createChooser(sendIntent, "Отправить бэкап в мессенджер / файл")
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(chooser)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Ошибка экспорта файла: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     var showAddClientDialog by remember { mutableStateOf(false) }
     var clientToEdit by remember { mutableStateOf<ClientEntity?>(null) }
@@ -618,23 +683,52 @@ fun SettingsScreen(
                 }
             }
 
-            // 7. ЛОКАЛЬНЫЙ JSON ЭКСПОРТ/ИМПОРТ
+            // 7. ЛОКАЛЬНЫЙ JSON ЭКСПОРТ/ИМПОРТ & ФАЙЛЫ
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            text = "ЛОКАЛЬНЫЙ JSON ЭКСПОРТ / ИМПОРТ",
+                            text = "РЕЗЕРВНОЕ КОПИРОВАНИЕ И РЕЗЕРВНЫЕ ФАЙЛЫ",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
 
+                        Text(
+                            text = "Вы можете сохранить базу данных в файл и отправить её через Telegram, WhatsApp, Email или сохранить в память телефона.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
+                                onClick = { exportAndShareFile() },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Файл в Мессенджер", fontSize = 11.sp)
+                            }
+
+                            Button(
+                                onClick = { filePickerLauncher.launch("*/*") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Импорт из файла", fontSize = 11.sp)
+                            }
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
                                 onClick = {
                                     scope.launch {
                                         backupJsonText = viewModel.backupManager.exportToJson()
@@ -644,9 +738,9 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Экспорт JSON", fontSize = 12.sp)
+                                Text("Текст JSON", fontSize = 11.sp)
                             }
 
                             OutlinedButton(
@@ -659,7 +753,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Импорт JSON", fontSize = 12.sp)
+                                Text("Вставить JSON", fontSize = 11.sp)
                             }
                         }
                     }

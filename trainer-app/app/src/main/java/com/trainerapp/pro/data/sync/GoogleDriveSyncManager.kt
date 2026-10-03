@@ -85,6 +85,17 @@ class GoogleDriveSyncManager {
                 rootObj.add("clients", JsonObject())
             }
 
+            if (!rootObj.has("updates")) {
+                val defaultUpdates = JsonObject().apply {
+                    addProperty("trainerVersion", "1.0.2")
+                    addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.2/trainer-pro-v1.0.2.apk")
+                    addProperty("athleteVersion", "1.0.2")
+                    addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.2/athlete-pro-v1.0.2.apk")
+                    addProperty("notes", "Версия 1.0.2: Автофоновая синхронизация, AES-256 шифрование, статистика подходов и синхронизация фото.")
+                }
+                rootObj.add("updates", defaultUpdates)
+            }
+
             // Ключом в облаке строго является clientUuid для изоляции данных подопечных
             val clientStorageKey = if (clientUuid.isNotBlank()) clientUuid else clientIdStr
             rootObj.getAsJsonObject("clients").add(clientStorageKey, trainerPayloadElement)

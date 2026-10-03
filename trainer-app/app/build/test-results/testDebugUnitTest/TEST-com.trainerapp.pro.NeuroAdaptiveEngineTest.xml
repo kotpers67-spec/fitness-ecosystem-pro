@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.trainerapp.pro.NeuroAdaptiveEngineTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:38:37.279Z" hostname="KOT" time="0.081">
+<testsuite name="com.trainerapp.pro.NeuroAdaptiveEngineTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:49:02.602Z" hostname="KOT" time="0.079">
   <properties/>
   <testcase name="testReadinessScoreDynamics" classname="com.trainerapp.pro.NeuroAdaptiveEngineTest" time="0.008"/>
   <testcase name="testFatigueIndexCalculation" classname="com.trainerapp.pro.NeuroAdaptiveEngineTest" time="0.012"/>
-  <testcase name="testTonnageAndVolumeCalculations" classname="com.trainerapp.pro.NeuroAdaptiveEngineTest" time="0.0"/>
+  <testcase name="testTonnageAndVolumeCalculations" classname="com.trainerapp.pro.NeuroAdaptiveEngineTest" time="0.001"/>
   <testcase name="testAthleteSyncPayloadJsonSerialization" classname="com.trainerapp.pro.NeuroAdaptiveEngineTest" time="0.046"/>
-  <testcase name="testRpeAutoRegulationRecommendations" classname="com.trainerapp.pro.NeuroAdaptiveEngineTest" time="0.009"/>
+  <testcase name="testRpeAutoRegulationRecommendations" classname="com.trainerapp.pro.NeuroAdaptiveEngineTest" time="0.008"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

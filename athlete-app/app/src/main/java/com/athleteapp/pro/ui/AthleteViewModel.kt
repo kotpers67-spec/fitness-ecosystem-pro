@@ -35,6 +35,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     val updateService = AthleteUpdateService(application)
     val timerManager = RestTimerManager(application)
     val neuroEngine = NeuroAdaptiveEngine()
+    val backupManager = com.athleteapp.pro.data.backup.AthleteBackupManager(dao)
 
     // Current Date
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -101,14 +102,19 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             var lastUpdateCheck = 0L
+            var lastAutoUpdateVersion: String? = null
             while (true) {
                 autoSync()
                 if (System.currentTimeMillis() - lastUpdateCheck > 60000L) {
                     lastUpdateCheck = System.currentTimeMillis()
                     val checkRes = updateService.checkForUpdates()
                     val updateInfo = checkRes.getOrNull()
-                    if (updateInfo?.isUpdateAvailable == true && updateInfo.downloadUrl != null) {
+                    if (updateInfo?.isUpdateAvailable == true && !updateInfo.downloadUrl.isNullOrBlank()) {
                         _availableUpdate.value = updateInfo
+                        if (updateInfo.latestVersion != lastAutoUpdateVersion) {
+                            lastAutoUpdateVersion = updateInfo.latestVersion
+                            updateService.downloadAndInstallApk(updateInfo.downloadUrl)
+                        }
                     }
                 }
                 delay(45000L)

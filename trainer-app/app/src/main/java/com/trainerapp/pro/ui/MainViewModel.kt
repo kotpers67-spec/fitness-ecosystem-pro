@@ -129,6 +129,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             // Автоматическая фоновая синхронизация и проверка обновлений каждые 45 секунд
             var lastUpdateCheck = 0L
+            var lastAutoUpdateVersion: String? = null
             while (true) {
                 selectedClientId.value?.let {
                     syncActiveClientWithGoogleDrive()
@@ -137,8 +138,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     lastUpdateCheck = System.currentTimeMillis()
                     val checkRes = updateService.checkForUpdates()
                     val updateInfo = checkRes.getOrNull()
-                    if (updateInfo?.isUpdateAvailable == true && updateInfo.downloadUrl != null) {
+                    if (updateInfo?.isUpdateAvailable == true && !updateInfo.downloadUrl.isNullOrBlank()) {
                         _availableUpdate.value = updateInfo
+                        if (updateInfo.latestVersion != lastAutoUpdateVersion) {
+                            lastAutoUpdateVersion = updateInfo.latestVersion
+                            updateService.downloadAndInstallApk(updateInfo.downloadUrl)
+                        }
                     }
                 }
                 delay(45000L)
