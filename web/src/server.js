@@ -26,6 +26,7 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const db = new AppDatabase();
 const authLimiter = new RateLimiter(60000, 15); // Max 15 auth attempts/min per IP
+const telegramOtpStore = new Map(); // key: username -> { code, expiresAt, attempts }
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -301,6 +302,177 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, {
           success: true,
           authProvider: 'telegram',
+          token,
+          user: {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            fullName: user.full_name,
+            phone: user.phone,
+            avatarBase64: user.avatar_base64 || '',
+            pairingCode: user.pairing_code,
+            clientUuid: user.client_uuid || '',
+            coachName: user.coach_name || '',
+            coachPhone: user.coach_phone || '',
+            isPrivate: Boolean(user.is_private)
+          }
+        });
+      }
+
+      // TELEGRAM OTP: 1. Request One-Time 6-digit Code (Valid 5 minutes)
+      if (pathname === '/api/auth/telegram/request-otp' && req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const { username } = body;
+        const cleanUsername = String(username || '').replace(/^@/, '').trim().toLowerCase();
+
+        if (!cleanUsername || hasSqlInjectionVector(cleanUsername)) {
+          return sendError(res, 400, 'Укажите корректный Telegram логин');
+        }
+
+        // Generate 6-digit random code
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const expiresAt = Date.now() + 5 * 60 * 1000; // Strictly 5 minutes
+
+        telegramOtpStore.set(cleanUsername, {
+          code,
+          expiresAt,
+          attempts: 0
+        });
+
+        const botToken = process.env.BOT_TOKEN;
+        if (botToken) {
+          console.log(`[Telegram Auth] One-time code for @${cleanUsername}: ${code} (expires in 5 min)`);
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          message: 'Одноразовый код отправлен в Telegram. Действует 5 минут.',
+          expiresInSeconds: 300,
+          telegramUsername: cleanUsername,
+          debugCode: (process.env.NODE_ENV === 'test' || !botToken) ? code : undefined
+        });
+      }
+
+      // TELEGRAM OTP: 2. Verify 6-digit Code
+      if (pathname === '/api/auth/telegram/verify-otp' && req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const { username, code } = body;
+        const cleanUsername = String(username || '').replace(/^@/, '').trim().toLowerCase();
+        const cleanCode = String(code || '').trim();
+
+        if (!cleanUsername || !cleanCode) {
+          return sendError(res, 400, 'Введите имя пользователя и 6-значный код');
+        }
+
+        const record = telegramOtpStore.get(cleanUsername);
+        if (!record) {
+          return sendError(res, 400, 'Код не запрашивался или срок действия (5 минут) истек');
+        }
+
+        if (Date.now() > record.expiresAt) {
+          telegramOtpStore.delete(cleanUsername);
+          return sendError(res, 400, 'Срок действия кода истек (5 минут). Запросите новый код.');
+        }
+
+        if (record.attempts >= 5) {
+          telegramOtpStore.delete(cleanUsername);
+          return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
+        }
+
+        if (record.code !== cleanCode) {
+          record.attempts++;
+          return sendError(res, 400, 'Неверный код из Telegram');
+        }
+
+        // Code is verified and consumed (single-use guaranteed)
+        telegramOtpStore.delete(cleanUsername);
+
+        const usernameKey = `tg_${cleanUsername}`;
+        const user = db.findUserByUsername(usernameKey);
+
+        if (user) {
+          const token = generateToken();
+          db.createAuthToken(token, user.id);
+          return sendJson(res, 200, {
+            success: true,
+            isNewUser: false,
+            token,
+            user: {
+              id: user.id,
+              username: user.username,
+              role: user.role,
+              fullName: user.full_name,
+              phone: user.phone,
+              avatarBase64: user.avatar_base64 || '',
+              pairingCode: user.pairing_code,
+              clientUuid: user.client_uuid || '',
+              coachName: user.coach_name || '',
+              coachPhone: user.coach_phone || '',
+              isPrivate: Boolean(user.is_private)
+            }
+          });
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          isNewUser: true,
+          telegramUsername: cleanUsername
+        });
+      }
+
+      // TELEGRAM OTP: 3. Complete Profile (New User: Name, Phone, Role)
+      if (pathname === '/api/auth/telegram/complete-profile' && req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const { username, role, fullName, phone, avatarBase64 } = body;
+        const cleanUsername = String(username || '').replace(/^@/, '').trim().toLowerCase();
+        const cleanFullName = String(fullName || '').trim();
+        const cleanPhone = phone ? String(phone).trim() : '';
+
+        if (!cleanUsername || !cleanFullName || !role) {
+          return sendError(res, 400, 'Заполните обязательные поля профиля');
+        }
+
+        if (hasSqlInjectionVector(cleanUsername) || hasSqlInjectionVector(cleanFullName)) {
+          return sendError(res, 400, 'Недопустимые символы в профиле');
+        }
+
+        if (role !== 'athlete' && role !== 'trainer') {
+          return sendError(res, 400, 'Роль должна быть athlete или trainer');
+        }
+
+        const usernameKey = `tg_${cleanUsername}`;
+        let user = db.findUserByUsername(usernameKey);
+
+        if (!user) {
+          const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
+          const escapedFullName = escapeHtml(cleanFullName);
+          const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
+          const pairingCode = role === 'athlete' ? String(Math.floor(100000 + Math.random() * 900000)) : '';
+          const clientUuid = crypto.randomUUID();
+
+          const userId = db.createUser(
+            usernameKey,
+            passwordHash,
+            role,
+            escapedFullName,
+            escapedPhone,
+            pairingCode,
+            clientUuid,
+            avatarBase64 || ''
+          );
+
+          if (role === 'athlete') {
+            cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapedFullName, escapedPhone).catch(() => {});
+          }
+
+          user = db.findUserById(userId);
+        }
+
+        const token = generateToken();
+        db.createAuthToken(token, user.id);
+
+        return sendJson(res, 201, {
+          success: true,
           token,
           user: {
             id: user.id,

@@ -58,9 +58,18 @@
     regPhone: document.getElementById('reg-phone'),
     btnTelegramAuth: document.getElementById('btn-telegram-auth'),
     dialogTelegramAuth: document.getElementById('dialog-telegram-auth'),
-    formTelegramAuth: document.getElementById('form-telegram-auth'),
+    tgStepRequest: document.getElementById('tg-step-request'),
+    tgStepVerify: document.getElementById('tg-step-verify'),
+    tgStepProfile: document.getElementById('tg-step-profile'),
+    formTgRequest: document.getElementById('form-tg-request'),
     tgInputUsername: document.getElementById('tg-input-username'),
-    btnCancelTgDialog: document.getElementById('btn-cancel-tg-dialog'),
+    formTgVerify: document.getElementById('form-tg-verify'),
+    tgInputCode: document.getElementById('tg-input-code'),
+    tgTimerDisplay: document.getElementById('tg-timer-display'),
+    btnTgBackToStep1: document.getElementById('btn-tg-back-to-step1'),
+    formTgProfile: document.getElementById('form-tg-profile'),
+    tgProfileName: document.getElementById('tg-profile-name'),
+    tgProfilePhone: document.getElementById('tg-profile-phone'),
 
     // Athlete Workout
     athleteDateDisplay: document.getElementById('athlete-date-display'),
@@ -1076,12 +1085,49 @@
       } catch {}
     };
 
+    // Telegram 3-Step OTP Authentication Flow
+    function resetTgAuthModal() {
+      if (state.tgTimerInterval) {
+        clearInterval(state.tgTimerInterval);
+        state.tgTimerInterval = null;
+      }
+      if (el.tgStepRequest) el.tgStepRequest.style.display = 'block';
+      if (el.tgStepVerify) el.tgStepVerify.style.display = 'none';
+      if (el.tgStepProfile) el.tgStepProfile.style.display = 'none';
+      if (el.tgInputCode) el.tgInputCode.value = '';
+    }
+
+    function startTgTimer(durationSeconds = 300) {
+      if (state.tgTimerInterval) clearInterval(state.tgTimerInterval);
+      let remaining = durationSeconds;
+      const updateBadge = () => {
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        const mm = String(m).padStart(2, '0');
+        const ss = String(s).padStart(2, '0');
+        if (el.tgTimerDisplay) {
+          el.tgTimerDisplay.textContent = `⏱ Действует: ${mm}:${ss}`;
+        }
+        if (remaining <= 0) {
+          clearInterval(state.tgTimerInterval);
+          state.tgTimerInterval = null;
+          if (el.tgTimerDisplay) {
+            el.tgTimerDisplay.textContent = '❌ Срок действия кода истек (5 минут)';
+          }
+          showToast('Срок действия кода истек. Запросите код повторно.', 'error');
+        }
+        remaining--;
+      };
+      updateBadge();
+      state.tgTimerInterval = setInterval(updateBadge, 1000);
+    }
+
     // Telegram Fast Auth Button
     if (el.btnTelegramAuth) {
       el.btnTelegramAuth.onclick = async () => {
-        // If running inside Telegram Mini App
+        // Mini App auto-login if running inside Telegram
         if (window.Telegram?.WebApp?.initData) {
-          showToast('Авторизация через Telegram...', 'info');
+          showToast('Авторизация через Telegram Mini App...', 'info');
           try {
             const data = await api('/api/auth/telegram', {
               method: 'POST',
@@ -1096,40 +1142,144 @@
           } catch (_) {}
         }
 
-        // Outside Telegram WebApp: show dialog
+        // Open 3-step OTP dialog
+        resetTgAuthModal();
         if (el.dialogTelegramAuth) {
           el.dialogTelegramAuth.showModal();
+          el.tgInputUsername?.focus();
         }
       };
     }
 
-    // Cancel Telegram Dialog
-    if (el.btnCancelTgDialog) {
-      el.btnCancelTgDialog.onclick = () => {
+    // Close Dialog buttons
+    document.querySelectorAll('.btn-close-tg').forEach(btn => {
+      btn.onclick = () => {
+        resetTgAuthModal();
         el.dialogTelegramAuth?.close();
+      };
+    });
+
+    // Step 1: Request OTP code
+    if (el.formTgRequest) {
+      el.formTgRequest.onsubmit = async (e) => {
+        e.preventDefault();
+        const username = el.tgInputUsername.value.trim();
+        if (!username) return;
+
+        showToast('Отправка кода в Telegram...', 'info');
+        try {
+          const res = await api('/api/auth/telegram/request-otp', {
+            method: 'POST',
+            body: JSON.stringify({ username })
+          });
+          state.tgPendingUsername = res.telegramUsername;
+          showToast(res.message || 'Код отправлен в бота Telegram', 'success');
+
+          // Transition to Step 2
+          el.tgStepRequest.style.display = 'none';
+          el.tgStepVerify.style.display = 'block';
+          startTgTimer(res.expiresInSeconds || 300);
+
+          if (res.debugCode) {
+            el.tgInputCode.value = res.debugCode;
+          }
+          el.tgInputCode.focus();
+        } catch (_) {}
       };
     }
 
-    // Telegram Modal Submit
-    if (el.formTelegramAuth) {
-      el.formTelegramAuth.onsubmit = async (e) => {
-        e.preventDefault();
-        const username = el.tgInputUsername.value.trim();
-        const requestedRole = document.querySelector('input[name="tg-reg-role"]:checked')?.value || 'athlete';
-        if (!username) return;
+    // Back to Step 1
+    if (el.btnTgBackToStep1) {
+      el.btnTgBackToStep1.onclick = () => {
+        if (state.tgTimerInterval) clearInterval(state.tgTimerInterval);
+        el.tgStepVerify.style.display = 'none';
+        el.tgStepRequest.style.display = 'block';
+        el.tgInputUsername.focus();
+      };
+    }
 
-        showToast('Вход через Telegram...', 'info');
+    // Auto-filter OTP code input (only 6 digits)
+    if (el.tgInputCode) {
+      el.tgInputCode.oninput = (e) => {
+        e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+      };
+    }
+
+    // Step 2: Verify OTP code
+    if (el.formTgVerify) {
+      el.formTgVerify.onsubmit = async (e) => {
+        e.preventDefault();
+        const code = el.tgInputCode.value.trim();
+        if (code.length !== 6) {
+          showToast('Код должен содержать ровно 6 цифр', 'error');
+          return;
+        }
+
+        showToast('Проверка кода...', 'info');
         try {
-          const data = await api('/api/auth/telegram', {
+          const res = await api('/api/auth/telegram/verify-otp', {
             method: 'POST',
-            body: JSON.stringify({ username, requestedRole })
+            body: JSON.stringify({
+              username: state.tgPendingUsername,
+              code
+            })
           });
-          state.token = data.token;
-          state.user = data.user;
-          localStorage.setItem('fit_token', data.token);
+
+          if (state.tgTimerInterval) {
+            clearInterval(state.tgTimerInterval);
+            state.tgTimerInterval = null;
+          }
+
+          if (!res.isNewUser && res.token) {
+            // Existing user logged in
+            state.token = res.token;
+            state.user = res.user;
+            localStorage.setItem('fit_token', res.token);
+            el.dialogTelegramAuth?.close();
+            setupAppForRole(res.user.role);
+            showToast(`С возвращением, ${res.user.fullName || res.user.username}!`, 'success');
+          } else {
+            // New user: transition to Step 3 (Fill account profile)
+            el.tgStepVerify.style.display = 'none';
+            el.tgStepProfile.style.display = 'block';
+            el.tgProfileName.focus();
+            showToast('Код подтвержден! Заполните ваш профиль.', 'success');
+          }
+        } catch (_) {}
+      };
+    }
+
+    // Step 3: Complete profile (New user)
+    if (el.formTgProfile) {
+      el.formTgProfile.onsubmit = async (e) => {
+        e.preventDefault();
+        const fullName = el.tgProfileName.value.trim();
+        const phone = el.tgProfilePhone.value.trim();
+        const role = document.querySelector('input[name="tg-new-role"]:checked')?.value || 'athlete';
+
+        if (!fullName) {
+          showToast('Укажите ваше ФИО', 'error');
+          return;
+        }
+
+        showToast('Создание профиля...', 'info');
+        try {
+          const res = await api('/api/auth/telegram/complete-profile', {
+            method: 'POST',
+            body: JSON.stringify({
+              username: state.tgPendingUsername,
+              fullName,
+              phone,
+              role
+            })
+          });
+
+          state.token = res.token;
+          state.user = res.user;
+          localStorage.setItem('fit_token', res.token);
           el.dialogTelegramAuth?.close();
-          setupAppForRole(data.user.role);
-          showToast(`Добро пожаловать, ${data.user.fullName || data.user.username}!`, 'success');
+          setupAppForRole(res.user.role);
+          showToast(`Добро пожаловать в Fitness Pro, ${res.user.fullName}!`, 'success');
         } catch (_) {}
       };
     }

@@ -515,39 +515,75 @@
         </button>
       </section>
 
-      <!-- Dialog: Telegram Auth Modal -->
+      <!-- Dialog: Telegram OTP Auth Modal (5-minute one-time code + profile completion) -->
       <dialog id="dialog-telegram-auth" class="app-dialog">
         <div class="dialog-content">
-          <div class="dialog-title">ВХОД ЧЕРЕЗ TELEGRAM</div>
-          <p class="dialog-subtitle">Мгновенный вход в экосистему через Telegram</p>
           
-          <form id="form-telegram-auth">
-            <div class="form-group" style="margin-bottom: 12px;">
-              <label class="field-label">Ваш Telegram @username или ID</label>
-              <input type="text" id="tg-input-username" class="app-input" placeholder="@username или имя" required>
-            </div>
-
-            <div class="form-group" style="margin-bottom: 16px;">
-              <label class="field-label">Ваша роль в экосистеме</label>
-              <div class="role-selector-cards">
-                <label class="role-card selected">
-                  <input type="radio" name="tg-reg-role" value="athlete" checked>
-                  <div class="role-card-title">АТЛЕТ</div>
-                  <div class="role-card-desc">Тренировки, отметка подходов, рейтинг</div>
-                </label>
-                <label class="role-card">
-                  <input type="radio" name="tg-reg-role" value="trainer">
-                  <div class="role-card-title">ТРЕНЕР</div>
-                  <div class="role-card-desc">Ведение подопечных, назначение планов</div>
-                </label>
+          <!-- STEP 1: Request Code -->
+          <div id="tg-step-request">
+            <div class="dialog-title">ВХОД ЧЕРЕЗ TELEGRAM</div>
+            <p class="dialog-subtitle">Введите ваш Telegram @username. В бота придёт одноразовый 6-значный код (действует 5 минут).</p>
+            <form id="form-tg-request">
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label class="field-label">Ваш Telegram @username</label>
+                <input type="text" id="tg-input-username" class="app-input" placeholder="@durov или логин" required autocomplete="username">
               </div>
-            </div>
+              <div class="dialog-actions">
+                <button type="button" class="app-btn btn-secondary btn-close-tg">Отмена</button>
+                <button type="submit" class="app-btn btn-telegram" id="btn-submit-tg-request">Получить код в Telegram</button>
+              </div>
+            </form>
+          </div>
 
-            <div class="dialog-actions">
-              <button type="button" id="btn-cancel-tg-dialog" class="app-btn btn-secondary">Отмена</button>
-              <button type="submit" class="app-btn btn-telegram">Войти</button>
-            </div>
-          </form>
+          <!-- STEP 2: Verify OTP Code -->
+          <div id="tg-step-verify" style="display: none;">
+            <div class="dialog-title">ОДНОРАЗОВЫЙ КОД</div>
+            <p class="dialog-subtitle">В Telegram бота отправлен 6-значный код. Он действует 5 минут.</p>
+            <div class="tg-timer-badge" id="tg-timer-display">⏱ Действует: 05:00</div>
+            <form id="form-tg-verify">
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label class="field-label">6-значный код из Telegram</label>
+                <input type="text" id="tg-input-code" class="app-input pin-input-field tabular-nums" placeholder="123456" maxlength="6" inputmode="numeric" required autocomplete="one-time-code">
+              </div>
+              <div class="dialog-actions">
+                <button type="button" id="btn-tg-back-to-step1" class="app-btn btn-secondary">Назад</button>
+                <button type="submit" class="app-btn btn-telegram" id="btn-submit-tg-verify">Подтвердить код</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- STEP 3: Complete Profile (As in Mobile App) -->
+          <div id="tg-step-profile" style="display: none;">
+            <div class="dialog-title">ЗАПОЛНИТЕ ПРОФИЛЬ</div>
+            <p class="dialog-subtitle">Первый вход через Telegram: укажите ваши данные (как в приложении).</p>
+            <form id="form-tg-profile">
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label class="field-label">ФИО</label>
+                <input type="text" id="tg-profile-name" class="app-input" placeholder="Иван Иванов" required>
+              </div>
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label class="field-label">Номер телефона</label>
+                <input type="tel" id="tg-profile-phone" class="app-input" placeholder="+7 999 000-00-00">
+              </div>
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label class="field-label">Ваша роль (нельзя изменить позже)</label>
+                <div class="role-selector-cards">
+                  <label class="role-card selected">
+                    <input type="radio" name="tg-new-role" value="athlete" checked>
+                    <div class="role-card-title">АТЛЕТ</div>
+                    <div class="role-card-desc">Тренировки по плану, отметка подходов, рейтинг</div>
+                  </label>
+                  <label class="role-card">
+                    <input type="radio" name="tg-new-role" value="trainer">
+                    <div class="role-card-title">ТРЕНЕР</div>
+                    <div class="role-card-desc">Ведение подопечных, назначение планов</div>
+                  </label>
+                </div>
+              </div>
+              <button type="submit" class="app-btn btn-primary" id="btn-submit-tg-profile">Войти в аккаунт</button>
+            </form>
+          </div>
+
         </div>
       </dialog>
 
