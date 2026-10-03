@@ -14,6 +14,8 @@ import com.trainerapp.pro.domain.calculators.SessionReadinessInfo
 import com.trainerapp.pro.domain.timer.RestTimerManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -122,9 +124,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     dao.updateClient(client.copy(clientUuid = defaultUuid, pairingCode = defaultPin))
                 }
             }
-            // Автоматическая синхронизация при запуске приложения
-            selectedClientId.filterNotNull().firstOrNull()?.let {
-                syncActiveClientWithGoogleDrive()
+            // Автоматическая фоновая синхронизация при запуске и каждые 45 секунд
+            while (true) {
+                selectedClientId.value?.let {
+                    syncActiveClientWithGoogleDrive()
+                }
+                delay(45000L)
             }
         }
         viewModelScope.launch {
@@ -428,6 +433,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun importAthletePayloadJson(clientId: Long, json: String): Result<String> = withContext(Dispatchers.IO) {
         gitHubSync.applyAthletePayload(dao, clientId, json)
+    }
+
+    data class LastExerciseStatsSummary(
+        val lastDate: String?,
+        val maxWeightKg: Double,
+        val setsCount: Int,
+        val totalReps: Int,
+        val sets: List<WorkoutSetEntity>
+    )
+
+    suspend fun getLastExerciseStats(exerciseId: Long): LastExerciseStatsSummary = withContext(Dispatchers.IO) {
+        val clientId = _selectedClientId.value ?: 1L
+        val date = _currentDate.value
+        val lastDate = dao.getLastExerciseDateForClient(clientId, exerciseId, date)
+        val sets = dao.getLastExerciseSetsForClient(clientId, exerciseId, date)
+        val maxWeight = sets.maxOfOrNull { it.weightKg } ?: 0.0
+        val setsCount = sets.size
+        val totalReps = sets.sumOf { it.reps }
+        LastExerciseStatsSummary(lastDate, maxWeight, setsCount, totalReps, sets)
     }
 
     override fun onCleared() {

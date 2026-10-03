@@ -32,8 +32,9 @@ class GoogleDriveSyncManager {
             val encodedKey = URLEncoder.encode(secretKey, "UTF-8")
             val requestUrl = "$endpoint?key=$encodedKey"
 
-            // 1. Читаем текущее состояние с Google Диска
-            val currentCloudJson = httpGet(requestUrl)
+            // 1. Читаем текущее состояние с Google Диска (с автоматической расшифровкой AES-256)
+            val rawCloudData = httpGet(requestUrl)
+            val currentCloudJson = CloudSecurityManager.decryptPayload(rawCloudData)
             var pullMsg = "Данных подопечного в облаке пока нет."
 
             val clientUuid = client.clientUuid
@@ -89,9 +90,10 @@ class GoogleDriveSyncManager {
             rootObj.getAsJsonObject("clients").add(clientStorageKey, trainerPayloadElement)
             rootObj.addProperty("updatedAt", System.currentTimeMillis().toString())
 
-            // 3. Отправляем обновленный JSON в Google Диск
+            // 3. Отправляем зашифрованный JSON (AES-256) в Google Диск
             val updatedJson = gson.toJson(rootObj)
-            val postSuccess = httpPost(requestUrl, updatedJson)
+            val encryptedJson = CloudSecurityManager.encryptPayload(updatedJson)
+            val postSuccess = httpPost(requestUrl, encryptedJson)
 
             if (!postSuccess) {
                 return@withContext Result.failure(Exception("Не удалось сохранить данные на Google Диске (ошибка HTTP)"))
@@ -121,21 +123,33 @@ class GoogleDriveSyncManager {
             var goalFromQr: String? = null
             var notesFromQr: String? = null
 
-            // Извлекаем JSON объект даже если он обернут в кавычки или дополнительный текст
+            // Clean input string from surrounding quotes or markdown formatting
+            var rawInput = trimmedInput
+            if (rawInput.startsWith("```json")) {
+                rawInput = rawInput.removePrefix("```json").removeSuffix("```").trim()
+            } else if (rawInput.startsWith("```")) {
+                rawInput = rawInput.removePrefix("```").removeSuffix("```").trim()
+            }
+            if (rawInput.startsWith("\"") && rawInput.endsWith("\"") && rawInput.length > 2) {
+                rawInput = rawInput.substring(1, rawInput.length - 1).replace("\\\"", "\"").replace("\\\\", "\\")
+            }
+
+            // Extract JSON object if present
             var jsonCandidate: String? = null
-            if (trimmedInput.startsWith("{") && trimmedInput.endsWith("}")) {
-                jsonCandidate = trimmedInput
-            } else if (trimmedInput.contains("{") && trimmedInput.contains("}")) {
-                val start = trimmedInput.indexOf("{")
-                val end = trimmedInput.lastIndexOf("}")
+            if (rawInput.startsWith("{") && rawInput.endsWith("}")) {
+                jsonCandidate = rawInput
+            } else if (rawInput.contains("{") && rawInput.contains("}")) {
+                val start = rawInput.indexOf("{")
+                val end = rawInput.lastIndexOf("}")
                 if (start < end) {
-                    jsonCandidate = trimmedInput.substring(start, end + 1)
+                    jsonCandidate = rawInput.substring(start, end + 1)
                 }
             }
 
             if (jsonCandidate != null) {
                 try {
-                    val qrJson = JsonParser.parseString(jsonCandidate).asJsonObject
+                    val element = JsonParser.parseString(jsonCandidate)
+                    val qrJson = if (element.isJsonObject) element.asJsonObject else JsonParser.parseString(element.asString).asJsonObject
                     pinFromQr = qrJson.get("pin")?.asString
                     uuidFromQr = qrJson.get("uuid")?.asString ?: qrJson.get("clientUuid")?.asString
                     nameFromQr = qrJson.get("name")?.asString ?: qrJson.get("clientName")?.asString
@@ -143,11 +157,19 @@ class GoogleDriveSyncManager {
                     goalFromQr = qrJson.get("goal")?.asString
                     notesFromQr = qrJson.get("notes")?.asString
                 } catch (_: Exception) {
-                    // Не валидный JSON, обрабатываем как обычный 6-значный PIN
+                    // Fallback to Regex extraction if JSON parsing fails due to escaping/quotes
+                    Regex("\"pin\"\\s*:\\s*\"([^\"]+)\"").find(jsonCandidate)?.let { pinFromQr = it.groupValues[1] }
+                    Regex("\"uuid\"\\s*:\\s*\"([^\"]+)\"").find(jsonCandidate)?.let { uuidFromQr = it.groupValues[1] }
+                    Regex("\"clientUuid\"\\s*:\\s*\"([^\"]+)\"").find(jsonCandidate)?.let { uuidFromQr = it.groupValues[1] }
+                    Regex("\"name\"\\s*:\\s*\"([^\"]+)\"").find(jsonCandidate)?.let { nameFromQr = it.groupValues[1] }
+                    Regex("\"clientName\"\\s*:\\s*\"([^\"]+)\"").find(jsonCandidate)?.let { nameFromQr = it.groupValues[1] }
+                    Regex("\"phone\"\\s*:\\s*\"([^\"]+)\"").find(jsonCandidate)?.let { phoneFromQr = it.groupValues[1] }
+                    Regex("\"goal\"\\s*:\\s*\"([^\"]+)\"").find(jsonCandidate)?.let { goalFromQr = it.groupValues[1] }
+                    Regex("\"notes\"\\s*:\\s*\"([^\"]+)\"").find(jsonCandidate)?.let { notesFromQr = it.groupValues[1] }
                 }
             }
 
-            val cleanPin = (pinFromQr ?: trimmedInput).filter { it.isDigit() }
+            val cleanPin = (pinFromQr ?: rawInput).filter { it.isDigit() }
             if (cleanPin.length != 6 && uuidFromQr.isNullOrBlank()) {
                 return@withContext Result.failure(IllegalArgumentException("Неверный формат кода. Введите 6 цифр (например, 739-102) или отсканируйте QR-код."))
             }
@@ -157,7 +179,8 @@ class GoogleDriveSyncManager {
             val encodedKey = URLEncoder.encode(secretKey, "UTF-8")
             val requestUrl = "$endpoint?key=$encodedKey"
 
-            val currentCloudJson = httpGet(requestUrl)
+            val rawCloudData = httpGet(requestUrl)
+            val currentCloudJson = CloudSecurityManager.decryptPayload(rawCloudData)
             var rootObj = JsonObject()
 
             var athleteUuid: String? = uuidFromQr
@@ -273,7 +296,8 @@ class GoogleDriveSyncManager {
                 pairingEntry.addProperty("pairedAt", System.currentTimeMillis().toString())
 
                 rootObj.addProperty("updatedAt", System.currentTimeMillis().toString())
-                httpPost(requestUrl, gson.toJson(rootObj))
+                val encPost = CloudSecurityManager.encryptPayload(gson.toJson(rootObj))
+                httpPost(requestUrl, encPost)
             } catch (_: Exception) {
                 // Ошибка обновления облачного статуса спаривания не должна ломать локальную привязку
             }

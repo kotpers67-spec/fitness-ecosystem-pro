@@ -100,6 +100,8 @@ class SyncAndReadinessRemediationTest {
             sets.removeAll { it.sessionId == sessionId && it.exerciseId == exerciseId }
         }
         override suspend fun getLastExerciseSet(clientId: Long, exerciseId: Long, currentDate: String): WorkoutSetEntity? = null
+        override suspend fun getLastExerciseSetsForClient(clientId: Long, exerciseId: Long, currentDate: String): List<WorkoutSetEntity> = emptyList()
+        override suspend fun getLastExerciseDateForClient(clientId: Long, exerciseId: Long, currentDate: String): String? = null
         override fun getAnthropometryForClient(clientId: Long): Flow<List<AnthropometryEntity>> = emptyFlow()
         override suspend fun insertAnthropometry(entry: AnthropometryEntity): Long {
             val id = (anthropometry.maxOfOrNull { it.id } ?: 0) + 1

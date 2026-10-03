@@ -1488,6 +1488,131 @@ public final class TrainerDao_Impl implements TrainerDao {
   }
 
   @Override
+  public Object getLastExerciseSetsForClient(final long clientId, final long exerciseId,
+      final String currentDate, final Continuation<? super List<WorkoutSetEntity>> $completion) {
+    final String _sql = "\n"
+            + "        SELECT ws.* FROM workout_sets ws\n"
+            + "        INNER JOIN workout_sessions s ON ws.sessionId = s.id\n"
+            + "        WHERE s.clientId = ? AND ws.exerciseId = ? AND s.date < ?\n"
+            + "        AND s.date = (\n"
+            + "            SELECT MAX(s2.date) FROM workout_sessions s2\n"
+            + "            INNER JOIN workout_sets ws2 ON ws2.sessionId = s2.id\n"
+            + "            WHERE s2.clientId = ? AND ws2.exerciseId = ? AND s2.date < ?\n"
+            + "        )\n"
+            + "        ORDER BY ws.setNumber ASC\n"
+            + "    ";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 6);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, clientId);
+    _argIndex = 2;
+    _statement.bindLong(_argIndex, exerciseId);
+    _argIndex = 3;
+    _statement.bindString(_argIndex, currentDate);
+    _argIndex = 4;
+    _statement.bindLong(_argIndex, clientId);
+    _argIndex = 5;
+    _statement.bindLong(_argIndex, exerciseId);
+    _argIndex = 6;
+    _statement.bindString(_argIndex, currentDate);
+    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
+    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<List<WorkoutSetEntity>>() {
+      @Override
+      @NonNull
+      public List<WorkoutSetEntity> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
+          final int _cursorIndexOfSessionId = CursorUtil.getColumnIndexOrThrow(_cursor, "sessionId");
+          final int _cursorIndexOfExerciseId = CursorUtil.getColumnIndexOrThrow(_cursor, "exerciseId");
+          final int _cursorIndexOfExerciseOrder = CursorUtil.getColumnIndexOrThrow(_cursor, "exerciseOrder");
+          final int _cursorIndexOfSetNumber = CursorUtil.getColumnIndexOrThrow(_cursor, "setNumber");
+          final int _cursorIndexOfWeightKg = CursorUtil.getColumnIndexOrThrow(_cursor, "weightKg");
+          final int _cursorIndexOfReps = CursorUtil.getColumnIndexOrThrow(_cursor, "reps");
+          final int _cursorIndexOfIsCompleted = CursorUtil.getColumnIndexOrThrow(_cursor, "isCompleted");
+          final int _cursorIndexOfRpe = CursorUtil.getColumnIndexOrThrow(_cursor, "rpe");
+          final List<WorkoutSetEntity> _result = new ArrayList<WorkoutSetEntity>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final WorkoutSetEntity _item;
+            final long _tmpId;
+            _tmpId = _cursor.getLong(_cursorIndexOfId);
+            final long _tmpSessionId;
+            _tmpSessionId = _cursor.getLong(_cursorIndexOfSessionId);
+            final long _tmpExerciseId;
+            _tmpExerciseId = _cursor.getLong(_cursorIndexOfExerciseId);
+            final int _tmpExerciseOrder;
+            _tmpExerciseOrder = _cursor.getInt(_cursorIndexOfExerciseOrder);
+            final int _tmpSetNumber;
+            _tmpSetNumber = _cursor.getInt(_cursorIndexOfSetNumber);
+            final double _tmpWeightKg;
+            _tmpWeightKg = _cursor.getDouble(_cursorIndexOfWeightKg);
+            final int _tmpReps;
+            _tmpReps = _cursor.getInt(_cursorIndexOfReps);
+            final boolean _tmpIsCompleted;
+            final int _tmp;
+            _tmp = _cursor.getInt(_cursorIndexOfIsCompleted);
+            _tmpIsCompleted = _tmp != 0;
+            final Double _tmpRpe;
+            if (_cursor.isNull(_cursorIndexOfRpe)) {
+              _tmpRpe = null;
+            } else {
+              _tmpRpe = _cursor.getDouble(_cursorIndexOfRpe);
+            }
+            _item = new WorkoutSetEntity(_tmpId,_tmpSessionId,_tmpExerciseId,_tmpExerciseOrder,_tmpSetNumber,_tmpWeightKg,_tmpReps,_tmpIsCompleted,_tmpRpe);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+          _statement.release();
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object getLastExerciseDateForClient(final long clientId, final long exerciseId,
+      final String currentDate, final Continuation<? super String> $completion) {
+    final String _sql = "\n"
+            + "        SELECT MAX(s.date) FROM workout_sessions s\n"
+            + "        INNER JOIN workout_sets ws ON ws.sessionId = s.id\n"
+            + "        WHERE s.clientId = ? AND ws.exerciseId = ? AND s.date < ?\n"
+            + "    ";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 3);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, clientId);
+    _argIndex = 2;
+    _statement.bindLong(_argIndex, exerciseId);
+    _argIndex = 3;
+    _statement.bindString(_argIndex, currentDate);
+    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
+    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<String>() {
+      @Override
+      @Nullable
+      public String call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final String _result;
+          if (_cursor.moveToFirst()) {
+            final String _tmp;
+            if (_cursor.isNull(0)) {
+              _tmp = null;
+            } else {
+              _tmp = _cursor.getString(0);
+            }
+            _result = _tmp;
+          } else {
+            _result = null;
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+          _statement.release();
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
   public Flow<List<AnthropometryEntity>> getAnthropometryForClient(final long clientId) {
     final String _sql = "SELECT * FROM anthropometry WHERE clientId = ? ORDER BY date ASC";
     final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 1);

@@ -34,8 +34,9 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             }
             val cleanPin = profile.pairingPin.filter { it.isDigit() }
 
-            // 1. PULL: Читаем с Google Диска
-            val cloudJson = httpGet(requestUrl)
+            // 1. PULL: Читаем с Google Диска (с автоматической расшифровкой AES-256)
+            val rawCloudData = httpGet(requestUrl)
+            val cloudJson = CloudSecurityManager.decryptPayload(rawCloudData)
             var pulledWorkouts = 0
 
             val clientIdStr = athleteId.toString()
@@ -132,6 +133,7 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                 clientUuid = clientUuid,
                 athleteId = athleteId,
                 clientName = currentProfile.fullName.ifBlank { "Александр Смирнов" },
+                avatarBase64 = currentProfile.avatarBase64,
                 syncTimestamp = System.currentTimeMillis(),
                 assignedWorkouts = syncSessions,
                 anthropometry = syncAnth
@@ -168,7 +170,8 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
 
             rootObj.addProperty("updatedAt", System.currentTimeMillis().toString())
 
-            val postSuccess = httpPost(requestUrl, gson.toJson(rootObj))
+            val encryptedJson = CloudSecurityManager.encryptPayload(gson.toJson(rootObj))
+            val postSuccess = httpPost(requestUrl, encryptedJson)
             if (!postSuccess) {
                 return@withContext Result.failure(Exception("Не удалось обновить данные на Google Диске"))
             }

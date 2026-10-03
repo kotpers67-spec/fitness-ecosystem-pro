@@ -87,6 +87,8 @@ class TrainerMilestone2FeatureTest {
         }
         override suspend fun deleteExerciseFromSession(sessionId: Long, exerciseId: Long) {}
         override suspend fun getLastExerciseSet(clientId: Long, exerciseId: Long, currentDate: String): WorkoutSetEntity? = null
+        override suspend fun getLastExerciseSetsForClient(clientId: Long, exerciseId: Long, currentDate: String): List<WorkoutSetEntity> = emptyList()
+        override suspend fun getLastExerciseDateForClient(clientId: Long, exerciseId: Long, currentDate: String): String? = null
         override fun getAnthropometryForClient(clientId: Long): Flow<List<AnthropometryEntity>> = emptyFlow()
         override suspend fun insertAnthropometry(entry: AnthropometryEntity): Long = 1L
         override fun getExerciseHistory(clientId: Long, exerciseId: Long): Flow<List<SetHistoryItem>> = emptyFlow()

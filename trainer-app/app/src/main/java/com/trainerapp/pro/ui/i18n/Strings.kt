@@ -24,10 +24,10 @@ object AppStrings {
             "clients_list" -> if (isEn) "ATHLETES LIST" else "СПИСОК ИМЕН (КЛИЕНТЫ)"
             "exercises_list" -> if (isEn) "EXERCISES LIST" else "СПИСОК УПРАЖНЕНИЙ"
             "language" -> if (isEn) "LANGUAGE / ЯЗЫК" else "ЯЗЫК ИНТЕРФЕЙСА"
-            "cloud_sync" -> if (isEn) "CLOUD & GITHUB SYNC" else "ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ (GITHUB / JSON)"
-            "auto_update" -> if (isEn) "AUTO-UPDATE (GITHUB RELEASES)" else "АВТООБНОВЛЕНИЕ (GITHUB RELEASES)"
+            "cloud_sync" -> if (isEn) "SYNC" else "СИНХРОНИЗАЦИЯ"
+            "auto_update" -> if (isEn) "AUTO-UPDATE" else "АВТООБНОВЛЕНИЕ"
             "check_update" -> if (isEn) "Check for Updates" else "Проверить обновления"
-            "push_to_cloud" -> if (isEn) "Push to Cloud" else "Отправить в облако"
+            "push_to_cloud" -> if (isEn) "Sync" else "Синхронизация"
             "pull_from_cloud" -> if (isEn) "Pull from Cloud" else "Загрузить из облака"
             "sets" -> if (isEn) "SETS" else "ПОДХОДЫ"
             "weight_kg" -> if (isEn) "WEIGHT (KG)" else "ВЕС (КГ)"
@@ -37,7 +37,7 @@ object AppStrings {
             "rest_timer" -> if (isEn) "REST BETWEEN SETS" else "ОТДЫХ МЕЖДУ СЕТАМИ"
             "body_weight_dynamic" -> if (isEn) "BODY WEIGHT DYNAMICS (KG)" else "ДИНАМИКА ВЕСА ТЕЛА (КГ)"
             "exercise_progress" -> if (isEn) "STRENGTH PROGRESS BY EXERCISE" else "ПРОГРЕСС СИЛОВЫХ ПО УПРАЖНЕНИЮ"
-            "sync_hub" -> if (isEn) "SYNC HUB (BLE / CLOUD)" else "СИНХРОНИЗАЦИЯ (BLE / GITHUB CLOUD)"
+            "sync_hub" -> if (isEn) "SYNC" else "СИНХРОНИЗАЦИЯ"
             else -> key
         }
     }

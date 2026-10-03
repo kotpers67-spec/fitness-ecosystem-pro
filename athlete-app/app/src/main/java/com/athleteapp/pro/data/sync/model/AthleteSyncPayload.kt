@@ -5,6 +5,7 @@ data class AthleteSyncPayload(
     val athleteId: Long = 1,
     val syncTimestamp: Long = System.currentTimeMillis(),
     val clientName: String = "",
+    val avatarBase64: String? = null,
     val assignedWorkouts: List<SyncWorkoutSession> = emptyList(),
     val anthropometry: List<SyncAnthropometry> = emptyList()
 )

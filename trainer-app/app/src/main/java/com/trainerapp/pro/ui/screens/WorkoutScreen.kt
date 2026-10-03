@@ -29,6 +29,7 @@ import com.trainerapp.pro.data.local.entities.WorkoutSetEntity
 import com.trainerapp.pro.ui.MainViewModel
 import com.trainerapp.pro.ui.components.OneRepMaxCalculatorDialog
 import com.trainerapp.pro.ui.components.PlateCalculatorDialog
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,8 +47,11 @@ fun WorkoutScreen(
     var showAddExerciseDialog by remember { mutableStateOf(false) }
     var showPlateDialog by remember { mutableStateOf(false) }
     var show1RMDialog by remember { mutableStateOf(false) }
+    var showExerciseStatsDialog by remember { mutableStateOf(false) }
+    var statsSummary by remember { mutableStateOf<MainViewModel.LastExerciseStatsSummary?>(null) }
     var selectedWeightForCalc by remember { mutableStateOf(0.0) }
     var selectedRepsForCalc by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     // Distinct exercise orders present in this session (max 8)
     val sessionExercises = remember(currentSets, exercises) {
@@ -353,19 +357,43 @@ fun WorkoutScreen(
                             }
 
                             item {
-                                OutlinedButton(
-                                    onClick = { viewModel.addSetToCurrentExercise(exercise.id, order) },
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 8.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.primary
-                                    )
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("+ ДОБАВИТЬ ПОДХОД", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    OutlinedButton(
+                                        onClick = { viewModel.addSetToCurrentExercise(exercise.id, order) },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("+ ПОДХОД", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                statsSummary = viewModel.getLastExerciseStats(exercise.id)
+                                                showExerciseStatsDialog = true
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    ) {
+                                        Icon(Icons.Default.BarChart, contentDescription = "Статистика", modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("СТАТИСТИКА", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
                                 }
                             }
                         }
@@ -418,6 +446,119 @@ fun WorkoutScreen(
             initialWeight = selectedWeightForCalc,
             initialReps = selectedRepsForCalc,
             onDismiss = { show1RMDialog = false }
+        )
+    }
+
+    // Exercise History / Statistics Dialog
+    if (showExerciseStatsDialog && activeExerciseTriple != null) {
+        val exercise = activeExerciseTriple.second
+        val summary = statsSummary
+
+        AlertDialog(
+            onDismissRequest = { showExerciseStatsDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.QueryStats,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Статистика: ${exercise.name}",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (summary == null || summary.lastDate == null) {
+                        Text(
+                            text = "Ранее история выполнения этого упражнения для данного подопечного не найдена.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Дата последней тренировки:", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                                    Text(summary.lastDate, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Максимальный вес:", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                                    Text("${summary.maxWeightKg} кг", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Количество подходов:", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                                    Text("${summary.setsCount} (всего ${summary.totalReps} повт.)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = "ДЕТАЛИЗАЦИЯ ПОДХОДОВ:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            summary.sets.forEach { set ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Подход ${set.setNumber}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "${set.weightKg} кг × ${set.reps} повт.",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showExerciseStatsDialog = false },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Закрыть")
+                }
+            }
         )
     }
 }

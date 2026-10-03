@@ -17,6 +17,7 @@ data class AthleteProfileEntity(
     val restrictions: String = "",
     val avatarPath: String? = null,
     val photoUri: String? = null,
+    val avatarBase64: String? = null,
     val pairingPin: String = "",
     val isPairedWithCoach: Boolean = false,
     val pairedCoachName: String = ""

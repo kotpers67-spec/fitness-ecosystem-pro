@@ -19,6 +19,8 @@ import com.athleteapp.pro.domain.calculators.SessionReadiness
 import com.athleteapp.pro.domain.timer.RestTimerManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -91,6 +93,13 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                 if (_selectedExerciseId.value == null && list.isNotEmpty()) {
                     selectExerciseForHistory(list.first().id)
                 }
+            }
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            while (true) {
+                autoSync()
+                delay(45000L)
             }
         }
     }
@@ -298,10 +307,13 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                     scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
                 }
 
+                val bytes = avatarFile.readBytes()
+                val base64Str = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 val savedPath = avatarFile.absolutePath
                 val current = profile.value ?: AthleteProfileEntity()
-                dao.saveProfile(current.copy(avatarPath = savedPath, photoUri = savedPath))
+                dao.saveProfile(current.copy(avatarPath = savedPath, photoUri = savedPath, avatarBase64 = base64Str))
                 _syncMessage.value = "Фото профиля обновлено"
+                autoSync()
             } catch (e: Exception) {
                 _syncMessage.value = "Ошибка сохранения фото: ${e.message}"
             }

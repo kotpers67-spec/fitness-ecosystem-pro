@@ -89,7 +89,6 @@ interface TrainerDao {
     @Query("DELETE FROM workout_sets WHERE sessionId = :sessionId AND exerciseId = :exerciseId")
     suspend fun deleteExerciseFromSession(sessionId: Long, exerciseId: Long)
 
-    // Previous Weight Hint Lookup
     @Query("""
         SELECT ws.* FROM workout_sets ws
         INNER JOIN workout_sessions s ON ws.sessionId = s.id
@@ -97,6 +96,26 @@ interface TrainerDao {
         ORDER BY s.date DESC, ws.setNumber DESC LIMIT 1
     """)
     suspend fun getLastExerciseSet(clientId: Long, exerciseId: Long, currentDate: String): WorkoutSetEntity?
+
+    @Query("""
+        SELECT ws.* FROM workout_sets ws
+        INNER JOIN workout_sessions s ON ws.sessionId = s.id
+        WHERE s.clientId = :clientId AND ws.exerciseId = :exerciseId AND s.date < :currentDate
+        AND s.date = (
+            SELECT MAX(s2.date) FROM workout_sessions s2
+            INNER JOIN workout_sets ws2 ON ws2.sessionId = s2.id
+            WHERE s2.clientId = :clientId AND ws2.exerciseId = :exerciseId AND s2.date < :currentDate
+        )
+        ORDER BY ws.setNumber ASC
+    """)
+    suspend fun getLastExerciseSetsForClient(clientId: Long, exerciseId: Long, currentDate: String): List<WorkoutSetEntity>
+
+    @Query("""
+        SELECT MAX(s.date) FROM workout_sessions s
+        INNER JOIN workout_sets ws ON ws.sessionId = s.id
+        WHERE s.clientId = :clientId AND ws.exerciseId = :exerciseId AND s.date < :currentDate
+    """)
+    suspend fun getLastExerciseDateForClient(clientId: Long, exerciseId: Long, currentDate: String): String?
 
     // Anthropometry
     @Query("SELECT * FROM anthropometry WHERE clientId = :clientId ORDER BY date ASC")

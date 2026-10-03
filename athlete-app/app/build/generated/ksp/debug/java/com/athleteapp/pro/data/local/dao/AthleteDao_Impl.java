@@ -67,7 +67,7 @@ public final class AthleteDao_Impl implements AthleteDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR REPLACE INTO `athlete_profile` (`id`,`clientUuid`,`athleteIdInCoachBase`,`fullName`,`phone`,`goal`,`notes`,`restrictions`,`avatarPath`,`photoUri`,`pairingPin`,`isPairedWithCoach`,`pairedCoachName`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        return "INSERT OR REPLACE INTO `athlete_profile` (`id`,`clientUuid`,`athleteIdInCoachBase`,`fullName`,`phone`,`goal`,`notes`,`restrictions`,`avatarPath`,`photoUri`,`avatarBase64`,`pairingPin`,`isPairedWithCoach`,`pairedCoachName`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -91,10 +91,15 @@ public final class AthleteDao_Impl implements AthleteDao {
         } else {
           statement.bindString(10, entity.getPhotoUri());
         }
-        statement.bindString(11, entity.getPairingPin());
+        if (entity.getAvatarBase64() == null) {
+          statement.bindNull(11);
+        } else {
+          statement.bindString(11, entity.getAvatarBase64());
+        }
+        statement.bindString(12, entity.getPairingPin());
         final int _tmp = entity.isPairedWithCoach() ? 1 : 0;
-        statement.bindLong(12, _tmp);
-        statement.bindString(13, entity.getPairedCoachName());
+        statement.bindLong(13, _tmp);
+        statement.bindString(14, entity.getPairedCoachName());
       }
     };
     this.__insertionAdapterOfAssignedExerciseEntity = new EntityInsertionAdapter<AssignedExerciseEntity>(__db) {
@@ -549,6 +554,7 @@ public final class AthleteDao_Impl implements AthleteDao {
           final int _cursorIndexOfRestrictions = CursorUtil.getColumnIndexOrThrow(_cursor, "restrictions");
           final int _cursorIndexOfAvatarPath = CursorUtil.getColumnIndexOrThrow(_cursor, "avatarPath");
           final int _cursorIndexOfPhotoUri = CursorUtil.getColumnIndexOrThrow(_cursor, "photoUri");
+          final int _cursorIndexOfAvatarBase64 = CursorUtil.getColumnIndexOrThrow(_cursor, "avatarBase64");
           final int _cursorIndexOfPairingPin = CursorUtil.getColumnIndexOrThrow(_cursor, "pairingPin");
           final int _cursorIndexOfIsPairedWithCoach = CursorUtil.getColumnIndexOrThrow(_cursor, "isPairedWithCoach");
           final int _cursorIndexOfPairedCoachName = CursorUtil.getColumnIndexOrThrow(_cursor, "pairedCoachName");
@@ -582,6 +588,12 @@ public final class AthleteDao_Impl implements AthleteDao {
             } else {
               _tmpPhotoUri = _cursor.getString(_cursorIndexOfPhotoUri);
             }
+            final String _tmpAvatarBase64;
+            if (_cursor.isNull(_cursorIndexOfAvatarBase64)) {
+              _tmpAvatarBase64 = null;
+            } else {
+              _tmpAvatarBase64 = _cursor.getString(_cursorIndexOfAvatarBase64);
+            }
             final String _tmpPairingPin;
             _tmpPairingPin = _cursor.getString(_cursorIndexOfPairingPin);
             final boolean _tmpIsPairedWithCoach;
@@ -590,7 +602,7 @@ public final class AthleteDao_Impl implements AthleteDao {
             _tmpIsPairedWithCoach = _tmp != 0;
             final String _tmpPairedCoachName;
             _tmpPairedCoachName = _cursor.getString(_cursorIndexOfPairedCoachName);
-            _result = new AthleteProfileEntity(_tmpId,_tmpClientUuid,_tmpAthleteIdInCoachBase,_tmpFullName,_tmpPhone,_tmpGoal,_tmpNotes,_tmpRestrictions,_tmpAvatarPath,_tmpPhotoUri,_tmpPairingPin,_tmpIsPairedWithCoach,_tmpPairedCoachName);
+            _result = new AthleteProfileEntity(_tmpId,_tmpClientUuid,_tmpAthleteIdInCoachBase,_tmpFullName,_tmpPhone,_tmpGoal,_tmpNotes,_tmpRestrictions,_tmpAvatarPath,_tmpPhotoUri,_tmpAvatarBase64,_tmpPairingPin,_tmpIsPairedWithCoach,_tmpPairedCoachName);
           } else {
             _result = null;
           }
