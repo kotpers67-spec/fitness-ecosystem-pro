@@ -81,6 +81,9 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     private val _syncMessage = MutableStateFlow<String?>(null)
     val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
 
+    private val _availableUpdate = MutableStateFlow<com.athleteapp.pro.data.update.AthleteUpdateCheckResult?>(null)
+    val availableUpdate: StateFlow<com.athleteapp.pro.data.update.AthleteUpdateCheckResult?> = _availableUpdate.asStateFlow()
+
     // Safe coroutine job holders to prevent Flow leaks
     private var sessionJob: Job? = null
     private var historyJob: Job? = null
@@ -97,8 +100,17 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
         }
 
         viewModelScope.launch(Dispatchers.IO) {
+            var lastUpdateCheck = 0L
             while (true) {
                 autoSync()
+                if (System.currentTimeMillis() - lastUpdateCheck > 60000L) {
+                    lastUpdateCheck = System.currentTimeMillis()
+                    val checkRes = updateService.checkForUpdates()
+                    val updateInfo = checkRes.getOrNull()
+                    if (updateInfo?.isUpdateAvailable == true && updateInfo.downloadUrl != null) {
+                        _availableUpdate.value = updateInfo
+                    }
+                }
                 delay(45000L)
             }
         }

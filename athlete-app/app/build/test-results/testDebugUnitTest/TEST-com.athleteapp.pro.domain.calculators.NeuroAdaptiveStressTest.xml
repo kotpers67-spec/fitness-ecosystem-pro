@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:34:15.261Z" hostname="KOT" time="0.004">
+<testsuite name="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:39:12.668Z" hostname="KOT" time="0.004">
   <properties/>
   <testcase name="testMathematicalSoundness_zeroWeightAndReps" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
-  <testcase name="testSetRecommendation_zeroTargetReps_safeLowerBoundEnforced" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
+  <testcase name="testSetRecommendation_zeroTargetReps_safeLowerBoundEnforced" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.001"/>
   <testcase name="testEmptySets_tonnageAndReadiness" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testSuperExtremeValues_1000kgAnd1000reps" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testSetRecommendation_zeroTargetRepsAcrossAllCases" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.001"/>
   <testcase name="testUncompletedSetsCountedInTonnageSemantics" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
-  <testcase name="testSetRecommendation_deloadOnFailure" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.001"/>
+  <testcase name="testSetRecommendation_deloadOnFailure" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testRpeBoundaries_zeroTenNullNegative" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testEmptySets_recommendationFallback" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.001"/>
   <testcase name="testProgressionRunawaySimulation" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
-  <testcase name="testExtremeValues_highRepsAndHeavyWeights" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
+  <testcase name="testExtremeValues_highRepsAndHeavyWeights" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.001"/>
   <testcase name="testSetRecommendation_unratedRpeMaintainsWeightWithoutOverload" classname="com.athleteapp.pro.domain.calculators.NeuroAdaptiveStressTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

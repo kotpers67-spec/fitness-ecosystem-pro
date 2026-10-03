@@ -61,6 +61,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentSets = MutableStateFlow<List<WorkoutSetEntity>>(emptyList())
     val currentSets: StateFlow<List<WorkoutSetEntity>> = _currentSets.asStateFlow()
 
+    private val _availableUpdate = MutableStateFlow<com.trainerapp.pro.data.update.UpdateCheckResult?>(null)
+    val availableUpdate: StateFlow<com.trainerapp.pro.data.update.UpdateCheckResult?> = _availableUpdate.asStateFlow()
+
     private val _selectedChartExerciseId = MutableStateFlow<Long?>(null)
     val selectedChartExerciseId: StateFlow<Long?> = _selectedChartExerciseId.asStateFlow()
 
@@ -124,10 +127,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     dao.updateClient(client.copy(clientUuid = defaultUuid, pairingCode = defaultPin))
                 }
             }
-            // Автоматическая фоновая синхронизация при запуске и каждые 45 секунд
+            // Автоматическая фоновая синхронизация и проверка обновлений каждые 45 секунд
+            var lastUpdateCheck = 0L
             while (true) {
                 selectedClientId.value?.let {
                     syncActiveClientWithGoogleDrive()
+                }
+                if (System.currentTimeMillis() - lastUpdateCheck > 60000L) {
+                    lastUpdateCheck = System.currentTimeMillis()
+                    val checkRes = updateService.checkForUpdates()
+                    val updateInfo = checkRes.getOrNull()
+                    if (updateInfo?.isUpdateAvailable == true && updateInfo.downloadUrl != null) {
+                        _availableUpdate.value = updateInfo
+                    }
                 }
                 delay(45000L)
             }

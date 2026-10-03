@@ -4,10 +4,16 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.Settings
+import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -38,7 +44,7 @@ class AthleteUpdateService(private val context: Context) {
     private val repoOwner = "santiyastudio-lgtm"
     private val repoName = "fitness-ecosystem-pro"
 
-    private fun getCurrentVersionName(): String {
+    fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             pInfo.versionName ?: "1.0.1"
@@ -156,27 +162,105 @@ class AthleteUpdateService(private val context: Context) {
         return ""
     }
 
-    fun downloadAndInstallApk(downloadUrl: String) {
+    suspend fun downloadApkDirectly(downloadUrl: String): File? = withContext(Dispatchers.IO) {
         try {
-            val uri = Uri.parse(downloadUrl)
-            val request = DownloadManager.Request(uri)
-                .setTitle("Athlete Pro Update")
-                .setDescription("Загрузка обновления Athlete Pro...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "AthletePro_Update.apk")
-                .setMimeType("application/vnd.android.package-archive")
+            val targetFile = File(context.cacheDir, "AthletePro_Update.apk")
+            if (targetFile.exists()) targetFile.delete()
 
-            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            dm.enqueue(request)
-        } catch (e: Exception) {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            var currentUrl = downloadUrl
+            var redirects = 0
+            var conn: HttpURLConnection? = null
+
+            while (redirects < 8) {
+                val url = URL(currentUrl)
+                conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
+
+                val code = conn.responseCode
+                if (code in 300..308) {
+                    val loc = conn.getHeaderField("Location") ?: break
+                    currentUrl = loc
+                    redirects++
+                    continue
+                }
+                break
             }
-            context.startActivity(browserIntent)
+
+            if (conn != null && conn.responseCode in 200..299) {
+                conn.inputStream.use { input ->
+                    FileOutputStream(targetFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                if (targetFile.length() > 100000) {
+                    return@withContext targetFile
+                }
+            }
+            null
+        } catch (_: Exception) {
+            null
         }
     }
 
-    private fun isVersionNewer(remote: String, local: String): Boolean {
+    fun downloadAndInstallApk(downloadUrl: String) {
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            val apkFile = downloadApkDirectly(downloadUrl)
+            if (apkFile != null) {
+                withContext(Dispatchers.Main) {
+                    launchApkInstallation(apkFile)
+                }
+            } else {
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(browserIntent)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    fun launchApkInstallation(apkFile: File) {
+        try {
+            if (!apkFile.exists()) return
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    val manageIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(manageIntent)
+                }
+            }
+
+            val contentUri: Uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                apkFile
+            )
+
+            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(contentUri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+
+            context.startActivity(installIntent)
+        } catch (e: Exception) {
+            val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            try {
+                context.startActivity(fallbackIntent)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun isVersionNewer(remote: String, local: String): Boolean {
         val rParts = remote.split(".").mapNotNull { it.toIntOrNull() }
         val lParts = local.split(".").mapNotNull { it.toIntOrNull() }
 

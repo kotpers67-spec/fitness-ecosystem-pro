@@ -9,12 +9,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
-import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -45,7 +46,7 @@ class UpdateService(private val context: Context) {
     private val repoOwner = "santiyastudio-lgtm"
     private val repoName = "fitness-ecosystem-pro"
 
-    private fun getCurrentVersionName(): String {
+    fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             pInfo.versionName ?: "1.0.1"
@@ -91,7 +92,7 @@ class UpdateService(private val context: Context) {
                     }
                 }
             } catch (_: Exception) {
-                // Если Google Диск недоступен, выполняем переключение на GitHub API
+                // Если Google Диск недоступен, подключаем резервный GitHub API
             }
 
             // 2. Резервный источник: GitHub API
@@ -163,56 +164,73 @@ class UpdateService(private val context: Context) {
         return ""
     }
 
-    fun downloadAndInstallApk(downloadUrl: String) {
+    suspend fun downloadApkDirectly(downloadUrl: String): File? = withContext(Dispatchers.IO) {
         try {
-            val targetFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "TrainerPro_Update.apk")
-            if (targetFile.exists()) {
-                targetFile.delete()
+            val targetFile = File(context.cacheDir, "TrainerPro_Update.apk")
+            if (targetFile.exists()) targetFile.delete()
+
+            var currentUrl = downloadUrl
+            var redirects = 0
+            var conn: HttpURLConnection? = null
+
+            while (redirects < 8) {
+                val url = URL(currentUrl)
+                conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
+
+                val code = conn.responseCode
+                if (code in 300..308) {
+                    val loc = conn.getHeaderField("Location") ?: break
+                    currentUrl = loc
+                    redirects++
+                    continue
+                }
+                break
             }
 
-            val uri = Uri.parse(downloadUrl)
-            val request = DownloadManager.Request(uri)
-                .setTitle("Trainer Pro Update")
-                .setDescription("Загрузка новой версии приложения...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "TrainerPro_Update.apk")
-                .setMimeType("application/vnd.android.package-archive")
-
-            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val downloadId = dm.enqueue(request)
-
-            val receiver = object : BroadcastReceiver() {
-                override fun onReceive(recvContext: Context?, intent: Intent?) {
-                    val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
-                    if (id == downloadId) {
-                        try {
-                            context.unregisterReceiver(this)
-                        } catch (_: Exception) {}
-                        launchApkInstallation(targetFile)
+            if (conn != null && conn.responseCode in 200..299) {
+                conn.inputStream.use { input ->
+                    FileOutputStream(targetFile).use { output ->
+                        input.copyTo(output)
                     }
                 }
+                if (targetFile.length() > 100000) {
+                    return@withContext targetFile
+                }
             }
-
-            val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                context.registerReceiver(receiver, filter)
-            }
-        } catch (e: Exception) {
-            // Fallback to browser download if DownloadManager fails
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(browserIntent)
+            null
+        } catch (_: Exception) {
+            null
         }
     }
 
-    private fun launchApkInstallation(apkFile: File) {
+    fun downloadAndInstallApk(downloadUrl: String) {
+        // Fallback or explicit trigger: try direct HTTP download first, then launch installer
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            val apkFile = downloadApkDirectly(downloadUrl)
+            if (apkFile != null) {
+                withContext(Dispatchers.Main) {
+                    launchApkInstallation(apkFile)
+                }
+            } else {
+                // Fallback to browser or DownloadManager
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(browserIntent)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    fun launchApkInstallation(apkFile: File) {
         try {
             if (!apkFile.exists()) return
 
-            // Check REQUEST_INSTALL_PACKAGES permission on Android 8.0+ (Oreo) and Android 14+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!context.packageManager.canRequestPackageInstalls()) {
                     val manageIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
@@ -220,7 +238,6 @@ class UpdateService(private val context: Context) {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
                     context.startActivity(manageIntent)
-                    // Continue to attempt install flow
                 }
             }
 
@@ -237,7 +254,6 @@ class UpdateService(private val context: Context) {
 
             context.startActivity(installIntent)
         } catch (e: Exception) {
-            // Fallback if FileProvider fails
             val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -248,7 +264,7 @@ class UpdateService(private val context: Context) {
         }
     }
 
-    private fun isVersionNewer(remote: String, local: String): Boolean {
+    fun isVersionNewer(remote: String, local: String): Boolean {
         val rParts = remote.split(".").mapNotNull { it.toIntOrNull() }
         val lParts = local.split(".").mapNotNull { it.toIntOrNull() }
 

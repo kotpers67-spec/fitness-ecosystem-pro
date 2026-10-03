@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.trainerapp.pro.TrainerMilestone2FeatureTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:33:47.184Z" hostname="KOT" time="0.011">
+<testsuite name="com.trainerapp.pro.TrainerMilestone2FeatureTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:38:37.415Z" hostname="KOT" time="0.011">
   <properties/>
   <testcase name="testWorkoutSessionEntitySelfWorkoutPermissionFlag" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.0"/>
   <testcase name="testClientSearchFilterLogic" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.001"/>
   <testcase name="testDaoQueriesByUuidAndPairingCode" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.002"/>
   <testcase name="testApplyAthletePayloadPreservesSelfWorkoutPermission" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.003"/>
   <testcase name="testClientEntityHasValidUuidAndPairingCode" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.001"/>
-  <testcase name="testPinAndQrParsing" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.002"/>
-  <testcase name="testSyncPayloadContainsClientUuidAndSelfWorkoutPermission" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.002"/>
+  <testcase name="testPinAndQrParsing" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.001"/>
+  <testcase name="testSyncPayloadContainsClientUuidAndSelfWorkoutPermission" classname="com.trainerapp.pro.TrainerMilestone2FeatureTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

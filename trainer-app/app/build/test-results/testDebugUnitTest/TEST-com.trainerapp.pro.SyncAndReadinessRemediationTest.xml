@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.trainerapp.pro.SyncAndReadinessRemediationTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:33:47.141Z" hostname="KOT" time="0.04">
+<testsuite name="com.trainerapp.pro.SyncAndReadinessRemediationTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:38:37.371Z" hostname="KOT" time="0.042">
   <properties/>
-  <testcase name="testExerciseIdDesynchronizationByName" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.035"/>
+  <testcase name="testExerciseIdDesynchronizationByName" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.036"/>
   <testcase name="testTonnageFilterExcludesUncompletedSets" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.0"/>
-  <testcase name="testSafeRpeAutoRegulationNoOverloadOnZeroOrUnrated" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.0"/>
-  <testcase name="testPreventCascadeDeletionOnSessionCompletion" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.005"/>
-  <testcase name="testReadinessScorePreviousSessionDateComparison" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.0"/>
+  <testcase name="testSafeRpeAutoRegulationNoOverloadOnZeroOrUnrated" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.001"/>
+  <testcase name="testPreventCascadeDeletionOnSessionCompletion" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.004"/>
+  <testcase name="testReadinessScorePreviousSessionDateComparison" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
