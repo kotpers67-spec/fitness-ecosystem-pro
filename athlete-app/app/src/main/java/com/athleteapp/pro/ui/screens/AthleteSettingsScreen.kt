@@ -530,97 +530,112 @@ fun AthleteSettingsScreen(
                 }
             }
 
-            // 5. In-App Auto-Update via GitHub Releases
+            // 5. ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ (AUTO-UPDATE)
             item {
+                var isCheckingUpdate by remember { mutableStateOf(false) }
+                var updateResult by remember { mutableStateOf<com.athleteapp.pro.data.update.AthleteUpdateCheckResult?>(null) }
+                var updateStatusText by remember { mutableStateOf<String?>(null) }
+                val updateService = remember { com.athleteapp.pro.data.update.AthleteUpdateService(context) }
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text(
-                                text = "АВТООБНОВЛЕНИЕ ПРИЛОЖЕНИЯ",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "v1.0.1",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
                         Text(
-                            text = "Текущая версия: v1.0.0 (Release APK). Проверка новых версий в GitHub Releases.",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "Автоматическая проверка и загрузка обновлений с GitHub.",
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        updateStatus?.let { status ->
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = status,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedButton(
+                        Button(
                             onClick = {
                                 isCheckingUpdate = true
-                                updateStatus = "Проверка обновлений..."
+                                updateStatusText = "Проверка релизов на GitHub..."
                                 scope.launch {
-                                    val res = viewModel.updateService.checkForUpdates()
+                                    val res = updateService.checkForUpdates()
                                     isCheckingUpdate = false
                                     if (res.isSuccess) {
-                                        val info = res.getOrNull()
-                                        if (info != null && info.isUpdateAvailable) {
-                                            availableUpdate = info
-                                            updateStatus = "Найдена новая версия: ${info.latestVersion}! ${info.releaseNotes}"
+                                        val data = res.getOrNull()
+                                        updateResult = data
+                                        if (data?.isUpdateAvailable == true) {
+                                            updateStatusText = "Доступно новое обновление: v${data.latestVersion}!"
                                         } else {
-                                            availableUpdate = null
-                                            updateStatus = "У вас установлена самая последняя версия (v1.0.0)."
+                                            updateStatusText = "У вас установлена актуальная версия Athlete Pro (v1.0.1)."
                                         }
                                     } else {
-                                        availableUpdate = null
-                                        updateStatus = "Самая свежая версия установлена (v1.0.0)."
+                                        updateStatusText = "У вас установлена актуальная версия (v1.0.1)."
                                     }
                                 }
                             },
                             enabled = !isCheckingUpdate,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 48.dp),
-                            shape = RoundedCornerShape(12.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (isCheckingUpdate) "Проверка..." else "Проверить обновления")
+                            if (isCheckingUpdate) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Проверка...", fontSize = 13.sp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Проверить обновления", fontSize = 13.sp)
+                            }
                         }
 
-                        if (availableUpdate != null && availableUpdate?.downloadUrl != null) {
-                            Spacer(modifier = Modifier.height(10.dp))
+                        if (updateResult?.isUpdateAvailable == true && updateResult?.downloadUrl != null) {
                             Button(
                                 onClick = {
-                                    availableUpdate?.downloadUrl?.let { url ->
-                                        viewModel.updateService.downloadAndInstallApk(url)
-                                        updateStatus = "Загрузка файла обновления (${availableUpdate?.latestVersion}) начата..."
-                                    }
+                                    updateStatusText = "Загрузка обновления..."
+                                    updateService.downloadAndInstallApk(updateResult!!.downloadUrl!!)
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(12.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Скачать и установить v${availableUpdate?.latestVersion}")
+                                Text("Скачать и установить v${updateResult!!.latestVersion}", fontWeight = FontWeight.Bold)
                             }
+                        }
+
+                        if (updateStatusText != null) {
+                            Text(
+                                text = updateStatusText!!,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
                         }
                     }
                 }

@@ -121,10 +121,21 @@ class GoogleDriveSyncManager {
             var goalFromQr: String? = null
             var notesFromQr: String? = null
 
-            // Проверяем, является ли ввод JSON объектом из QR-кода
+            // Извлекаем JSON объект даже если он обернут в кавычки или дополнительный текст
+            var jsonCandidate: String? = null
             if (trimmedInput.startsWith("{") && trimmedInput.endsWith("}")) {
+                jsonCandidate = trimmedInput
+            } else if (trimmedInput.contains("{") && trimmedInput.contains("}")) {
+                val start = trimmedInput.indexOf("{")
+                val end = trimmedInput.lastIndexOf("}")
+                if (start < end) {
+                    jsonCandidate = trimmedInput.substring(start, end + 1)
+                }
+            }
+
+            if (jsonCandidate != null) {
                 try {
-                    val qrJson = JsonParser.parseString(trimmedInput).asJsonObject
+                    val qrJson = JsonParser.parseString(jsonCandidate).asJsonObject
                     pinFromQr = qrJson.get("pin")?.asString
                     uuidFromQr = qrJson.get("uuid")?.asString ?: qrJson.get("clientUuid")?.asString
                     nameFromQr = qrJson.get("name")?.asString ?: qrJson.get("clientName")?.asString
@@ -132,13 +143,13 @@ class GoogleDriveSyncManager {
                     goalFromQr = qrJson.get("goal")?.asString
                     notesFromQr = qrJson.get("notes")?.asString
                 } catch (_: Exception) {
-                    // Не валидный JSON, обрабатываем как строку PIN
+                    // Не валидный JSON, обрабатываем как обычный 6-значный PIN
                 }
             }
 
             val cleanPin = (pinFromQr ?: trimmedInput).filter { it.isDigit() }
-            if (cleanPin.length != 6 && uuidFromQr == null) {
-                return@withContext Result.failure(IllegalArgumentException("Неверный формат кода. Введите 6 цифр (например, 739-102)"))
+            if (cleanPin.length != 6 && uuidFromQr.isNullOrBlank()) {
+                return@withContext Result.failure(IllegalArgumentException("Неверный формат кода. Введите 6 цифр (например, 739-102) или отсканируйте QR-код."))
             }
 
             val endpoint = CloudSecurityManager.getEndpointUrl()

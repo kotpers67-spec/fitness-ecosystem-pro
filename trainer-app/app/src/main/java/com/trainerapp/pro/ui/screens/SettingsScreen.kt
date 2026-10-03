@@ -249,6 +249,117 @@ fun SettingsScreen(
                 }
             }
 
+            // 3.5. ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ (AUTO-UPDATE)
+            item {
+                var isCheckingUpdate by remember { mutableStateOf(false) }
+                var updateResult by remember { mutableStateOf<UpdateCheckResult?>(null) }
+                var updateStatusText by remember { mutableStateOf<String?>(null) }
+                val updateService = remember { com.trainerapp.pro.data.update.UpdateService(context) }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "v1.0.1",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "Автоматическая проверка и скачивание новых релизов с GitHub.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+
+                        Button(
+                            onClick = {
+                                isCheckingUpdate = true
+                                updateStatusText = "Запрос к GitHub Releases..."
+                                scope.launch {
+                                    val res = updateService.checkForUpdates()
+                                    isCheckingUpdate = false
+                                    if (res.isSuccess) {
+                                        val data = res.getOrNull()
+                                        updateResult = data
+                                        if (data?.isUpdateAvailable == true) {
+                                            updateStatusText = "Доступна новая версия: v${data.latestVersion}!"
+                                        } else {
+                                            updateStatusText = "У вас уже установлена актуальная версия Trainer Pro (v1.0.1)."
+                                        }
+                                    } else {
+                                        updateStatusText = "У вас установлена актуальная версия (v1.0.1)."
+                                    }
+                                }
+                            },
+                            enabled = !isCheckingUpdate,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            if (isCheckingUpdate) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Проверка...", fontSize = 13.sp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Проверить обновления", fontSize = 13.sp)
+                            }
+                        }
+
+                        if (updateResult?.isUpdateAvailable == true && updateResult?.downloadUrl != null) {
+                            Button(
+                                onClick = {
+                                    updateStatusText = "Загрузка и установка обновления..."
+                                    updateService.downloadAndInstallApk(updateResult!!.downloadUrl!!)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Скачать и установить v${updateResult!!.latestVersion}", fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (updateStatusText != null) {
+                            Text(
+                                text = updateStatusText!!,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // 4. СПИСОК ПОДОПЕЧНЫХ (CRUD)
             item {
                 Card(
