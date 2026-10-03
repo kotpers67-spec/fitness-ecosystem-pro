@@ -1087,6 +1087,53 @@ input:checked + .slider:before {
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* ==========================================================================
+   Framer Motion Grade Micro-Interactions & Spring Physics
+   ========================================================================== */
+.app-card, .metric-item, .auth-card, .client-item-card, .leaderboard-row {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+}
+
+.app-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.app-btn {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-btn:active {
+  transform: scale(0.97);
+}
+
+.auth-tab {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-item {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
+}
+
+.nav-item:active {
+  transform: scale(0.92);
+}
+
+.screen-container {
+  animation: framerScreenTransition 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes framerScreenTransition {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
