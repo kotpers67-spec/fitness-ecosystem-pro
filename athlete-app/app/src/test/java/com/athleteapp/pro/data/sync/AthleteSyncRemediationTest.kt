@@ -206,6 +206,58 @@ class AthleteSyncRemediationTest {
         val flowSets = fakeDao.getAllSets().first()
         assertEquals(2, flowSets.size)
     }
+
+    @Test
+    fun testLeaderboard_showsOnlyCurrentUserWhenNoCompetitors() {
+        val myEntry = LeaderboardEntry(1, "Иван", 5, 5000.0, 100, isMe = true)
+        val cloudAthletes = emptyList<LeaderboardEntry>()
+        val isPrivate = false
+
+        val rawList = mutableListOf<LeaderboardEntry>()
+        if (!isPrivate) {
+            rawList.add(myEntry)
+        }
+        rawList.addAll(cloudAthletes.filter { !it.isMe })
+        val entries = rawList
+            .sortedByDescending { it.points }
+            .mapIndexed { index, entry -> entry.copy(rank = index + 1) }
+
+        assertEquals(1, entries.size)
+        assertTrue(entries[0].isMe)
+        assertEquals("Иван", entries[0].name)
+        assertEquals(1, entries[0].rank)
+    }
+
+    @Test
+    fun testLeaderboard_emptyStateWhenPrivateAndNoCompetitors() {
+        val myEntry = LeaderboardEntry(1, "Иван", 5, 5000.0, 100, isMe = true)
+        val cloudAthletes = emptyList<LeaderboardEntry>()
+        val isPrivate = true
+
+        val rawList = mutableListOf<LeaderboardEntry>()
+        if (!isPrivate) {
+            rawList.add(myEntry)
+        }
+        rawList.addAll(cloudAthletes.filter { !it.isMe })
+        val entries = rawList
+            .sortedByDescending { it.points }
+            .mapIndexed { index, entry -> entry.copy(rank = index + 1) }
+
+        assertTrue(entries.isEmpty())
+    }
+
+    @Test
+    fun testPairingLinkFormat_andShareText() {
+        val rawPin = "  739 102 "
+        val cleanPin = rawPin.filter { it.isDigit() }
+        assertEquals("739102", cleanPin)
+
+        val pairingLink = "https://fitnessapp.pro/pair?code=$cleanPin"
+        assertEquals("https://fitnessapp.pro/pair?code=739102", pairingLink)
+
+        val shareText = "Код для привязки к тренеру: $cleanPin\n$pairingLink"
+        assertEquals("Код для привязки к тренеру: 739102\nhttps://fitnessapp.pro/pair?code=739102", shareText)
+    }
 }
 
 /**

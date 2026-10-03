@@ -32,7 +32,6 @@ import androidx.core.content.FileProvider
 import com.athleteapp.pro.R
 import com.athleteapp.pro.ui.AthleteViewModel
 import com.athleteapp.pro.ui.components.AthleteAvatar
-import com.athleteapp.pro.ui.components.QrCodeView
 import com.athleteapp.pro.ui.i18n.AthleteLanguage
 import com.athleteapp.pro.ui.i18n.AthleteStrings
 import com.athleteapp.pro.ui.theme.AthleteThemePreset
@@ -280,14 +279,13 @@ fun AthleteSettingsScreen(
                 }
             }
 
-            // 2. Pairing Card (PIN & QR Code)
+            // 2. Pairing Card (PIN & Link)
             item {
                 val cleanPin = (profile?.pairingPin ?: "").filter { it.isDigit() }
                 val formattedPin = if (cleanPin.length == 6) "${cleanPin.substring(0, 3)}-${cleanPin.substring(3)}" else cleanPin
                 val isPaired = profile?.isPairedWithCoach == true
                 val coachName = profile?.pairedCoachName?.ifBlank { "Тренер" } ?: "Тренер"
                 val clientUuid = profile?.clientUuid ?: ""
-                val qrJson = "{\"pin\":\"$cleanPin\",\"uuid\":\"$clientUuid\",\"name\":\"${profile?.fullName ?: ""}\",\"phone\":\"${profile?.phone ?: ""}\"}"
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -400,7 +398,10 @@ fun AthleteSettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            // 6-digit PIN Box (large readable digits without dash)
+                            val pairingLink = "https://fitnessapp.pro/pair?code=$cleanPin"
+                            val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+                            // Карточка с PIN-кодом и ссылкой для привязки
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surface,
@@ -408,14 +409,14 @@ fun AthleteSettingsScreen(
                             ) {
                                 Column(
                                     modifier = Modifier.padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
                                         text = "КОД ПОДКЛЮЧЕНИЯ (6 ЦИФР)",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = cleanPin,
                                         style = MaterialTheme.typography.headlineLarge.copy(
@@ -425,36 +426,46 @@ fun AthleteSettingsScreen(
                                         ),
                                         color = MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = "Вводится тренером слитно, без дефиса",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.secondary
                                     )
+
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(vertical = 4.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+
+                                    Text(
+                                        text = "ССЫЛКА ДЛЯ ПРИВЯЗКИ",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = pairingLink,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontFamily = FontFamily.Monospace
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
-
-                            // QR-код для быстрого сканирования тренером
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                QrCodeView(
-                                    content = qrJson,
-                                    modifier = Modifier.size(180.dp)
-                                )
-                            }
-
-                            val pairingLink = "https://fitnessapp.pro/pair?code=$cleanPin&uuid=$clientUuid"
-                            val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
                             // Кнопка: Скопировать ссылку для тренера
                             Button(
                                 onClick = {
                                     clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(pairingLink))
-                                    Toast.makeText(context, "Ссылка для тренера скопирована: $pairingLink", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Ссылка скопирована в буфер", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
@@ -465,15 +476,16 @@ fun AthleteSettingsScreen(
                                 Text("Скопировать ссылку для тренера", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                             }
 
-                            // Кнопка: Отправить в мессенджер
+                            // Кнопка: Отправить тренеру
                             OutlinedButton(
                                 onClick = {
                                     try {
+                                        val shareText = "Код для привязки к тренеру: $cleanPin\n$pairingLink"
                                         val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                            putExtra(Intent.EXTRA_TEXT, "Привет! Мой код подключения в приложении: $cleanPin\nСсылка: $pairingLink")
+                                            putExtra(Intent.EXTRA_TEXT, shareText)
                                             type = "text/plain"
                                         }
-                                        val shareIntent = Intent.createChooser(sendIntent, "Отправить тренеру код подключения")
+                                        val shareIntent = Intent.createChooser(sendIntent, "Отправить тренеру")
                                         context.startActivity(shareIntent)
                                     } catch (_: Exception) {}
                                 },
@@ -482,7 +494,7 @@ fun AthleteSettingsScreen(
                             ) {
                                 Icon(Icons.Default.Share, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Поделиться кодом (Telegram / WhatsApp)")
+                                Text("Отправить тренеру")
                             }
 
                             OutlinedButton(
