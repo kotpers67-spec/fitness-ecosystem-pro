@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.athleteapp.pro.data.sync.AthleteIsolationAndPairingTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-03T14:47:47.288Z" hostname="KOT" time="0.147">
+  <properties/>
+  <testcase name="testIsSelfWorkoutAllowed_importedAndSavedIntoWorkoutSession" classname="com.athleteapp.pro.data.sync.AthleteIsolationAndPairingTest" time="0.121"/>
+  <testcase name="testPairingQrJsonFormat" classname="com.athleteapp.pro.data.sync.AthleteIsolationAndPairingTest" time="0.007"/>
+  <testcase name="testIsSelfWorkoutAllowed_falseByDefaultEnforcesReadOnly" classname="com.athleteapp.pro.data.sync.AthleteIsolationAndPairingTest" time="0.003"/>
+  <testcase name="testClientUuid_persistedAndIsolatedInSyncPayload" classname="com.athleteapp.pro.data.sync.AthleteIsolationAndPairingTest" time="0.003"/>
+  <testcase name="testDataIsolation_multiClientCloudPayloadDoesNotLeakToAthlete" classname="com.athleteapp.pro.data.sync.AthleteIsolationAndPairingTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

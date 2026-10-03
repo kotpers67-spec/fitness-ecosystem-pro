@@ -83,7 +83,7 @@ fun AthleteTodayScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = profile?.fullName ?: "Атлет",
+                                text = if (profile?.fullName.isNullOrBlank()) "Атлет" else profile?.fullName!!,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,

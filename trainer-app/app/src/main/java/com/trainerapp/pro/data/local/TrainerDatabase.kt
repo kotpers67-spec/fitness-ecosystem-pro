@@ -127,35 +127,6 @@ abstract class TrainerDatabase : RoomDatabase() {
                     ExerciseEntity(name = "Молитва (скручивания на блоке)", muscleGroup = "Пресс/Кор", defaultRestSeconds = 45)
                 )
                 dao.insertExercises(exercises)
-
-                val c1 = dao.insertClient(
-                    ClientEntity(
-                        fullName = "Александр Смирнов",
-                        phone = "+7 999 123-45-67",
-                        goal = "Набор мышечной массы (+5 кг), жим 120 кг",
-                        membershipStatus = "Активен",
-                        membershipExpiryDate = "2026-12-31",
-                        notes = "Травма правого плеча в прошлом — обязательная разминка с резиной",
-                        clientUuid = "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-                        pairingCode = "739102"
-                    )
-                )
-                val c2 = dao.insertClient(
-                    ClientEntity(
-                        fullName = "Елена Васильева",
-                        phone = "+7 988 765-43-21",
-                        goal = "Снижение жировой массы, тонус ягодиц",
-                        membershipStatus = "Активен",
-                        membershipExpiryDate = "2026-11-15",
-                        notes = "Предпочитает суперсеты и интервальные протоколы",
-                        clientUuid = "e7b1a234-58cc-4372-b567-0e02b2c3d888",
-                        pairingCode = "582419"
-                    )
-                )
-
-                dao.insertAnthropometry(AnthropometryEntity(clientId = c1, date = "2026-09-01", weightKg = 82.5, chestCm = 104.0, waistCm = 84.0, bicepsCm = 39.0))
-                dao.insertAnthropometry(AnthropometryEntity(clientId = c1, date = "2026-09-15", weightKg = 83.2, chestCm = 105.0, waistCm = 84.0, bicepsCm = 39.5))
-                dao.insertAnthropometry(AnthropometryEntity(clientId = c1, date = "2026-10-01", weightKg = 84.1, chestCm = 106.0, waistCm = 83.5, bicepsCm = 40.2))
             }
         }
     }

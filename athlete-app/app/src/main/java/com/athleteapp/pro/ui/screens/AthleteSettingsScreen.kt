@@ -49,19 +49,14 @@ fun AthleteSettingsScreen(
         uri?.let { viewModel.saveAvatar(context, it) }
     }
 
-    var fullName by remember(profile) { mutableStateOf(profile?.fullName ?: "Александр Смирнов") }
-    var phone by remember(profile) { mutableStateOf(profile?.phone ?: "+7 999 123-45-67") }
-    var goal by remember(profile) { mutableStateOf(profile?.goal ?: "Набор мышечной массы (+5 кг), жим 120 кг") }
-    var restrictions by remember(profile) { mutableStateOf(profile?.restrictions ?: "Без осевых нагрузок на позвоночник") }
+    var fullName by remember(profile?.fullName) { mutableStateOf(profile?.fullName ?: "") }
+    var phone by remember(profile?.phone) { mutableStateOf(profile?.phone ?: "") }
+    var goal by remember(profile?.goal) { mutableStateOf(profile?.goal ?: "") }
+    var restrictions by remember(profile?.restrictions) { mutableStateOf(profile?.restrictions ?: "") }
 
     val lang = settings?.language ?: "ru"
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    var ghToken by remember(settings) { mutableStateOf(settings?.githubToken ?: "") }
-    var ghRepo by remember(settings) { mutableStateOf(settings?.githubRepo ?: "trainer-pro-sync") }
-    var coachOwner by remember(settings) { mutableStateOf(settings?.coachGitHubOwner ?: "kotpe") }
-    var athleteIdText by remember(settings) { mutableStateOf((settings?.athleteId ?: 1).toString()) }
 
     var updateStatus by remember { mutableStateOf<String?>(null) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
@@ -170,6 +165,7 @@ fun AthleteSettingsScreen(
                             value = fullName,
                             onValueChange = { fullName = it },
                             label = { Text("ФИО атлета") },
+                            placeholder = { Text("Например: Иван Иванов") },
                             leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -179,6 +175,7 @@ fun AthleteSettingsScreen(
                             value = phone,
                             onValueChange = { phone = it },
                             label = { Text("Номер телефона") },
+                            placeholder = { Text("+7 999 000-00-00") },
                             leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -188,6 +185,7 @@ fun AthleteSettingsScreen(
                             value = goal,
                             onValueChange = { goal = it },
                             label = { Text("Цели тренировок") },
+                            placeholder = { Text("Например: Набор мышечной массы, жим 100 кг") },
                             leadingIcon = { Icon(Icons.Default.Flag, contentDescription = null) },
                             modifier = Modifier.fillMaxWidth(),
                             minLines = 2
@@ -197,6 +195,7 @@ fun AthleteSettingsScreen(
                             value = restrictions,
                             onValueChange = { restrictions = it },
                             label = { Text("Ограничения и травмы") },
+                            placeholder = { Text("Например: Без осевых нагрузок") },
                             leadingIcon = { Icon(Icons.Default.WarningAmber, contentDescription = null) },
                             modifier = Modifier.fillMaxWidth(),
                             minLines = 2
@@ -219,11 +218,11 @@ fun AthleteSettingsScreen(
 
             // 2. Pairing Card (PIN & QR Code)
             item {
-                val cleanPin = (profile?.pairingPin ?: "739102").filter { it.isDigit() }.padStart(6, '0')
+                val cleanPin = (profile?.pairingPin ?: "").filter { it.isDigit() }
                 val formattedPin = if (cleanPin.length == 6) "${cleanPin.substring(0, 3)}-${cleanPin.substring(3)}" else cleanPin
                 val isPaired = profile?.isPairedWithCoach == true
                 val coachName = profile?.pairedCoachName?.ifBlank { "Тренер" } ?: "Тренер"
-                val clientUuid = profile?.clientUuid ?: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                val clientUuid = profile?.clientUuid ?: ""
                 val qrJson = "{\"pin\":\"$cleanPin\",\"uuid\":\"$clientUuid\",\"name\":\"${profile?.fullName ?: ""}\",\"phone\":\"${profile?.phone ?: ""}\"}"
 
                 Card(

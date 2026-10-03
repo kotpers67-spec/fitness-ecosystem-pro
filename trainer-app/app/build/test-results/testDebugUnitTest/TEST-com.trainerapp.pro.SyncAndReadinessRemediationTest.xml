@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.trainerapp.pro.SyncAndReadinessRemediationTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-03T14:42:11.878Z" hostname="KOT" time="0.048">
+  <properties/>
+  <testcase name="testExerciseIdDesynchronizationByName" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.04"/>
+  <testcase name="testTonnageFilterExcludesUncompletedSets" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.0"/>
+  <testcase name="testSafeRpeAutoRegulationNoOverloadOnZeroOrUnrated" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.0"/>
+  <testcase name="testPreventCascadeDeletionOnSessionCompletion" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.005"/>
+  <testcase name="testReadinessScorePreviousSessionDateComparison" classname="com.trainerapp.pro.SyncAndReadinessRemediationTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

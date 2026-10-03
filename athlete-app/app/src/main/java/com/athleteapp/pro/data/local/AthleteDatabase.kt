@@ -116,10 +116,17 @@ abstract class AthleteDatabase : RoomDatabase() {
             }
 
             suspend fun populateInitialData(dao: AthleteDao) {
+                val newUuid = java.util.UUID.randomUUID().toString()
+                val newPin = String.format("%06d", (100000..999999).random())
                 dao.saveProfile(
                     AthleteProfileEntity(
-                        clientUuid = "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-                        pairingPin = "739102"
+                        clientUuid = newUuid,
+                        pairingPin = newPin,
+                        isPairedWithCoach = false,
+                        fullName = "",
+                        phone = "",
+                        goal = "",
+                        restrictions = ""
                     )
                 )
                 dao.saveSettings(AthleteAppSettingsEntity())
@@ -128,25 +135,9 @@ abstract class AthleteDatabase : RoomDatabase() {
                 val ex1 = AssignedExerciseEntity(name = "Жим штанги лежа", muscleGroup = "Грудь", defaultRestSeconds = 120)
                 val ex2 = AssignedExerciseEntity(name = "Жим гантелей наклонный", muscleGroup = "Грудь", defaultRestSeconds = 90)
                 val ex3 = AssignedExerciseEntity(name = "Разведения гантелей", muscleGroup = "Грудь", defaultRestSeconds = 60)
-                dao.insertExercises(listOf(ex1, ex2, ex3))
-
-                // Preload today's sample workout from coach
-                val today = LocalDate.now().toString()
-                val sessionId = dao.insertSession(MyWorkoutSessionEntity(date = today, notes = "Программа грудь + трицепс от тренера"))
-
-                val sets = listOf(
-                    MyWorkoutSetEntity(sessionId = sessionId, exerciseId = 1, exerciseName = "Жим штанги лежа", muscleGroup = "Грудь", exerciseOrder = 1, setNumber = 1, targetWeightKg = 80.0, targetReps = 10, actualWeightKg = 80.0, actualReps = 10),
-                    MyWorkoutSetEntity(sessionId = sessionId, exerciseId = 1, exerciseName = "Жим штанги лежа", muscleGroup = "Грудь", exerciseOrder = 1, setNumber = 2, targetWeightKg = 85.0, targetReps = 8, actualWeightKg = 85.0, actualReps = 8),
-                    MyWorkoutSetEntity(sessionId = sessionId, exerciseId = 1, exerciseName = "Жим штанги лежа", muscleGroup = "Грудь", exerciseOrder = 1, setNumber = 3, targetWeightKg = 90.0, targetReps = 6, actualWeightKg = 90.0, actualReps = 6),
-                    MyWorkoutSetEntity(sessionId = sessionId, exerciseId = 2, exerciseName = "Жим гантелей наклонный", muscleGroup = "Грудь", exerciseOrder = 2, setNumber = 1, targetWeightKg = 24.0, targetReps = 10, actualWeightKg = 24.0, actualReps = 10),
-                    MyWorkoutSetEntity(sessionId = sessionId, exerciseId = 2, exerciseName = "Жим гантелей наклонный", muscleGroup = "Грудь", exerciseOrder = 2, setNumber = 2, targetWeightKg = 26.0, targetReps = 8, actualWeightKg = 26.0, actualReps = 8)
-                )
-                dao.insertSets(sets)
-
-                // Sample anthropometry
-                dao.insertAnthropometry(MyAnthropometryEntity(date = "2026-09-01", weightKg = 82.5, chestCm = 104.0, bicepsCm = 39.0))
-                dao.insertAnthropometry(MyAnthropometryEntity(date = "2026-09-15", weightKg = 83.2, chestCm = 105.0, bicepsCm = 39.5))
-                dao.insertAnthropometry(MyAnthropometryEntity(date = "2026-10-01", weightKg = 84.1, chestCm = 106.0, bicepsCm = 40.2))
+                val ex4 = AssignedExerciseEntity(name = "Приседания со штангой", muscleGroup = "Ноги", defaultRestSeconds = 120)
+                val ex5 = AssignedExerciseEntity(name = "Тяга верхнего блока", muscleGroup = "Спина", defaultRestSeconds = 90)
+                dao.insertExercises(listOf(ex1, ex2, ex3, ex4, ex5))
             }
         }
     }

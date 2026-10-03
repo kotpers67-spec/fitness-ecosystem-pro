@@ -337,7 +337,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
             val athleteId = if (current.athleteId > 0) current.athleteId else 1L
             val prof = dao.getProfile().firstOrNull() ?: AthleteProfileEntity()
             if (prof.pairingPin.isBlank()) {
-                val initialPin = "739102"
+                val initialPin = String.format("%06d", (100000..999999).random())
                 dao.saveProfile(prof.copy(pairingPin = initialPin))
             }
             val result = googleDriveSync.syncWithCoach(athleteId)

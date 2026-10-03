@@ -1,0 +1,205 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.trainerapp.pro"
+4    android:versionCode="1"
+5    android:versionName="1.0.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.VIBRATE" />
+11-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:4:5-66
+11-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:4:22-63
+12    <uses-permission android:name="android.permission.INTERNET" />
+12-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:5:5-67
+12-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:5:22-64
+13    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+13-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:6:5-79
+13-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:6:22-76
+14    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+14-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:7:5-83
+14-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:7:22-80
+15
+16    <!-- Bluetooth & BLE permissions for real hardware discovery -->
+17    <uses-permission
+17-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:10:5-95
+18        android:name="android.permission.BLUETOOTH"
+18-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:10:22-65
+19        android:maxSdkVersion="30" />
+19-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:10:66-92
+20    <uses-permission
+20-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:11:5-101
+21        android:name="android.permission.BLUETOOTH_ADMIN"
+21-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:11:22-71
+22        android:maxSdkVersion="30" />
+22-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:11:72-98
+23    <uses-permission
+23-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:12:5-120
+24        android:name="android.permission.BLUETOOTH_SCAN"
+24-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:12:22-70
+25        android:usesPermissionFlags="neverForLocation" />
+25-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:12:71-117
+26    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+26-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:13:5-76
+26-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:13:22-73
+27    <uses-permission
+27-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:14:5-106
+28        android:name="android.permission.ACCESS_FINE_LOCATION"
+28-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:14:22-76
+29        android:maxSdkVersion="30" />
+29-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:14:77-103
+30
+31    <permission
+31-->[androidx.core:core:1.13.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\7f5b145433aa6179c461c2fb0c80ae69\workspace\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+32        android:name="com.trainerapp.pro.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+32-->[androidx.core:core:1.13.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\7f5b145433aa6179c461c2fb0c80ae69\workspace\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+33        android:protectionLevel="signature" />
+33-->[androidx.core:core:1.13.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\7f5b145433aa6179c461c2fb0c80ae69\workspace\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+34
+35    <uses-permission android:name="com.trainerapp.pro.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+35-->[androidx.core:core:1.13.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\7f5b145433aa6179c461c2fb0c80ae69\workspace\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+35-->[androidx.core:core:1.13.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\7f5b145433aa6179c461c2fb0c80ae69\workspace\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+36
+37    <application
+37-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:16:5-44:19
+38        android:name="com.trainerapp.pro.TrainerApplication"
+38-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:17:9-43
+39        android:allowBackup="true"
+39-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:18:9-35
+40        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+40-->[androidx.core:core:1.13.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\7f5b145433aa6179c461c2fb0c80ae69\workspace\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
+41        android:debuggable="true"
+42        android:extractNativeLibs="false"
+43        android:icon="@mipmap/ic_launcher"
+43-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:19:9-43
+44        android:label="@string/app_name"
+44-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:20:9-41
+45        android:roundIcon="@mipmap/ic_launcher_round"
+45-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:21:9-54
+46        android:supportsRtl="true"
+46-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:22:9-35
+47        android:theme="@style/Theme.TrainerApp" >
+47-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:23:9-48
+48        <activity
+48-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:24:9-33:20
+49            android:name="com.trainerapp.pro.MainActivity"
+49-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:25:13-41
+50            android:exported="true"
+50-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:26:13-36
+51            android:theme="@style/Theme.TrainerApp"
+51-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:28:13-52
+52            android:windowSoftInputMode="adjustResize" >
+52-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:27:13-55
+53            <intent-filter>
+53-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:29:13-32:29
+54                <action android:name="android.intent.action.MAIN" />
+54-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:30:17-69
+54-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:30:25-66
+55
+56                <category android:name="android.intent.category.LAUNCHER" />
+56-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:31:17-77
+56-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:31:27-74
+57            </intent-filter>
+58        </activity>
+59
+60        <provider
+61            android:name="androidx.core.content.FileProvider"
+61-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:36:13-62
+62            android:authorities="com.trainerapp.pro.fileprovider"
+62-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:37:13-64
+63            android:exported="false"
+63-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:38:13-37
+64            android:grantUriPermissions="true" >
+64-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:39:13-47
+65            <meta-data
+65-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:40:13-42:54
+66                android:name="android.support.FILE_PROVIDER_PATHS"
+66-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:41:17-67
+67                android:resource="@xml/file_paths" />
+67-->F:\Projects\fitness-ecosystem-pro\trainer-app\app\src\main\AndroidManifest.xml:42:17-51
+68        </provider>
+69        <provider
+69-->[androidx.emoji2:emoji2:1.3.0] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91dccecf0828cda10e8904e485ab9c23\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+70            android:name="androidx.startup.InitializationProvider"
+70-->[androidx.emoji2:emoji2:1.3.0] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91dccecf0828cda10e8904e485ab9c23\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+71            android:authorities="com.trainerapp.pro.androidx-startup"
+71-->[androidx.emoji2:emoji2:1.3.0] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91dccecf0828cda10e8904e485ab9c23\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+72            android:exported="false" >
+72-->[androidx.emoji2:emoji2:1.3.0] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91dccecf0828cda10e8904e485ab9c23\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+73            <meta-data
+73-->[androidx.emoji2:emoji2:1.3.0] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91dccecf0828cda10e8904e485ab9c23\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+74                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+74-->[androidx.emoji2:emoji2:1.3.0] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91dccecf0828cda10e8904e485ab9c23\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+75                android:value="androidx.startup" />
+75-->[androidx.emoji2:emoji2:1.3.0] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91dccecf0828cda10e8904e485ab9c23\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+76            <meta-data
+76-->[androidx.lifecycle:lifecycle-process:2.8.4] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\e5daa237d63f978c104d3aef6a39e8f1\workspace\transformed\lifecycle-process-2.8.4\AndroidManifest.xml:29:13-31:52
+77                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+77-->[androidx.lifecycle:lifecycle-process:2.8.4] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\e5daa237d63f978c104d3aef6a39e8f1\workspace\transformed\lifecycle-process-2.8.4\AndroidManifest.xml:30:17-78
+78                android:value="androidx.startup" />
+78-->[androidx.lifecycle:lifecycle-process:2.8.4] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\e5daa237d63f978c104d3aef6a39e8f1\workspace\transformed\lifecycle-process-2.8.4\AndroidManifest.xml:31:17-49
+79            <meta-data
+79-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
+80                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+80-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
+81                android:value="androidx.startup" />
+81-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
+82        </provider>
+83
+84        <activity
+84-->[androidx.compose.ui:ui-tooling-android:1.6.8] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\0ae9aa0be6d8a718f98f73d5b4dfbd5e\workspace\transformed\ui-tooling-release\AndroidManifest.xml:23:9-25:39
+85            android:name="androidx.compose.ui.tooling.PreviewActivity"
+85-->[androidx.compose.ui:ui-tooling-android:1.6.8] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\0ae9aa0be6d8a718f98f73d5b4dfbd5e\workspace\transformed\ui-tooling-release\AndroidManifest.xml:24:13-71
+86            android:exported="true" />
+86-->[androidx.compose.ui:ui-tooling-android:1.6.8] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\0ae9aa0be6d8a718f98f73d5b4dfbd5e\workspace\transformed\ui-tooling-release\AndroidManifest.xml:25:13-36
+87
+88        <service
+88-->[androidx.room:room-runtime:2.6.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\1d0e09d35afe44a3d2f05ca31a416708\workspace\transformed\room-runtime-2.6.1\AndroidManifest.xml:24:9-28:63
+89            android:name="androidx.room.MultiInstanceInvalidationService"
+89-->[androidx.room:room-runtime:2.6.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\1d0e09d35afe44a3d2f05ca31a416708\workspace\transformed\room-runtime-2.6.1\AndroidManifest.xml:25:13-74
+90            android:directBootAware="true"
+90-->[androidx.room:room-runtime:2.6.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\1d0e09d35afe44a3d2f05ca31a416708\workspace\transformed\room-runtime-2.6.1\AndroidManifest.xml:26:13-43
+91            android:exported="false" />
+91-->[androidx.room:room-runtime:2.6.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\1d0e09d35afe44a3d2f05ca31a416708\workspace\transformed\room-runtime-2.6.1\AndroidManifest.xml:27:13-37
+92
+93        <receiver
+93-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+94            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+94-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
+95            android:directBootAware="false"
+95-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
+96            android:enabled="true"
+96-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+97            android:exported="true"
+97-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
+98            android:permission="android.permission.DUMP" >
+98-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
+99            <intent-filter>
+99-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
+100                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+100-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
+100-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
+101            </intent-filter>
+102            <intent-filter>
+102-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
+103                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+103-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
+103-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
+104            </intent-filter>
+105            <intent-filter>
+105-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
+106                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+106-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
+106-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+107            </intent-filter>
+108            <intent-filter>
+108-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
+109                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+109-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
+109-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\kotpe\.gradle\caches\9.3.1\transforms\91885dbc713f855162976831439068e7\workspace\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+110            </intent-filter>
+111        </receiver>
+112    </application>
+113
+114</manifest>

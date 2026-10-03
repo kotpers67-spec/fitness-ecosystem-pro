@@ -1,0 +1,10 @@
+R_DEF: Internal format may change without notice
+local
+drawable app_logo
+drawable avatar_athlete
+drawable avatar_coach
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+style Theme.TrainerApp
+xml file_paths

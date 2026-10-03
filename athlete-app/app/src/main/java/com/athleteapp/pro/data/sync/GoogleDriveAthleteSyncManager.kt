@@ -27,7 +27,11 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             val requestUrl = "$endpoint?key=$encodedKey"
 
             val profile = dao.getProfile().firstOrNull() ?: AthleteProfileEntity()
-            val clientUuid = clientUuidOverride ?: profile.clientUuid.ifBlank { "f47ac10b-58cc-4372-a567-0e02b2c3d479" }
+            val clientUuid = clientUuidOverride ?: profile.clientUuid.ifBlank {
+                val freshUuid = java.util.UUID.randomUUID().toString()
+                dao.saveProfile(profile.copy(clientUuid = freshUuid))
+                freshUuid
+            }
             val cleanPin = profile.pairingPin.filter { it.isDigit() }
 
             // 1. PULL: Читаем с Google Диска
@@ -48,38 +52,29 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                         if (pairingObj.has(cleanPin)) {
                             val pinEntry = pairingObj.getAsJsonObject(cleanPin)
                             val status = if (pinEntry.has("status")) pinEntry.get("status").asString else ""
+                            val coachName = if (pinEntry.has("coachName")) pinEntry.get("coachName").asString else "Тренер"
                             if (status.equals("PAIRED", ignoreCase = true)) {
-                                val coachName = if (pinEntry.has("coachName")) pinEntry.get("coachName").asString else "Тренер"
                                 if (!profile.isPairedWithCoach || profile.pairedCoachName != coachName) {
-                                    dao.saveProfile(profile.copy(isPairedWithCoach = true, pairedCoachName = coachName))
+                                    val up = dao.getProfile().firstOrNull() ?: profile
+                                    dao.saveProfile(up.copy(isPairedWithCoach = true, pairedCoachName = coachName))
+                                }
+                            } else if (status.equals("UNPAIRED", ignoreCase = true) || status.equals("PENDING", ignoreCase = true)) {
+                                if (profile.isPairedWithCoach) {
+                                    val up = dao.getProfile().firstOrNull() ?: profile
+                                    dao.saveProfile(up.copy(isPairedWithCoach = false, pairedCoachName = ""))
                                 }
                             }
                         }
                     }
 
-                    // Strict Isolation: lookup strictly by clientUuid (or fallback to legacy integer ID)
+                    // Strict Isolation: lookup strictly by clientUuid
                     if (parsed.has("clients")) {
                         val clientsObj = parsed.getAsJsonObject("clients")
-                        val clientKey = when {
-                            clientsObj.has(clientUuid) -> clientUuid
-                            clientsObj.has(clientIdStr) -> clientIdStr
-                            else -> null
-                        }
-
-                        if (clientKey != null) {
-                            val clientPayload = clientsObj.get(clientKey).toString()
+                        if (clientsObj.has(clientUuid)) {
+                            val clientPayload = clientsObj.get(clientUuid).toString()
                             val applyRes = athleteSyncManager.applyPayloadJson(clientPayload)
                             pulledWorkouts = applyRes.getOrDefault(0)
-
-                            // If coach created the client slot, mark athlete as paired
-                            if (!profile.isPairedWithCoach) {
-                                val updatedProfile = dao.getProfile().firstOrNull() ?: profile
-                                dao.saveProfile(updatedProfile.copy(isPairedWithCoach = true, pairedCoachName = updatedProfile.pairedCoachName.ifBlank { "Тренер" }))
-                            }
                         }
-                    } else if (parsed.has("athleteId")) {
-                        val applyRes = athleteSyncManager.applyPayloadJson(cloudJson)
-                        pulledWorkouts = applyRes.getOrDefault(0)
                     }
                 } catch (_: Exception) { }
             }
@@ -187,16 +182,41 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
     suspend fun unpairFromCoach(): Result<String> = withContext(Dispatchers.IO) {
         try {
             val current = dao.getProfile().firstOrNull() ?: AthleteProfileEntity()
+            val oldPin = current.pairingPin.filter { it.isDigit() }
             val newPin = String.format("%06d", (100000..999999).random())
+            val newUuid = java.util.UUID.randomUUID().toString()
             val updated = current.copy(
                 isPairedWithCoach = false,
                 pairedCoachName = "",
-                pairingPin = newPin
+                pairingPin = newPin,
+                clientUuid = newUuid
             )
             dao.saveProfile(updated)
-            // Push updated pairing to cloud
-            syncWithCoach(clientUuidOverride = updated.clientUuid)
-            Result.success("Связь с тренером сброшена. Сгенерирован новый PIN: ${newPin.substring(0,3)}-${newPin.substring(3)}")
+
+            // 1. Remove or unpair old PIN node from cloud
+            val endpoint = CloudSecurityManager.getEndpointUrl()
+            val secretKey = CloudSecurityManager.getSecretKey()
+            val encodedKey = URLEncoder.encode(secretKey, "UTF-8")
+            val requestUrl = "$endpoint?key=$encodedKey"
+
+            val cloudJson = httpGet(requestUrl)
+            if (cloudJson.isNotBlank() && cloudJson != "{}") {
+                try {
+                    val rootObj = JsonParser.parseString(cloudJson).asJsonObject
+                    if (rootObj.has("pairing")) {
+                        val pairingObj = rootObj.getAsJsonObject("pairing")
+                        if (oldPin.isNotBlank() && pairingObj.has(oldPin)) {
+                            pairingObj.remove(oldPin)
+                        }
+                    }
+                    rootObj.addProperty("updatedAt", System.currentTimeMillis().toString())
+                    httpPost(requestUrl, gson.toJson(rootObj))
+                } catch (_: Exception) {}
+            }
+
+            // 2. Push new unassigned PENDING state with new UUID and PIN
+            syncWithCoach(clientUuidOverride = newUuid)
+            Result.success("Вы успешно отвязались от тренера. Новый код: ${newPin.substring(0, 3)}-${newPin.substring(3)}")
         } catch (e: Exception) {
             Result.failure(e)
         }

@@ -79,13 +79,14 @@ class AthleteSyncManager(private val dao: AthleteDao) {
 
             var importedWorkoutsCount = 0
 
-            // Update profile name if available
+            // Update profile name if locally empty and coach specified a name
             if (payload.clientName.isNotBlank()) {
                 val currentProfile = dao.getProfile().firstOrNull() ?: AthleteProfileEntity()
                 val updatedUuid = if (payload.clientUuid.isNotBlank()) payload.clientUuid else currentProfile.clientUuid
+                val targetName = if (currentProfile.fullName.isNotBlank()) currentProfile.fullName else payload.clientName
                 dao.saveProfile(
                     currentProfile.copy(
-                        fullName = payload.clientName,
+                        fullName = targetName,
                         athleteIdInCoachBase = payload.athleteId,
                         clientUuid = updatedUuid
                     )
