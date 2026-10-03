@@ -125,7 +125,7 @@ class CloudSyncService {
       restrictions: '',
       notes: '',
       timestamp: Date.now(),
-      status: 'PENDING'
+      status: cloud.pairing[pin]?.status || 'PENDING'
     };
 
     if (!cloud.clients) cloud.clients = {};
@@ -138,6 +138,9 @@ class CloudSyncService {
         assignedWorkouts: [],
         anthropometry: []
       };
+    } else {
+      cloud.clients[clientUuid].clientName = clientName || cloud.clients[clientUuid].clientName;
+      if (phone) cloud.clients[clientUuid].phone = phone;
     }
 
     await this.pushCloudData(cloud);
@@ -149,15 +152,33 @@ class CloudSyncService {
    */
   async findAndPairAthlete(pin, coachName = 'Тренер', coachPhone = '') {
     const cloud = await this.fetchCloudData(true);
-    if (!cloud.pairing || !cloud.pairing[pin]) {
+    if (!cloud.pairing) return null;
+
+    const cleanPin = String(pin).replace(/\D/g, '');
+    let pairingEntry = cloud.pairing[cleanPin];
+    let foundKey = cleanPin;
+
+    if (!pairingEntry) {
+      for (const [key, element] of Object.entries(cloud.pairing)) {
+        const digits = key.replace(/\D/g, '');
+        const entryPin = String(element?.pin || '').replace(/\D/g, '');
+        if (digits === cleanPin || entryPin === cleanPin) {
+          pairingEntry = element;
+          foundKey = key;
+          break;
+        }
+      }
+    }
+
+    if (!pairingEntry) {
       return null;
     }
 
-    const pairingEntry = cloud.pairing[pin];
     pairingEntry.status = 'PAIRED';
     pairingEntry.coachName = coachName;
     pairingEntry.coachPhone = coachPhone;
     pairingEntry.pairedTimestamp = Date.now();
+    cloud.pairing[foundKey] = pairingEntry;
 
     const clientUuid = pairingEntry.clientUuid;
     const clientPayload = (cloud.clients && cloud.clients[clientUuid]) ? cloud.clients[clientUuid] : null;
@@ -165,7 +186,7 @@ class CloudSyncService {
     await this.pushCloudData(cloud);
 
     return {
-      pin,
+      pin: cleanPin,
       clientUuid,
       clientName: pairingEntry.clientName,
       phone: pairingEntry.phone,
@@ -189,6 +210,44 @@ class CloudSyncService {
   }
 
   /**
+   * Check if athlete was paired in Google Drive (e.g. by mobile Trainer Pro app)
+   */
+  async checkAthletePairingStatus(pin, clientUuid) {
+    const cloud = await this.fetchCloudData(true);
+    if (!cloud.pairing) return { status: 'NOT_FOUND' };
+
+    let entry = cloud.pairing[pin];
+    if (!entry && clientUuid) {
+      for (const p of Object.values(cloud.pairing)) {
+        if (p && p.clientUuid === clientUuid) {
+          entry = p;
+          break;
+        }
+      }
+    }
+
+    if (!entry) return { status: 'NOT_FOUND' };
+
+    return {
+      status: entry.status || 'PENDING',
+      coachName: entry.coachName || '',
+      coachPhone: entry.coachPhone || '',
+      coachAvatarBase64: entry.coachAvatarBase64 || null
+    };
+  }
+
+  /**
+   * Get athlete assigned workouts from Google Drive cloud
+   */
+  async getAthleteCloudWorkouts(clientUuid) {
+    if (!clientUuid) return [];
+    const cloud = await this.fetchCloudData(true);
+    if (!cloud.clients || !cloud.clients[clientUuid]) return [];
+    const clientEntry = cloud.clients[clientUuid];
+    return Array.isArray(clientEntry.assignedWorkouts) ? clientEntry.assignedWorkouts : [];
+  }
+
+  /**
    * Push assigned workouts from web trainer to cloud client so athlete's mobile app receives them!
    */
   async pushAssignedWorkouts(clientUuid, clientName, workouts) {
@@ -204,6 +263,77 @@ class CloudSyncService {
     existing.assignedWorkouts = workouts;
     existing.syncTimestamp = Date.now();
     cloud.clients[clientUuid] = existing;
+
+    return await this.pushCloudData(cloud);
+  }
+
+  /**
+   * Sync complete workout session and sets to Google Drive (upserting target date)
+   */
+  async syncWorkoutSessionToCloud(clientUuid, clientName, date, session, sets) {
+    if (!clientUuid) return false;
+    const cloud = await this.fetchCloudData(true);
+    if (!cloud.clients) cloud.clients = {};
+
+    const client = cloud.clients[clientUuid] || {
+      clientUuid,
+      clientName: clientName || 'Атлет',
+      syncTimestamp: Date.now(),
+      assignedWorkouts: [],
+      anthropometry: []
+    };
+
+    if (!Array.isArray(client.assignedWorkouts)) {
+      client.assignedWorkouts = [];
+    }
+
+    // Group sets by exercise name
+    const grouped = {};
+    sets.forEach(s => {
+      const name = s.exercise_name || 'Упражнение';
+      if (!grouped[name]) grouped[name] = [];
+      grouped[name].push(s);
+    });
+
+    const exercises = [];
+    let exId = 1;
+    for (const [name, setList] of Object.entries(grouped)) {
+      exercises.push({
+        exerciseId: exId++,
+        name,
+        muscleGroup: 'Общая',
+        sets: setList.map((s, idx) => ({
+          setNumber: idx + 1,
+          targetWeightKg: Number(s.weight_kg) || 0,
+          targetReps: Number(s.reps) || 1,
+          actualWeightKg: Number(s.actual_weight_kg || s.weight_kg) || 0,
+          actualReps: Number(s.actual_reps || s.reps) || 1,
+          isCompleted: Boolean(s.is_completed),
+          rpe: Number(s.rpe) || 8.0
+        }))
+      });
+    }
+
+    const isAllCompleted = sets.length > 0 && sets.every(s => Boolean(s.is_completed));
+    const isSelfWorkoutAllowed = session ? Boolean(session.is_self_workout_allowed) : false;
+
+    const sessionObj = {
+      date,
+      notes: session?.notes || '',
+      completed: isAllCompleted,
+      isSelfWorkoutAllowed,
+      exercises
+    };
+
+    const existingIndex = client.assignedWorkouts.findIndex(w => w.date === date);
+    if (existingIndex >= 0) {
+      client.assignedWorkouts[existingIndex] = sessionObj;
+    } else {
+      client.assignedWorkouts.push(sessionObj);
+    }
+
+    client.syncTimestamp = Date.now();
+    cloud.clients[clientUuid] = client;
 
     return await this.pushCloudData(cloud);
   }

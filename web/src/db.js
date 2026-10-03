@@ -385,7 +385,7 @@ class AppDatabase {
 
   getWorkoutSetById(setId) {
     const stmt = this.db.prepare(`
-      SELECT s.id, s.session_id, s.exercise_name, s.weight_kg, s.reps, s.rpe, s.is_completed, s.created_at, ws.athlete_id
+      SELECT s.id, s.session_id, s.exercise_name, s.weight_kg, s.reps, s.rpe, s.is_completed, s.created_at, ws.athlete_id, ws.date AS workout_date
       FROM workout_sets s
       JOIN workout_sessions ws ON s.session_id = ws.id
       WHERE s.id = ?

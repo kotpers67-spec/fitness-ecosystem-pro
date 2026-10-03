@@ -56,6 +56,11 @@
     regPassword: document.getElementById('reg-password'),
     regFullname: document.getElementById('reg-fullname'),
     regPhone: document.getElementById('reg-phone'),
+    btnTelegramAuth: document.getElementById('btn-telegram-auth'),
+    dialogTelegramAuth: document.getElementById('dialog-telegram-auth'),
+    formTelegramAuth: document.getElementById('form-telegram-auth'),
+    tgInputUsername: document.getElementById('tg-input-username'),
+    btnCancelTgDialog: document.getElementById('btn-cancel-tg-dialog'),
 
     // Athlete Workout
     athleteDateDisplay: document.getElementById('athlete-date-display'),
@@ -100,6 +105,7 @@
     pairedCoachAvatar: document.getElementById('paired-coach-avatar'),
     pairedCoachName: document.getElementById('paired-coach-name'),
     pairedCoachPhone: document.getElementById('paired-coach-phone'),
+    btnCallCoach: document.getElementById('btn-call-coach'),
     btnUnpairCoach: document.getElementById('btn-unpair-coach'),
     btnLogoutAthlete: document.getElementById('btn-logout-athlete'),
 
@@ -690,10 +696,28 @@
     updatePrivacyStatusText(isPublic);
 
     // Paired coach card
-    if (state.pairedCoach || state.user.coach_name || state.user.coachName) {
+    const coachName = state.pairedCoach?.full_name || state.user.coach_name || state.user.coachName;
+    const coachPhone = state.pairedCoach?.phone || state.user.coach_phone || state.user.coachPhone;
+    if (coachName) {
       el.cardPairedCoach.style.display = 'block';
-      el.pairedCoachName.textContent = state.pairedCoach?.full_name || state.user.coach_name || state.user.coachName || 'Тренер';
-      el.pairedCoachPhone.textContent = state.pairedCoach?.phone || state.user.coach_phone || state.user.coachPhone || '';
+      el.pairedCoachName.textContent = coachName;
+      el.pairedCoachPhone.textContent = coachPhone || 'Телефон не указан';
+      if (el.pairedCoachAvatar) {
+        if (state.pairedCoach?.avatar_base64) {
+          el.pairedCoachAvatar.innerHTML = `<img src="${state.pairedCoach.avatar_base64}" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;">`;
+        } else {
+          el.pairedCoachAvatar.textContent = coachName.slice(0, 1).toUpperCase();
+        }
+      }
+      if (el.btnCallCoach) {
+        const cleanPhone = (coachPhone || '').replace(/[^\d+]/g, '');
+        if (cleanPhone) {
+          el.btnCallCoach.href = `tel:${cleanPhone}`;
+          el.btnCallCoach.style.display = 'inline-flex';
+        } else {
+          el.btnCallCoach.style.display = 'none';
+        }
+      }
     } else {
       el.cardPairedCoach.style.display = 'none';
     }
@@ -716,7 +740,7 @@
 
     if (typeof window.generateQrSvg === 'function') {
       const svg = window.generateQrSvg(pinCode, 180);
-      el.athleteQrContainer.appendChild(svg);
+      el.athleteQrContainer.innerHTML = svg;
     } else {
       el.athleteQrContainer.innerHTML = `<div style="font-size:24px;font-weight:900;color:var(--accent-lime);">${pinCode}</div>`;
     }
@@ -1051,6 +1075,64 @@
         showToast('Аккаунт успешно создан!', 'success');
       } catch {}
     };
+
+    // Telegram Fast Auth Button
+    if (el.btnTelegramAuth) {
+      el.btnTelegramAuth.onclick = async () => {
+        // If running inside Telegram Mini App
+        if (window.Telegram?.WebApp?.initData) {
+          showToast('Авторизация через Telegram...', 'info');
+          try {
+            const data = await api('/api/auth/telegram', {
+              method: 'POST',
+              body: JSON.stringify({ initData: window.Telegram.WebApp.initData })
+            });
+            state.token = data.token;
+            state.user = data.user;
+            localStorage.setItem('fit_token', data.token);
+            setupAppForRole(data.user.role);
+            showToast(`Вход выполнен: ${data.user.fullName || data.user.username}!`, 'success');
+            return;
+          } catch (_) {}
+        }
+
+        // Outside Telegram WebApp: show dialog
+        if (el.dialogTelegramAuth) {
+          el.dialogTelegramAuth.showModal();
+        }
+      };
+    }
+
+    // Cancel Telegram Dialog
+    if (el.btnCancelTgDialog) {
+      el.btnCancelTgDialog.onclick = () => {
+        el.dialogTelegramAuth?.close();
+      };
+    }
+
+    // Telegram Modal Submit
+    if (el.formTelegramAuth) {
+      el.formTelegramAuth.onsubmit = async (e) => {
+        e.preventDefault();
+        const username = el.tgInputUsername.value.trim();
+        const requestedRole = document.querySelector('input[name="tg-reg-role"]:checked')?.value || 'athlete';
+        if (!username) return;
+
+        showToast('Вход через Telegram...', 'info');
+        try {
+          const data = await api('/api/auth/telegram', {
+            method: 'POST',
+            body: JSON.stringify({ username, requestedRole })
+          });
+          state.token = data.token;
+          state.user = data.user;
+          localStorage.setItem('fit_token', data.token);
+          el.dialogTelegramAuth?.close();
+          setupAppForRole(data.user.role);
+          showToast(`Добро пожаловать, ${data.user.fullName || data.user.username}!`, 'success');
+        } catch (_) {}
+      };
+    }
 
     // Athlete Date Navigator
     el.btnAthleteDatePrev.onclick = () => changeAthleteDate(-1);

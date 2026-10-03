@@ -93,7 +93,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname.startsWith('/api/')) {
       // Rate Limit Auth Endpoints (enabled in test mode or if explicitly requested)
       if (process.env.NODE_ENV === 'test' || process.env.ENABLE_AUTH_LIMIT === 'true') {
-        if (pathname === '/api/login' || pathname === '/api/register') {
+        if (pathname === '/api/login' || pathname === '/api/register' || pathname === '/api/auth/telegram') {
           if (authLimiter.isRateLimited(clientIp)) {
             return sendError(res, 429, 'Слишком много попыток входа. Попробуйте через минуту.');
           }
@@ -145,7 +145,7 @@ const server = http.createServer(async (req, res) => {
         const token = generateToken();
         db.createAuthToken(token, userId);
 
-        // Async sync athlete pairing code to Google Drive cloud
+        // Sync athlete pairing code to Google Drive cloud
         if (role === 'athlete') {
           cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapedFullName, escapedPhone).catch(err => {
             console.warn('[Server] Cloud sync registration notice:', err.message);
@@ -199,6 +199,125 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      // TELEGRAM AUTHENTICATION (Mini App initData, Widget or Telegram Username)
+      if (pathname === '/api/auth/telegram' && req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const { initData, telegramUser, requestedRole } = body;
+        const botToken = process.env.BOT_TOKEN || '';
+
+        let tgId = null;
+        let tgUsername = '';
+        let tgFirstName = '';
+        let tgLastName = '';
+        let tgPhotoUrl = '';
+
+        if (initData) {
+          const params = new URLSearchParams(initData);
+          const hash = params.get('hash');
+          if (botToken && hash) {
+            params.delete('hash');
+            const dataCheckString = Array.from(params.entries())
+              .map(([k, v]) => `${k}=${v}`)
+              .sort()
+              .join('\n');
+            const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+            const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+            if (calculatedHash !== hash) {
+              return sendError(res, 401, 'Недействительная подпись Telegram HMAC');
+            }
+          }
+          const userJson = params.get('user');
+          if (userJson) {
+            try {
+              const u = JSON.parse(userJson);
+              tgId = u.id;
+              tgUsername = u.username || '';
+              tgFirstName = u.first_name || '';
+              tgLastName = u.last_name || '';
+              tgPhotoUrl = u.photo_url || '';
+            } catch (_) {}
+          }
+        } else if (telegramUser) {
+          if (botToken && telegramUser.hash) {
+            const { hash, ...data } = telegramUser;
+            const dataCheckString = Object.keys(data)
+              .sort()
+              .map(k => `${k}=${data[k]}`)
+              .join('\n');
+            const secretKey = crypto.createHash('sha256').update(botToken).digest();
+            const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+            if (calculatedHash !== hash) {
+              return sendError(res, 401, 'Недействительная подпись виджета Telegram');
+            }
+          }
+          tgId = telegramUser.id || ('tg_' + Date.now());
+          tgUsername = telegramUser.username || '';
+          tgFirstName = telegramUser.first_name || '';
+          tgLastName = telegramUser.last_name || '';
+          tgPhotoUrl = telegramUser.photo_url || '';
+        } else if (body.username) {
+          const clean = String(body.username).replace(/^@/, '').trim();
+          if (!clean || hasSqlInjectionVector(clean)) {
+            return sendError(res, 400, 'Некорректный логин Telegram');
+          }
+          tgUsername = clean;
+          tgFirstName = clean;
+          tgId = 'usr_' + clean.toLowerCase();
+        } else {
+          return sendError(res, 400, 'Не переданы данные для входа через Telegram');
+        }
+
+        const usernameKey = tgUsername ? `tg_${tgUsername.toLowerCase()}` : `tg_${tgId}`;
+        let user = db.findUserByUsername(usernameKey);
+        const role = requestedRole === 'trainer' ? 'trainer' : 'athlete';
+
+        if (!user) {
+          const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
+          const fullName = (tgFirstName + (tgLastName ? ' ' + tgLastName : '')).trim() || tgUsername || 'Telegram Атлет';
+          const pairingCode = role === 'athlete' ? String(Math.floor(100000 + Math.random() * 900000)) : '';
+          const clientUuid = crypto.randomUUID();
+
+          const userId = db.createUser(
+            usernameKey,
+            passwordHash,
+            role,
+            escapeHtml(fullName),
+            '', // phone
+            pairingCode,
+            clientUuid,
+            tgPhotoUrl
+          );
+
+          if (role === 'athlete') {
+            cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapeHtml(fullName), '').catch(() => {});
+          }
+
+          user = db.findUserById(userId);
+        }
+
+        const token = generateToken();
+        db.createAuthToken(token, user.id);
+
+        return sendJson(res, 200, {
+          success: true,
+          authProvider: 'telegram',
+          token,
+          user: {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            fullName: user.full_name,
+            phone: user.phone,
+            avatarBase64: user.avatar_base64 || '',
+            pairingCode: user.pairing_code,
+            clientUuid: user.client_uuid || '',
+            coachName: user.coach_name || '',
+            coachPhone: user.coach_phone || '',
+            isPrivate: Boolean(user.is_private)
+          }
+        });
+      }
+
       // LEADERBOARD (Public Competitions - 100% Zero-Mocks, Real Athletes Only)
       if (pathname === '/api/leaderboard' && req.method === 'GET') {
         try {
@@ -222,6 +341,34 @@ const server = http.createServer(async (req, res) => {
         let pairedCoach = null;
         if (user.role === 'athlete') {
           pairedCoach = db.getAthleteCoach(user.id);
+          // Bi-directional Cloud Check: If not locally paired or user has pairingCode, check Google Drive
+          if (!pairedCoach && user.pairing_code) {
+            try {
+              const cloudStatus = await cloudSyncService.checkAthletePairingStatus(user.pairing_code, user.client_uuid);
+              if (cloudStatus && cloudStatus.status === 'PAIRED' && cloudStatus.coachName) {
+                db.updateCoachInfo(user.id, cloudStatus.coachName, cloudStatus.coachPhone || '');
+                pairedCoach = {
+                  full_name: cloudStatus.coachName,
+                  phone: cloudStatus.coachPhone || '',
+                  avatar_base64: cloudStatus.coachAvatarBase64 || ''
+                };
+              } else if (cloudStatus && (cloudStatus.status === 'UNPAIRED' || cloudStatus.status === 'PENDING')) {
+                if (user.coach_name) {
+                  db.updateCoachInfo(user.id, '', '');
+                }
+                pairedCoach = null;
+              }
+            } catch (err) {
+              console.warn('[Server] Cloud coach status check notice:', err.message);
+            }
+          }
+          if (!pairedCoach && user.coach_name) {
+            pairedCoach = {
+              full_name: user.coach_name,
+              phone: user.coach_phone || '',
+              avatar_base64: ''
+            };
+          }
         }
         return sendJson(res, 200, { user, pairedCoach });
       }
@@ -327,7 +474,7 @@ const server = http.createServer(async (req, res) => {
             if (cloudAthlete) {
               let localUser = db.findUserByClientUuid(cloudAthlete.clientUuid);
               if (!localUser) {
-                const uniqueUsername = 'ath_' + cloudAthlete.clientUuid.slice(0, 8);
+                const uniqueUsername = 'ath_' + crypto.randomBytes(6).toString('hex');
                 const uid = db.createUser(
                   uniqueUsername,
                   hashPassword(crypto.randomBytes(16).toString('hex')),
@@ -407,27 +554,12 @@ const server = http.createServer(async (req, res) => {
         // Push to Google Drive cloud for mobile app sync
         const athlete = db.findUserById(Number(athleteId));
         if (athlete && athlete.client_uuid) {
-          const { sets } = db.getWorkoutSessionWithSets(athlete.id, date);
-          const cloudPayload = [{
-            date,
-            completed: false,
-            notes: notes || '',
-            isSelfWorkoutAllowed: Boolean(isSelfAllowed),
-            exercises: sets.map((s, idx) => ({
-              exerciseId: idx + 1,
-              name: s.exercise_name,
-              muscleGroup: 'Общая',
-              sets: [{
-                setNumber: idx + 1,
-                targetWeightKg: s.weight_kg,
-                targetReps: s.reps,
-                actualWeightKg: 0,
-                actualReps: 0,
-                isCompleted: false
-              }]
-            }))
-          }];
-          cloudSyncService.pushAssignedWorkouts(athlete.client_uuid, athlete.full_name, cloudPayload).catch(() => {});
+          const { session, sets } = db.getWorkoutSessionWithSets(athlete.id, date);
+          try {
+            await cloudSyncService.syncWorkoutSessionToCloud(athlete.client_uuid, athlete.full_name, date, session, sets);
+          } catch (err) {
+            console.warn('[Server] Cloud sync assign error:', err.message);
+          }
         }
 
         return sendJson(res, 200, { success: true, sessionId });
@@ -451,7 +583,67 @@ const server = http.createServer(async (req, res) => {
           ? user.id 
           : Number(reqUrl.searchParams.get('athleteId') || user.id);
         const date = reqUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10);
-        
+
+        const athlete = db.findUserById(targetAthleteId);
+
+        // Bi-directional Google Drive Cloud Workout Sync
+        if (athlete && athlete.client_uuid) {
+          try {
+            const cloudWorkouts = await cloudSyncService.getAthleteCloudWorkouts(athlete.client_uuid);
+            const targetCloudSession = cloudWorkouts.find(w => w.date === date);
+            if (targetCloudSession) {
+              const { session, sets } = db.getWorkoutSessionWithSets(targetAthleteId, date);
+              let sessionId = session ? session.id : null;
+
+              if (!session) {
+                sessionId = db.assignTrainerWorkout(
+                  session?.assigned_by_trainer_id || 1,
+                  targetAthleteId,
+                  date,
+                  targetCloudSession.isSelfWorkoutAllowed ? 1 : 0,
+                  targetCloudSession.notes || ''
+                );
+              } else if (targetCloudSession.isSelfWorkoutAllowed && !session.is_self_workout_allowed) {
+                db.assignTrainerWorkout(
+                  session.assigned_by_trainer_id || 1,
+                  targetAthleteId,
+                  date,
+                  1,
+                  session.notes || targetCloudSession.notes || ''
+                );
+              }
+
+              if (Array.isArray(targetCloudSession.exercises)) {
+                for (const ex of targetCloudSession.exercises) {
+                  const exName = escapeHtml(ex.name || 'Упражнение');
+                  if (Array.isArray(ex.sets)) {
+                    for (const s of ex.sets) {
+                      const weight = Number(s.actualWeightKg || s.targetWeightKg || s.weight || 0);
+                      const reps = Number(s.actualReps || s.targetReps || s.reps || 1);
+                      const isCompleted = Boolean(s.isCompleted);
+                      const rpe = Number(s.rpe || 8.0);
+
+                      const existingSet = sets.find(ls => ls.exercise_name === exName && ls.reps === reps && Math.abs(ls.weight_kg - weight) < 0.01);
+                      if (existingSet) {
+                        if (isCompleted && !existingSet.is_completed) {
+                          db.toggleWorkoutSet(existingSet.id, true);
+                        }
+                      } else {
+                        const newSetId = db.addWorkoutSet(sessionId, exName, weight, reps, rpe, 0);
+                        if (isCompleted) {
+                          db.toggleWorkoutSet(newSetId, true);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('[Server] Cloud workout sync notice:', err.message);
+          }
+        }
+
         const { session, sets } = db.getWorkoutSessionWithSets(targetAthleteId, date);
         const isSelfAllowed = session ? Boolean(session.is_self_workout_allowed) : (user.role === 'trainer');
         return sendJson(res, 200, { session, sets, date, isSelfAllowed });
@@ -477,7 +669,8 @@ const server = http.createServer(async (req, res) => {
 
         // Strict Athlete Permission Check:
         // "атлет не может создавать тренеровки только отмечать если тренер разрешил на этот день"
-        if (user.role === 'athlete' && session.assigned_by_trainer_id !== null && !session.is_self_workout_allowed) {
+        const hasTrainer = Boolean(session.assigned_by_trainer_id !== null || user.coach_name);
+        if (user.role === 'athlete' && hasTrainer && !session.is_self_workout_allowed) {
           return sendError(res, 403, 'Добавление упражнений заблокировано тренером. Атлет может только отмечать выполнение подходов.');
         }
 
@@ -487,6 +680,18 @@ const server = http.createServer(async (req, res) => {
         const rpeVal = Math.min(10, Math.max(1, Number(rpe) || 8.0));
 
         const setId = db.addWorkoutSet(session.id, cleanExercise, weight, repCount, rpeVal, 1);
+
+        // Sync to Google Drive cloud
+        const athlete = db.findUserById(targetAthleteId);
+        if (athlete && athlete.client_uuid) {
+          const { session: updatedSession, sets: updatedSets } = db.getWorkoutSessionWithSets(athlete.id, workoutDate);
+          try {
+            await cloudSyncService.syncWorkoutSessionToCloud(athlete.client_uuid, athlete.full_name, workoutDate, updatedSession, updatedSets);
+          } catch (err) {
+            console.warn('[Server] Cloud sync add set error:', err.message);
+          }
+        }
+
         return sendJson(res, 201, { success: true, setId, sessionId: session.id });
       }
 
@@ -506,6 +711,19 @@ const server = http.createServer(async (req, res) => {
         }
         const isCompleted = body.isCompleted !== undefined ? Boolean(body.isCompleted) : !Boolean(targetSet.is_completed);
         db.toggleWorkoutSet(setId, isCompleted);
+
+        // Sync to Google Drive cloud
+        const athlete = db.findUserById(targetSet.athlete_id);
+        if (athlete && athlete.client_uuid) {
+          const targetDate = targetSet.workout_date || new Date().toISOString().slice(0, 10);
+          const { session, sets } = db.getWorkoutSessionWithSets(athlete.id, targetDate);
+          try {
+            await cloudSyncService.syncWorkoutSessionToCloud(athlete.client_uuid, athlete.full_name, targetDate, session, sets);
+          } catch (err) {
+            console.warn('[Server] Cloud sync toggle set error:', err.message);
+          }
+        }
+
         return sendJson(res, 200, { success: true, setId, isCompleted });
       }
 
@@ -527,6 +745,19 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 403, 'Доступ запрещен');
         }
         db.deleteWorkoutSet(setId);
+
+        // Sync to Google Drive cloud
+        const athlete = db.findUserById(targetSet.athlete_id);
+        if (athlete && athlete.client_uuid) {
+          const targetDate = targetSet.workout_date || new Date().toISOString().slice(0, 10);
+          const { session: updatedSession, sets: updatedSets } = db.getWorkoutSessionWithSets(athlete.id, targetDate);
+          try {
+            await cloudSyncService.syncWorkoutSessionToCloud(athlete.client_uuid, athlete.full_name, targetDate, updatedSession, updatedSets);
+          } catch (err) {
+            console.warn('[Server] Cloud sync delete set error:', err.message);
+          }
+        }
+
         return sendJson(res, 200, { success: true, setId });
       }
 
