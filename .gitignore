@@ -2,9 +2,10 @@
 .gradle
 /local.properties
 /.idea/
-.DS_Store
-/build
-/captures
+build/
+**/build/
+.gradle/
+**/.gradle/
 .externalNativeBuild
 .cxx
 local.properties

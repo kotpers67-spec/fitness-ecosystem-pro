@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.athleteapp.pro.R
@@ -48,24 +49,30 @@ fun LeaderboardScreen(
     val myTonnage: Double = sets.filter { it.isCompleted }.fold(0.0) { acc, s -> acc + (s.actualWeightKg * s.actualReps) }
     val myPoints: Int = completedWorkouts * 10 + (myTonnage / 100.0).toInt()
 
-    // Generated ecosystem participants + Current Athlete
-    val rawEntries = remember(completedWorkouts, myTonnage, myName, profile?.avatarBase64) {
-        val baseWorkouts = completedWorkouts
-        val baseTonnage = myTonnage
-        val basePoints = myPoints
-        listOf(
-            LeaderboardEntry(1, myName, baseWorkouts, baseTonnage, basePoints, profile?.avatarBase64, isMe = true),
-            LeaderboardEntry(2, "Максим Громов", if (baseWorkouts > 1) baseWorkouts - 1 else 0, baseTonnage * 0.9, if (basePoints > 15) basePoints - 15 else 0),
-            LeaderboardEntry(3, "Елена Соколова", if (baseWorkouts > 2) baseWorkouts - 2 else 0, baseTonnage * 0.8, if (basePoints > 30) basePoints - 30 else 0),
-            LeaderboardEntry(4, "Дмитрий Воронов", if (baseWorkouts > 3) baseWorkouts - 3 else 0, baseTonnage * 0.7, if (basePoints > 45) basePoints - 45 else 0),
-            LeaderboardEntry(5, "Ольга Морозова", if (baseWorkouts > 4) baseWorkouts - 4 else 0, baseTonnage * 0.6, if (basePoints > 60) basePoints - 60 else 0)
-        ).sortedByDescending { it.points }
+    val cloudAthletes by viewModel.cloudAthletes.collectAsState()
+
+    val myEntry = remember(completedWorkouts, myTonnage, myPoints, myName, profile?.avatarBase64) {
+        LeaderboardEntry(
+            rank = 1,
+            name = myName,
+            workoutsCount = completedWorkouts,
+            tonnageKg = myTonnage,
+            points = myPoints,
+            avatarBase64 = profile?.avatarBase64,
+            isMe = true
+        )
     }
 
-    val entries = remember(rawEntries, isPrivate) {
-        rawEntries.mapIndexed { index, entry ->
-            entry.copy(rank = index + 1)
-        }.filter { !isPrivate || it.isMe }
+    // Только реальные участники: текущий атлет + участники из облачной синхронизации (Zero-Mocks)
+    val entries = remember(myEntry, cloudAthletes, isPrivate) {
+        val rawList = mutableListOf<LeaderboardEntry>()
+        if (!isPrivate) {
+            rawList.add(myEntry)
+        }
+        rawList.addAll(cloudAthletes.filter { !it.isMe })
+        rawList
+            .sortedByDescending { it.points }
+            .mapIndexed { index, entry -> entry.copy(rank = index + 1) }
     }
 
     Scaffold(
@@ -174,101 +181,160 @@ fun LeaderboardScreen(
                 letterSpacing = 0.5.sp
             )
 
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(entries) { _, item ->
-                    val badgeColor = when (item.rank) {
-                        1 -> Color(0xFFFFD700)
-                        2 -> Color(0xFFC0C0C0)
-                        3 -> Color(0xFFCD7F32)
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
-
+            if (entries.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (item.isMe) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        border = if (item.isMe) CardDefaults.outlinedCardBorder().copy(
-                            brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
-                        ) else null
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                        )
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isPrivate) Icons.Default.VisibilityOff else Icons.Default.EmojiEvents,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                            Text(
+                                text = "В состязаниях пока нет участников",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isPrivate) {
+                                    "Ваш профиль скрыт от других участников"
+                                } else {
+                                    "Завершите тренировки, чтобы набрать очки и войти в состязания"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(entries) { _, item ->
+                        val badgeColor = when (item.rank) {
+                            1 -> Color(0xFFFFD700)
+                            2 -> Color(0xFFC0C0C0)
+                            3 -> Color(0xFFCD7F32)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (item.isMe) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            border = if (item.isMe) CardDefaults.outlinedCardBorder().copy(
+                                brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
+                            ) else null
                         ) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(badgeColor),
-                                    contentAlignment = Alignment.Center
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Text(
-                                        text = "#${item.rank}",
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 12.sp,
-                                        color = if (item.rank in 1..3) Color.Black else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-
-                                AthleteAvatar(
-                                    avatarPath = item.avatarBase64,
-                                    size = 36.dp
-                                )
-
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(badgeColor),
+                                        contentAlignment = Alignment.Center
+                                    ) {
                                         Text(
-                                            text = item.name,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp
+                                            text = "#${item.rank}",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 12.sp,
+                                            color = if (item.rank in 1..3) Color.Black else MaterialTheme.colorScheme.onSurface
                                         )
-                                        if (item.isMe) {
-                                            Spacer(Modifier.width(6.dp))
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = MaterialTheme.colorScheme.primary
-                                            ) {
-                                                Text(
-                                                    text = "ВЫ",
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Black,
-                                                    color = MaterialTheme.colorScheme.onPrimary,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                                )
+                                    }
+
+                                    AthleteAvatar(
+                                        avatarPath = item.avatarBase64,
+                                        size = 36.dp
+                                    )
+
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = item.name,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            )
+                                            if (item.isMe) {
+                                                Spacer(Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                ) {
+                                                    Text(
+                                                        text = "ВЫ",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Black,
+                                                        color = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
                                             }
                                         }
+                                        Text(
+                                            text = "${item.workoutsCount} тренировок • ${String.format("%.0f", item.tonnageKg)} кг тоннаж",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
                                     }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surface
+                                ) {
                                     Text(
-                                        text = "${item.workoutsCount} тренировок • ${String.format("%.0f", item.tonnageKg)} кг тоннаж",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.secondary
+                                        text = "${item.points} очков",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surface
-                            ) {
-                                Text(
-                                    text = "${item.points} очков",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
                             }
                         }
                     }

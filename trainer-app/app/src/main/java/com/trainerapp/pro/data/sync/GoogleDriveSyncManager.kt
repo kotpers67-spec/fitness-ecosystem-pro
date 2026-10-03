@@ -24,7 +24,13 @@ class GoogleDriveSyncManager {
      * 1. Скачивает и объединяет выполненные подходы подопечного по clientUuid.
      * 2. Загружает актуальные назначенные тренировки тренера под изолированным ключом clientUuid.
      */
-    suspend fun syncClient(dao: TrainerDao, client: ClientEntity): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun syncClient(
+        dao: TrainerDao,
+        client: ClientEntity,
+        coachName: String? = null,
+        coachPhone: String? = null,
+        coachAvatarBase64: String? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val endpoint = CloudSecurityManager.getEndpointUrl()
             val secretKey = CloudSecurityManager.getSecretKey()
@@ -85,15 +91,40 @@ class GoogleDriveSyncManager {
                 rootObj.add("clients", JsonObject())
             }
 
-            if (!rootObj.has("updates")) {
-            val defaultUpdates = JsonObject().apply {
-                addProperty("trainerVersion", "1.0.4")
-                addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.4/trainer-pro-v1.0.4.apk")
-                addProperty("athleteVersion", "1.0.4")
-                addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.4/athlete-pro-v1.0.4.apk")
-                addProperty("notes", "Версия 1.0.4: Карточка тренера, синхронизация фото, состязания и статистика упражнений.")
+            // Обновляем запись сопряжения в облачном реестре pairing, если она существует
+            if (rootObj.has("pairing")) {
+                val pairingObj = rootObj.getAsJsonObject("pairing")
+                val cleanPin = client.pairingCode?.filter { it.isDigit() } ?: ""
+                val cUuid = client.clientUuid
+                for ((key, element) in pairingObj.entrySet()) {
+                    if (!element.isJsonObject) continue
+                    val entryObj = element.asJsonObject
+                    val entryUuid = entryObj.get("clientUuid")?.asString
+                    val entryPin = entryObj.get("pin")?.asString?.filter { it.isDigit() } ?: key.filter { it.isDigit() }
+                    val matchesUuid = cUuid.isNotBlank() && entryUuid == cUuid
+                    val matchesPin = cleanPin.isNotBlank() && entryPin == cleanPin
+                    if (matchesUuid || matchesPin) {
+                        if (!coachName.isNullOrBlank()) entryObj.addProperty("coachName", coachName)
+                        if (!coachPhone.isNullOrBlank()) entryObj.addProperty("coachPhone", coachPhone)
+                        if (!coachAvatarBase64.isNullOrBlank()) {
+                            entryObj.addProperty("coachAvatarBase64", coachAvatarBase64)
+                        }
+                        entryObj.addProperty("status", "PAIRED")
+                        entryObj.addProperty("lastSyncAt", System.currentTimeMillis().toString())
+                        break
+                    }
+                }
             }
-            rootObj.add("updates", defaultUpdates)
+
+            if (!rootObj.has("updates")) {
+                val defaultUpdates = JsonObject().apply {
+                    addProperty("trainerVersion", "1.0.5")
+                    addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/trainer-pro-v1.0.5.apk")
+                    addProperty("athleteVersion", "1.0.5")
+                    addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk")
+                    addProperty("notes", "Версия 1.0.5: Карточка тренера, синхронизация фото, состязания и статистика упражнений.")
+                }
+                rootObj.add("updates", defaultUpdates)
             }
 
             // Ключом в облаке строго является clientUuid для изоляции данных подопечных
@@ -101,16 +132,16 @@ class GoogleDriveSyncManager {
             rootObj.getAsJsonObject("clients").add(clientStorageKey, trainerPayloadElement)
             rootObj.addProperty("updatedAt", System.currentTimeMillis().toString())
 
-            // 3. Отправляем зашифрованный JSON (AES-256) в Google Диск
+            // 3. Отправляем зашифрованный JSON (AES-256) в облако
             val updatedJson = gson.toJson(rootObj)
             val encryptedJson = CloudSecurityManager.encryptPayload(updatedJson)
             val postSuccess = httpPost(requestUrl, encryptedJson)
 
             if (!postSuccess) {
-                return@withContext Result.failure(Exception("Не удалось сохранить данные на Google Диске (ошибка HTTP)"))
+                return@withContext Result.failure(Exception("Не удалось сохранить данные в облаке (ошибка HTTP)"))
             }
 
-            Result.success("Google Диск: план для ${client.fullName} отправлен в облако. $pullMsg")
+            Result.success("Облако: план для ${client.fullName} отправлен. $pullMsg")
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -186,9 +217,20 @@ class GoogleDriveSyncManager {
                 }
             }
 
-            val cleanPin = (pinFromQr ?: rawInput).filter { it.isDigit() }
+            var extractedCode: String? = pinFromQr
+            if (extractedCode == null) {
+                // If user pasted a link (e.g. https://fitnessapp.pro/pair?code=265507 or ?pin=265507)
+                val urlMatch = Regex("""[?&](?:code|pin)=(\d{6})""").find(rawInput)
+                    ?: Regex("""/pair/(\d{6})""").find(rawInput)
+                if (urlMatch != null) {
+                    extractedCode = urlMatch.groupValues[1]
+                }
+            }
+
+            val cleanCode = (extractedCode ?: rawInput).filter { it.isDigit() }
+            val cleanPin = if (cleanCode.length >= 6) cleanCode.take(6) else cleanCode
             if (cleanPin.length != 6 && uuidFromQr.isNullOrBlank()) {
-                return@withContext Result.failure(IllegalArgumentException("Неверный формат кода. Введите 6 цифр (например, 739-102) или отсканируйте QR-код."))
+                return@withContext Result.failure(IllegalArgumentException("Неверный формат кода. Введите 6 цифр (например, 739102 без тире) или ссылку подопечного."))
             }
 
             val endpoint = CloudSecurityManager.getEndpointUrl()
@@ -320,7 +362,7 @@ class GoogleDriveSyncManager {
 
             // 3. Выполняем начальную синхронизацию с облаком
             try {
-                syncClient(dao, client)
+                syncClient(dao, client, coachName, coachPhone, coachAvatarBase64)
             } catch (_: Exception) {}
 
             Result.success(client)

@@ -48,6 +48,7 @@ fun WorkoutScreen(
     var showPlateDialog by remember { mutableStateOf(false) }
     var show1RMDialog by remember { mutableStateOf(false) }
     var showExerciseStatsDialog by remember { mutableStateOf(false) }
+    var selectedStatsExercise by remember { mutableStateOf<ExerciseEntity?>(null) }
     var statsSummary by remember { mutableStateOf<MainViewModel.LastExerciseStatsSummary?>(null) }
     var selectedWeightForCalc by remember { mutableStateOf(0.0) }
     var selectedRepsForCalc by remember { mutableStateOf(0) }
@@ -379,6 +380,7 @@ fun WorkoutScreen(
 
                                     OutlinedButton(
                                         onClick = {
+                                            selectedStatsExercise = exercise
                                             scope.launch {
                                                 statsSummary = viewModel.getLastExerciseStats(exercise.id)
                                                 showExerciseStatsDialog = true
@@ -430,6 +432,7 @@ fun WorkoutScreen(
                 showAddExerciseDialog = false
             },
             onViewStats = { exerciseId ->
+                selectedStatsExercise = exercises.find { it.id == exerciseId }
                 scope.launch {
                     statsSummary = viewModel.getLastExerciseStats(exerciseId)
                     showExerciseStatsDialog = true
@@ -456,8 +459,8 @@ fun WorkoutScreen(
     }
 
     // Exercise History / Statistics Dialog
-    if (showExerciseStatsDialog && activeExerciseTriple != null) {
-        val exercise = activeExerciseTriple.second
+    if (showExerciseStatsDialog && selectedStatsExercise != null) {
+        val exercise = selectedStatsExercise!!
         val summary = statsSummary
 
         AlertDialog(

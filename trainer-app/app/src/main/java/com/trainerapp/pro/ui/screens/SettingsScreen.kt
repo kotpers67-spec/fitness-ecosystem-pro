@@ -478,7 +478,7 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 isCheckingUpdate = true
-                                updateStatusText = "Запрос к GitHub Releases..."
+                                updateStatusText = "Проверка обновлений..."
                                 scope.launch {
                                     val res = viewModel.updateService.checkForUpdates()
                                     isCheckingUpdate = false
@@ -488,10 +488,10 @@ fun SettingsScreen(
                                         if (data?.isUpdateAvailable == true) {
                                             updateStatusText = "Доступна новая версия: v${data.latestVersion}!"
                                         } else {
-                                            updateStatusText = "У вас уже установлена актуальная версия Trainer Pro (v1.0.1)."
+                                            updateStatusText = "У вас уже установлена актуальная версия Trainer Pro (v1.0.5)."
                                         }
                                     } else {
-                                        updateStatusText = "У вас установлена актуальная версия (v1.0.1)."
+                                        updateStatusText = "У вас установлена актуальная версия (v1.0.5)."
                                     }
                                 }
                             },

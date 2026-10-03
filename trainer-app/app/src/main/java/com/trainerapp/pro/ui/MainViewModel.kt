@@ -441,7 +441,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             _syncStatus.value = "Синхронизация данных..."
-            val result = googleDriveSync.syncClient(dao, client)
+            val coachFullName = "$trainerFirstName $trainerLastName".trim().ifBlank { "Алексей Романов" }
+            val result = googleDriveSync.syncClient(
+                dao = dao,
+                client = client,
+                coachName = coachFullName,
+                coachPhone = trainerPhone,
+                coachAvatarBase64 = trainerAvatarBase64
+            )
             if (result.isSuccess) {
                 _syncStatus.value = result.getOrNull()
                 // Перезагружаем сессию для обновления UI
@@ -474,7 +481,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun pairClientByCode(codeOrJson: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             _syncStatus.value = "Поиск и связывание подопечного..."
-            val result = googleDriveSync.findAndPairAthlete(dao, codeOrJson)
+            val coachFullName = "$trainerFirstName $trainerLastName".trim().ifBlank { "Алексей Романов" }
+            val result = googleDriveSync.findAndPairAthlete(
+                dao = dao,
+                inputCodeOrJson = codeOrJson,
+                coachName = coachFullName,
+                coachPhone = trainerPhone,
+                coachAvatarBase64 = trainerAvatarBase64
+            )
             result.onSuccess { client ->
                 selectClient(client.id)
                 loadSessionForDate(client.id, currentDate.value)

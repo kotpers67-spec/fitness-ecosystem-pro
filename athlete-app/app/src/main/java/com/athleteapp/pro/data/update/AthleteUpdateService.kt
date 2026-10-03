@@ -47,9 +47,9 @@ class AthleteUpdateService(private val context: Context) {
     fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.1"
+            pInfo.versionName ?: "1.0.5"
         } catch (_: Exception) {
-            "1.0.1"
+            "1.0.5"
         }
     }
 
@@ -57,7 +57,7 @@ class AthleteUpdateService(private val context: Context) {
         try {
             val currentVersionName = getCurrentVersionName()
 
-            // 1. Приоритетно проверяем обновление через Google Диск (AES-256)
+            // 1. Приоритетно проверяем обновление через облако (AES-256)
             try {
                 val endpoint = com.athleteapp.pro.data.sync.CloudSecurityManager.getEndpointUrl()
                 val secretKey = com.athleteapp.pro.data.sync.CloudSecurityManager.getSecretKey()
@@ -73,8 +73,8 @@ class AthleteUpdateService(private val context: Context) {
                         val updatesNode = root.getAsJsonObject("updates")
                         val remoteVersion = updatesNode.get("athleteVersion")?.asString?.removePrefix("v")?.trim() ?: ""
                         val downloadUrl = updatesNode.get("athleteUrl")?.asString
-                            ?: "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.2/athlete-pro-v1.0.2.apk"
-                        val notes = updatesNode.get("notes")?.asString ?: "Новое обновление Athlete Pro 1.0.2 доступно на Google Диске"
+                            ?: "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk"
+                        val notes = updatesNode.get("notes")?.asString ?: "Обновление доступно в облаке"
 
                         if (remoteVersion.isNotBlank()) {
                             val isNewer = isVersionNewer(remoteVersion, currentVersionName)
@@ -124,16 +124,16 @@ class AthleteUpdateService(private val context: Context) {
                 }
             } catch (_: Exception) {}
 
-            // Резервный фолбэк для v1.0.2 release
-            val fallbackVersion = "1.0.2"
+            // Резервный фолбэк для v1.0.5 release
+            val fallbackVersion = "1.0.5"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
                 AthleteUpdateCheckResult(
                     isUpdateAvailable = isFallbackNewer,
                     currentVersion = currentVersionName,
                     latestVersion = fallbackVersion,
-                    releaseNotes = "Версия $fallbackVersion доступна на Google Диске",
-                    downloadUrl = "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.2/athlete-pro-v1.0.2.apk"
+                    releaseNotes = "Версия $fallbackVersion доступна в облаке",
+                    downloadUrl = "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk"
                 )
             )
         } catch (e: Exception) {

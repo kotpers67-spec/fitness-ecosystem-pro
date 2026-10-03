@@ -7,7 +7,11 @@ import com.google.gson.JsonParser
 import com.athleteapp.pro.data.local.dao.AthleteDao
 import com.athleteapp.pro.data.local.entities.AthleteProfileEntity
 import com.athleteapp.pro.data.sync.model.*
+import com.athleteapp.pro.ui.screens.LeaderboardEntry
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -18,6 +22,8 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
 
     private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
     private val athleteSyncManager = AthleteSyncManager(dao)
+    private val _cloudAthletes = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
+    val cloudAthletes: StateFlow<List<LeaderboardEntry>> = _cloudAthletes.asStateFlow()
 
     suspend fun syncWithCoach(athleteId: Long = 1L, clientUuidOverride: String? = null): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -87,6 +93,38 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                             val applyRes = athleteSyncManager.applyPayloadJson(clientPayload)
                             pulledWorkouts = applyRes.getOrDefault(0)
                         }
+
+                        // Load real athletes from cloud sync for leaderboard
+                        val otherAthletes = mutableListOf<LeaderboardEntry>()
+                        for (entry in clientsObj.entrySet()) {
+                            val otherUuid = entry.key
+                            if (otherUuid != clientUuid && entry.value.isJsonObject) {
+                                try {
+                                    val otherPayload = gson.fromJson(entry.value, AthleteSyncPayload::class.java)
+                                    if (otherPayload != null && otherPayload.clientName.isNotBlank()) {
+                                        val workoutsCount = otherPayload.assignedWorkouts.count { it.completed }
+                                        val tonnage = otherPayload.assignedWorkouts
+                                            .flatMap { it.exercises }
+                                            .flatMap { it.sets }
+                                            .filter { it.isCompleted }
+                                            .sumOf { it.actualWeightKg * it.actualReps }
+                                        val pts = workoutsCount * 10 + (tonnage / 100.0).toInt()
+                                        otherAthletes.add(
+                                            LeaderboardEntry(
+                                                rank = 0,
+                                                name = otherPayload.clientName,
+                                                workoutsCount = workoutsCount,
+                                                tonnageKg = tonnage,
+                                                points = pts,
+                                                avatarBase64 = otherPayload.avatarBase64,
+                                                isMe = false
+                                            )
+                                        )
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        _cloudAthletes.value = otherAthletes
                     }
                 } catch (_: Exception) { }
             }
@@ -155,11 +193,11 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             }
             if (!rootObj.has("updates")) {
                 val defaultUpdates = JsonObject().apply {
-                    addProperty("trainerVersion", "1.0.4")
-                    addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.4/trainer-pro-v1.0.4.apk")
-                    addProperty("athleteVersion", "1.0.4")
-                    addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.4/athlete-pro-v1.0.4.apk")
-                    addProperty("notes", "Версия 1.0.4: Карточка тренера, синхронизация фото, состязания и статистика упражнений.")
+                    addProperty("trainerVersion", "1.0.5")
+                    addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/trainer-pro-v1.0.5.apk")
+                    addProperty("athleteVersion", "1.0.5")
+                    addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk")
+                    addProperty("notes", "Версия 1.0.5: Карточка тренера, синхронизация фото, состязания и статистика упражнений.")
                 }
                 rootObj.add("updates", defaultUpdates)
             }
@@ -194,10 +232,10 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             val encryptedJson = CloudSecurityManager.encryptPayload(gson.toJson(rootObj))
             val postSuccess = httpPost(requestUrl, encryptedJson)
             if (!postSuccess) {
-                return@withContext Result.failure(Exception("Не удалось обновить данные на Google Диске"))
+                return@withContext Result.failure(Exception("Не удалось обновить данные в облаке"))
             }
 
-            Result.success("Google Диск: данные синхронизированы! Актуализировано тренировок: $pulledWorkouts")
+            Result.success("Облако: данные синхронизированы! Актуализировано тренировок: $pulledWorkouts")
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -212,6 +250,9 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             val updated = current.copy(
                 isPairedWithCoach = false,
                 pairedCoachName = "",
+                pairedCoachPhone = "",
+                pairedCoachPhotoUri = null,
+                pairedCoachAvatarBase64 = null,
                 pairingPin = newPin,
                 clientUuid = newUuid
             )
@@ -226,7 +267,8 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             val cloudJson = httpGet(requestUrl)
             if (cloudJson.isNotBlank() && cloudJson != "{}") {
                 try {
-                    val rootObj = JsonParser.parseString(cloudJson).asJsonObject
+                    val decryptedJson = CloudSecurityManager.decryptPayload(cloudJson)
+                    val rootObj = JsonParser.parseString(decryptedJson).asJsonObject
                     if (rootObj.has("pairing")) {
                         val pairingObj = rootObj.getAsJsonObject("pairing")
                         if (oldPin.isNotBlank() && pairingObj.has(oldPin)) {
@@ -234,7 +276,8 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                         }
                     }
                     rootObj.addProperty("updatedAt", System.currentTimeMillis().toString())
-                    httpPost(requestUrl, gson.toJson(rootObj))
+                    val encryptedPayload = CloudSecurityManager.encryptPayload(gson.toJson(rootObj))
+                    httpPost(requestUrl, encryptedPayload)
                 } catch (_: Exception) {}
             }
 

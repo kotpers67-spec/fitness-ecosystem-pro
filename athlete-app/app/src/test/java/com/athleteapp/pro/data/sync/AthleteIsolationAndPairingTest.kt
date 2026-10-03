@@ -191,4 +191,35 @@ class AthleteIsolationAndPairingTest {
         assertEquals(name, parsed.get("name").asString)
         assertEquals(phone, parsed.get("phone").asString)
     }
+
+    @Test
+    fun testUnpairResetProfile_clearsCoachPhoneAndPhotos() {
+        val pairedProfile = AthleteProfileEntity(
+            id = 1,
+            isPairedWithCoach = true,
+            pairedCoachName = "Алексей Романов",
+            pairedCoachPhone = "+7 (999) 123-45-67",
+            pairedCoachPhotoUri = "/data/user/0/coach.jpg",
+            pairedCoachAvatarBase64 = "base64coachdata",
+            pairingPin = "123456",
+            clientUuid = "old-uuid"
+        )
+        val unpinned = pairedProfile.copy(
+            isPairedWithCoach = false,
+            pairedCoachName = "",
+            pairedCoachPhone = "",
+            pairedCoachPhotoUri = null,
+            pairedCoachAvatarBase64 = null,
+            pairingPin = "654321",
+            clientUuid = "new-uuid"
+        )
+
+        assertFalse(unpinned.isPairedWithCoach)
+        assertEquals("", unpinned.pairedCoachName)
+        assertEquals("", unpinned.pairedCoachPhone)
+        assertNull(unpinned.pairedCoachPhotoUri)
+        assertNull(unpinned.pairedCoachAvatarBase64)
+        assertEquals("654321", unpinned.pairingPin)
+        assertEquals("new-uuid", unpinned.clientUuid)
+    }
 }

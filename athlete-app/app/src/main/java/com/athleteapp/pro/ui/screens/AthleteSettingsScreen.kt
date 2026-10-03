@@ -395,12 +395,12 @@ fun AthleteSettingsScreen(
                             }
                         } else {
                             Text(
-                                text = "Покажите QR-код или назовите 6-значный PIN тренеру для привязки:",
+                                text = "Назовите 6-значный код или отправьте ссылку тренеру для привязки:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            // 6-digit PIN Box
+                            // 6-digit PIN Box (large readable digits without dash)
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surface,
@@ -411,24 +411,30 @@ fun AthleteSettingsScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
-                                        text = "КОД ПОДКЛЮЧЕНИЯ",
+                                        text = "КОД ПОДКЛЮЧЕНИЯ (6 ЦИФР)",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = formattedPin,
+                                        text = cleanPin,
                                         style = MaterialTheme.typography.headlineLarge.copy(
                                             fontFamily = FontFamily.Monospace,
                                             fontWeight = FontWeight.Black,
-                                            letterSpacing = 4.sp
+                                            letterSpacing = 6.sp
                                         ),
                                         color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Вводится тренером слитно, без дефиса",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.secondary
                                     )
                                 }
                             }
 
-                            // QR Code
+                            // QR-код для быстрого сканирования тренером
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -439,6 +445,44 @@ fun AthleteSettingsScreen(
                                     content = qrJson,
                                     modifier = Modifier.size(180.dp)
                                 )
+                            }
+
+                            val pairingLink = "https://fitnessapp.pro/pair?code=$cleanPin&uuid=$clientUuid"
+                            val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+                            // Кнопка: Скопировать ссылку для тренера
+                            Button(
+                                onClick = {
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(pairingLink))
+                                    Toast.makeText(context, "Ссылка для тренера скопирована: $pairingLink", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Скопировать ссылку для тренера", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+                            }
+
+                            // Кнопка: Отправить в мессенджер
+                            OutlinedButton(
+                                onClick = {
+                                    try {
+                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                            putExtra(Intent.EXTRA_TEXT, "Привет! Мой код подключения в приложении: $cleanPin\nСсылка: $pairingLink")
+                                            type = "text/plain"
+                                        }
+                                        val shareIntent = Intent.createChooser(sendIntent, "Отправить тренеру код подключения")
+                                        context.startActivity(shareIntent)
+                                    } catch (_: Exception) {}
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Поделиться кодом (Telegram / WhatsApp)")
                             }
 
                             OutlinedButton(
@@ -731,7 +775,7 @@ fun AthleteSettingsScreen(
                         Button(
                             onClick = {
                                 isCheckingUpdate = true
-                                updateStatusText = "Проверка релизов на GitHub..."
+                                updateStatusText = "Проверка обновлений..."
                                 scope.launch {
                                     val res = viewModel.updateService.checkForUpdates()
                                     isCheckingUpdate = false
@@ -741,10 +785,10 @@ fun AthleteSettingsScreen(
                                         if (data?.isUpdateAvailable == true) {
                                             updateStatusText = "Доступно новое обновление: v${data.latestVersion}!"
                                         } else {
-                                            updateStatusText = "У вас установлена актуальная версия Athlete Pro (v1.0.1)."
+                                            updateStatusText = "У вас установлена актуальная версия Athlete Pro (v1.0.5)."
                                         }
                                     } else {
-                                        updateStatusText = "У вас установлена актуальная версия (v1.0.1)."
+                                        updateStatusText = "У вас установлена актуальная версия (v1.0.5)."
                                     }
                                 }
                             },

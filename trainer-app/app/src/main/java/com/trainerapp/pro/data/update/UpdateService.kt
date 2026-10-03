@@ -49,9 +49,9 @@ class UpdateService(private val context: Context) {
     fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.1"
+            pInfo.versionName ?: "1.0.5"
         } catch (_: Exception) {
-            "1.0.1"
+            "1.0.5"
         }
     }
 
@@ -75,8 +75,8 @@ class UpdateService(private val context: Context) {
                         val updatesNode = root.getAsJsonObject("updates")
                         val remoteVersion = updatesNode.get("trainerVersion")?.asString?.removePrefix("v")?.trim() ?: ""
                         val downloadUrl = updatesNode.get("trainerUrl")?.asString
-                            ?: "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.2/trainer-pro-v1.0.2.apk"
-                        val notes = updatesNode.get("notes")?.asString ?: "Новое обновление Trainer Pro 1.0.2 доступно на Google Диске"
+                            ?: "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/trainer-pro-v1.0.5.apk"
+                        val notes = updatesNode.get("notes")?.asString ?: "Новое обновление Trainer Pro 1.0.5 доступно в облаке"
 
                         if (remoteVersion.isNotBlank()) {
                             val isNewer = isVersionNewer(remoteVersion, currentVersionName)
@@ -126,16 +126,16 @@ class UpdateService(private val context: Context) {
                 }
             } catch (_: Exception) {}
 
-            // Резервный фолбэк для v1.0.2 release
-            val fallbackVersion = "1.0.2"
+            // Резервный фолбэк для v1.0.5 release
+            val fallbackVersion = "1.0.5"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
                 UpdateCheckResult(
                     isUpdateAvailable = isFallbackNewer,
                     currentVersion = currentVersionName,
                     latestVersion = fallbackVersion,
-                    releaseNotes = "Версия $fallbackVersion доступна на Google Диске",
-                    downloadUrl = "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.2/trainer-pro-v1.0.2.apk"
+                    releaseNotes = "Версия $fallbackVersion доступна в облаке",
+                    downloadUrl = "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/trainer-pro-v1.0.5.apk"
                 )
             )
         } catch (e: Exception) {

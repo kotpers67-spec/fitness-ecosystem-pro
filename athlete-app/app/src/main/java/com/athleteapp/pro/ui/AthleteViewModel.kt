@@ -17,6 +17,7 @@ import com.athleteapp.pro.domain.calculators.NeuroAdaptiveEngine
 import com.athleteapp.pro.domain.calculators.NeuroRecommendation
 import com.athleteapp.pro.domain.calculators.SessionReadiness
 import com.athleteapp.pro.domain.timer.RestTimerManager
+import com.athleteapp.pro.ui.screens.LeaderboardEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -114,7 +115,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             var lastUpdateCheck = 0L
             var lastAutoUpdateVersion: String? = null
-            while (true) {
+            while (isActive) {
                 autoSync()
                 if (System.currentTimeMillis() - lastUpdateCheck > 60000L) {
                     lastUpdateCheck = System.currentTimeMillis()
@@ -298,6 +299,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     }
 
     val googleDriveSync = com.athleteapp.pro.data.sync.GoogleDriveAthleteSyncManager(dao)
+    val cloudAthletes: StateFlow<List<LeaderboardEntry>> = googleDriveSync.cloudAthletes
 
     fun updateProfile(fullName: String, phone: String, goal: String, restrictions: String) {
         viewModelScope.launch {
@@ -356,7 +358,10 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
             val updated = current.copy(
                 pairingPin = newPin,
                 isPairedWithCoach = false,
-                pairedCoachName = ""
+                pairedCoachName = "",
+                pairedCoachPhone = "",
+                pairedCoachPhotoUri = null,
+                pairedCoachAvatarBase64 = null
             )
             dao.saveProfile(updated)
             _syncMessage.value = "Сгенерирован новый PIN: ${newPin.substring(0, 3)}-${newPin.substring(3)}"

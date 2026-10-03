@@ -13,8 +13,8 @@ android {
         applicationId = "com.trainerapp.pro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.0.4"
+        versionCode = 5
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -25,6 +25,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            isCrunchPngs = false
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -73,6 +75,9 @@ dependencies {
     // JSON Export/Import & Coroutines
     implementation(libs.google.gson)
     implementation(libs.kotlinx.coroutines.android)
+
+    // ZXing for QR Code scanning & decoding
+    implementation("com.google.zxing:core:3.5.3")
 
     testImplementation(libs.junit)
 }

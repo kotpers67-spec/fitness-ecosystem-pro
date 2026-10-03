@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trainerapp.pro.R
 import com.trainerapp.pro.ui.MainViewModel
+import com.trainerapp.pro.ui.components.ClientAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,14 +50,13 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.avatar_coach),
-                            contentDescription = "Тренер",
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                            contentScale = ContentScale.Crop
+                        ClientAvatar(
+                            photoUri = viewModel.trainerPhotoUri,
+                            avatarBase64 = viewModel.trainerAvatarBase64,
+                            size = 38.dp,
+                            borderWidth = 1.5.dp,
+                            defaultResId = R.drawable.avatar_coach,
+                            contentDescription = "Тренер"
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
@@ -188,14 +188,13 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.avatar_athlete),
-                                    contentDescription = client.fullName,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                                    contentScale = ContentScale.Crop
+                                ClientAvatar(
+                                    photoUri = client.photoUri,
+                                    avatarBase64 = client.avatarBase64,
+                                    size = 36.dp,
+                                    borderWidth = 1.dp,
+                                    defaultResId = R.drawable.avatar_athlete,
+                                    contentDescription = client.fullName
                                 )
                                 Spacer(Modifier.width(10.dp))
                                 Column {
@@ -446,9 +445,58 @@ fun HomeScreen(
 
     // Диалог привязки по 6-значному PIN-коду или QR-коду
     if (showPairingDialog) {
+        val context = androidx.compose.ui.platform.LocalContext.current
         var pairingCodeInput by remember { mutableStateOf("") }
         var isPairing by remember { mutableStateOf(false) }
         var pairingErrorMessage by remember { mutableStateOf<String?>(null) }
+
+        val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+        ) { bitmap ->
+            if (bitmap != null) {
+                val decoded = com.trainerapp.pro.util.QrCodeScannerHelper.decodeFromBitmap(bitmap)
+                if (!decoded.isNullOrBlank()) {
+                    val codeToUse = if (decoded.trim().startsWith("{")) decoded else extractPairingCode(decoded).ifBlank { decoded }
+                    pairingCodeInput = codeToUse
+                    pairingErrorMessage = null
+                    isPairing = true
+                    viewModel.pairClientByCode(codeToUse) { success, msg ->
+                        isPairing = false
+                        if (success) {
+                            showPairingDialog = false
+                        } else {
+                            pairingErrorMessage = msg
+                        }
+                    }
+                } else {
+                    pairingErrorMessage = "QR-код не распознан. Наведите камеру ближе или введите 6 цифр."
+                }
+            }
+        }
+
+        val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.GetContent()
+        ) { uri ->
+            if (uri != null) {
+                val decoded = com.trainerapp.pro.util.QrCodeScannerHelper.decodeFromUri(context, uri)
+                if (!decoded.isNullOrBlank()) {
+                    val codeToUse = if (decoded.trim().startsWith("{")) decoded else extractPairingCode(decoded).ifBlank { decoded }
+                    pairingCodeInput = codeToUse
+                    pairingErrorMessage = null
+                    isPairing = true
+                    viewModel.pairClientByCode(codeToUse) { success, msg ->
+                        isPairing = false
+                        if (success) {
+                            showPairingDialog = false
+                        } else {
+                            pairingErrorMessage = msg
+                        }
+                    }
+                } else {
+                    pairingErrorMessage = "QR-код на изображении не найден."
+                }
+            }
+        }
 
         AlertDialog(
             onDismissRequest = {
@@ -470,27 +518,55 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Кнопки быстрого сканирования QR-кода
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { cameraLauncher.launch(null) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            enabled = !isPairing
+                        ) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Сканировать QR", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+                        }
+
+                        OutlinedButton(
+                            onClick = { galleryLauncher.launch("image/*") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !isPairing
+                        ) {
+                            Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Из фото QR", fontSize = 12.sp)
+                        }
+                    }
+
                     Text(
-                        "Введите 6-значный цифровой код (например 739-102) или вставьте данные QR-кода из приложения подопечного Athlete Pro.",
-                        fontSize = 13.sp,
+                        "Или введите 6 цифр кода (без дефиса) или вставьте ссылку подопечного:",
+                        fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.secondary
                     )
 
                     OutlinedTextField(
                         value = pairingCodeInput,
                         onValueChange = {
-                            pairingCodeInput = it
+                            pairingCodeInput = extractPairingCode(it)
                             pairingErrorMessage = null
                         },
-                        label = { Text("Код подопечного или QR") },
-                        placeholder = { Text("739-102") },
+                        label = { Text("Код подопечного (6 цифр)") },
+                        placeholder = { Text("739102 (без тире)") },
                         leadingIcon = {
                             Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        maxLines = 3,
+                        singleLine = true,
                         enabled = !isPairing
                     )
 
@@ -531,7 +607,8 @@ fun HomeScreen(
                     onClick = {
                         isPairing = true
                         pairingErrorMessage = null
-                        viewModel.pairClientByCode(pairingCodeInput) { success, msg ->
+                        val codeToPair = extractPairingCode(pairingCodeInput)
+                        viewModel.pairClientByCode(codeToPair) { success, msg ->
                             isPairing = false
                             if (success) {
                                 showPairingDialog = false
@@ -556,4 +633,20 @@ fun HomeScreen(
             }
         )
     }
+}
+
+internal fun extractPairingCode(input: String): String {
+    val trimmed = input.trim()
+    if (trimmed.isBlank()) return ""
+    val linkMatch = Regex("""[?&](?:code|pin)=(\d{6})""").find(trimmed)
+        ?: Regex("""(?:pair|code|pin)[/=](\d{6})""").find(trimmed)
+    if (linkMatch != null) {
+        return linkMatch.groupValues[1]
+    }
+    val jsonMatch = Regex("""\"(?:pin|code)\"\s*:\s*\"(\d{6})\"""").find(trimmed)
+    if (jsonMatch != null) {
+        return jsonMatch.groupValues[1]
+    }
+    val cleanCode = trimmed.filter { it.isDigit() }
+    return if (cleanCode.length > 6) cleanCode.take(6) else cleanCode
 }

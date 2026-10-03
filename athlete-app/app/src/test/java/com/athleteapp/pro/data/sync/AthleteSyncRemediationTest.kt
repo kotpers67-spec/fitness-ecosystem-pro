@@ -4,8 +4,10 @@ import com.athleteapp.pro.data.local.dao.AthleteDao
 import com.athleteapp.pro.data.local.dao.AthleteSetHistory
 import com.athleteapp.pro.data.local.entities.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import com.athleteapp.pro.ui.screens.LeaderboardEntry
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -156,6 +158,54 @@ class AthleteSyncRemediationTest {
         assertTrue(sets[0].isCompleted)
         assertEquals(82.5, sets[0].targetWeightKg, 0.01) // Target updated
     }
+
+    @Test
+    fun testLeaderboardPrivacyFilter_omitsCurrentUserWhenPrivate() {
+        val rawEntries = listOf(
+            LeaderboardEntry(1, "Вы", 5, 5000.0, 100, isMe = true),
+            LeaderboardEntry(2, "Максим", 4, 4000.0, 80, isMe = false),
+            LeaderboardEntry(3, "Елена", 3, 3000.0, 60, isMe = false)
+        )
+        val isPrivate = true
+        val filtered = rawEntries
+            .filter { !isPrivate || !it.isMe }
+            .mapIndexed { index, entry -> entry.copy(rank = index + 1) }
+
+        assertEquals(2, filtered.size)
+        assertTrue(filtered.none { it.isMe })
+        assertEquals("Максим", filtered[0].name)
+        assertEquals(1, filtered[0].rank)
+        assertEquals("Елена", filtered[1].name)
+        assertEquals(2, filtered[1].rank)
+    }
+
+    @Test
+    fun testLeaderboardPrivacyFilter_retainsAllWhenNotPrivate() {
+        val rawEntries = listOf(
+            LeaderboardEntry(1, "Вы", 5, 5000.0, 100, isMe = true),
+            LeaderboardEntry(2, "Максим", 4, 4000.0, 80, isMe = false)
+        )
+        val isPrivate = false
+        val filtered = rawEntries
+            .filter { !isPrivate || !it.isMe }
+            .mapIndexed { index, entry -> entry.copy(rank = index + 1) }
+
+        assertEquals(2, filtered.size)
+        assertTrue(filtered.any { it.isMe })
+        assertEquals(1, filtered[0].rank)
+        assertEquals(2, filtered[1].rank)
+    }
+
+    @Test
+    fun testFakeAthleteDao_getAllSets_returnsAllSetsAcrossSessions() = runBlocking {
+        val set1 = MyWorkoutSetEntity(id = 1L, sessionId = 10L, exerciseId = 1L, exerciseName = "Присед", muscleGroup = "Ноги", exerciseOrder = 1, setNumber = 1, targetWeightKg = 100.0, targetReps = 5, actualWeightKg = 100.0, actualReps = 5, isCompleted = true)
+        val set2 = MyWorkoutSetEntity(id = 2L, sessionId = 20L, exerciseId = 2L, exerciseName = "Жим", muscleGroup = "Грудь", exerciseOrder = 1, setNumber = 1, targetWeightKg = 80.0, targetReps = 8, actualWeightKg = 80.0, actualReps = 8, isCompleted = true)
+        fakeDao.insertSet(set1)
+        fakeDao.insertSet(set2)
+
+        val flowSets = fakeDao.getAllSets().first()
+        assertEquals(2, flowSets.size)
+    }
 }
 
 /**
@@ -247,6 +297,8 @@ class FakeAthleteDao : AthleteDao {
     override suspend fun getRecentCompletedSets(): List<MyWorkoutSetEntity> = emptyList()
 
     override suspend fun getCompletedSetsForExercise(exerciseId: Long): List<MyWorkoutSetEntity> = emptyList()
+
+    override fun getAllSets(): Flow<List<MyWorkoutSetEntity>> = flowOf(setsForSession.values.flatten())
 
     override suspend fun getAllSetsSync(): List<MyWorkoutSetEntity> = setsForSession.values.flatten()
 
