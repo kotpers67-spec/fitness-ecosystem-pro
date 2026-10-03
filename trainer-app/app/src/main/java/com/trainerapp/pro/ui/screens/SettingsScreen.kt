@@ -873,6 +873,22 @@ fun SettingsScreen(
                 }
             }
 
+            item {
+                Button(
+                    onClick = { viewModel.logout() },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Выйти из аккаунта", fontWeight = FontWeight.Bold)
+                }
+            }
+
             item { Spacer(Modifier.height(20.dp)) }
         }
     }

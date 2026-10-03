@@ -245,15 +245,6 @@ fun AthleteSettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        OutlinedTextField(
-                            value = goal,
-                            onValueChange = { goal = it },
-                            label = { Text("Цели тренировок") },
-                            placeholder = { Text("Например: Набор мышечной массы, жим 100 кг") },
-                            leadingIcon = { Icon(Icons.Default.Flag, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 2
-                        )
 
                         OutlinedTextField(
                             value = restrictions,
@@ -853,6 +844,22 @@ fun AthleteSettingsScreen(
                             }
                         }
                     }
+                }
+            }
+
+            item {
+                Button(
+                    onClick = { viewModel.logout() },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Выйти из аккаунта", fontWeight = FontWeight.Bold)
                 }
             }
 

@@ -47,9 +47,9 @@ class AthleteUpdateService(private val context: Context) {
     fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.5"
+            pInfo.versionName ?: "1.0.6"
         } catch (_: Exception) {
-            "1.0.5"
+            "1.0.6"
         }
     }
 

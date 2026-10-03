@@ -109,6 +109,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var loadSessionJob: Job? = null
 
+    private val authPrefs = application.getSharedPreferences("trainer_auth", android.content.Context.MODE_PRIVATE)
+    private val _isLoggedIn = MutableStateFlow(authPrefs.getBoolean("is_logged_in", false))
+    val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
+
+    fun login(username: String, pass: String): Boolean {
+        val savedUser = authPrefs.getString("username", "") ?: ""
+        val savedHash = authPrefs.getString("password_hash", "") ?: ""
+        val inputHash = hashPassword(pass)
+        if (savedUser.isNotEmpty() && savedUser.equals(username.trim(), ignoreCase = true) && savedHash == inputHash) {
+            authPrefs.edit().putBoolean("is_logged_in", true).apply()
+            _isLoggedIn.value = true
+            return true
+        }
+        return false
+    }
+
+    fun register(trainerName: String, username: String, password: String, phone: String) {
+        val inputHash = hashPassword(password)
+        authPrefs.edit()
+            .putString("username", username.trim())
+            .putString("password_hash", inputHash)
+            .putString("trainer_name", trainerName.trim())
+            .putString("phone", phone.trim())
+            .putBoolean("is_logged_in", true)
+            .apply()
+        _isLoggedIn.value = true
+
+        val parts = trainerName.trim().split(" ", limit = 2)
+        val firstName = parts.firstOrNull() ?: trainerName.trim()
+        val lastName = if (parts.size > 1) parts[1] else ""
+        prefs.edit()
+            .putString("trainer_first_name", firstName)
+            .putString("trainer_last_name", lastName)
+            .putString("trainer_phone", phone.trim())
+            .apply()
+
+        syncActiveClientWithGoogleDrive()
+    }
+
+    fun logout() {
+        authPrefs.edit().putBoolean("is_logged_in", false).apply()
+        _isLoggedIn.value = false
+    }
+
+    private fun hashPassword(password: String): String {
+        val bytes = java.security.MessageDigest.getInstance("SHA-256").digest(password.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
     private val prefs = application.getSharedPreferences("trainer_settings", android.content.Context.MODE_PRIVATE)
     var isAutoInstallUpdatesEnabled: Boolean
         get() = prefs.getBoolean("auto_install_updates", true)

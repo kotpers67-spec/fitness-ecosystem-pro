@@ -9,6 +9,9 @@ const path = require('node:path');
 class AppDatabase {
   constructor(dbPath = path.join(__dirname, '..', 'fitness.sqlite')) {
     this.db = new DatabaseSync(dbPath);
+    try {
+      this.db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+    } catch (_) {}
     this.initTables();
   }
 
@@ -21,6 +24,10 @@ class AppDatabase {
         role TEXT NOT NULL CHECK(role IN ('athlete', 'trainer')),
         full_name TEXT NOT NULL,
         phone TEXT DEFAULT '',
+        avatar_base64 TEXT DEFAULT '',
+        client_uuid TEXT DEFAULT '',
+        coach_name TEXT DEFAULT '',
+        coach_phone TEXT DEFAULT '',
         pairing_code TEXT DEFAULT '',
         is_private INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -40,6 +47,10 @@ class AppDatabase {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         athlete_id INTEGER NOT NULL,
         date TEXT NOT NULL,
+        notes TEXT DEFAULT '',
+        completed INTEGER DEFAULT 0,
+        is_self_workout_allowed INTEGER DEFAULT 0,
+        assigned_by_trainer_id INTEGER DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(athlete_id, date),
         FOREIGN KEY(athlete_id) REFERENCES users(id)
@@ -53,6 +64,11 @@ class AppDatabase {
         reps INTEGER NOT NULL,
         rpe REAL DEFAULT 8.0,
         is_completed INTEGER DEFAULT 1,
+        set_number INTEGER DEFAULT 1,
+        target_weight_kg REAL DEFAULT 0,
+        target_reps INTEGER DEFAULT 0,
+        actual_weight_kg REAL DEFAULT 0,
+        actual_reps INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(session_id) REFERENCES workout_sessions(id)
       );
@@ -64,29 +80,50 @@ class AppDatabase {
         FOREIGN KEY(user_id) REFERENCES users(id)
       );
     `);
+
+    // Ensure backwards-compatible columns exist in existing tables
+    const safeAddColumn = (table, colDef) => {
+      try { this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${colDef}`); } catch (_) {}
+    };
+
+    safeAddColumn('users', "avatar_base64 TEXT DEFAULT ''");
+    safeAddColumn('users', "client_uuid TEXT DEFAULT ''");
+    safeAddColumn('users', "coach_name TEXT DEFAULT ''");
+    safeAddColumn('users', "coach_phone TEXT DEFAULT ''");
+
+    safeAddColumn('workout_sessions', "is_self_workout_allowed INTEGER DEFAULT 0");
+    safeAddColumn('workout_sessions', "assigned_by_trainer_id INTEGER DEFAULT NULL");
+    safeAddColumn('workout_sessions', "completed INTEGER DEFAULT 0");
+    safeAddColumn('workout_sessions', "notes TEXT DEFAULT ''");
+
+    safeAddColumn('workout_sets', "set_number INTEGER DEFAULT 1");
+    safeAddColumn('workout_sets', "target_weight_kg REAL DEFAULT 0");
+    safeAddColumn('workout_sets', "target_reps INTEGER DEFAULT 0");
+    safeAddColumn('workout_sets', "actual_weight_kg REAL DEFAULT 0");
+    safeAddColumn('workout_sets', "actual_reps INTEGER DEFAULT 0");
   }
 
   // --- User Operations (Strictly Parameterized) ---
 
-  createUser(username, passwordHash, role, fullName, phone = '', pairingCode = '') {
+  createUser(username, passwordHash, role, fullName, phone = '', pairingCode = '', clientUuid = '', avatarBase64 = '') {
     const stmt = this.db.prepare(`
-      INSERT INTO users (username, password_hash, role, full_name, phone, pairing_code, is_private)
-      VALUES (?, ?, ?, ?, ?, ?, 0)
+      INSERT INTO users (username, password_hash, role, full_name, phone, pairing_code, client_uuid, avatar_base64, is_private)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
     `);
-    const result = stmt.run(username, passwordHash, role, fullName, phone, pairingCode);
+    const result = stmt.run(username, passwordHash, role, fullName, phone, pairingCode, clientUuid, avatarBase64);
     return Number(result.lastInsertRowid);
   }
 
   findUserByUsername(username) {
     const clean = String(username || '').trim();
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, pairing_code, is_private, created_at
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private, created_at
       FROM users WHERE username = ? OR LOWER(username) = LOWER(?)
     `);
     let user = stmt.get(clean, clean);
     if (!user) {
       const allStmt = this.db.prepare(`
-        SELECT id, username, password_hash, role, full_name, phone, pairing_code, is_private, created_at
+        SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private, created_at
         FROM users
       `);
       const all = allStmt.all();
@@ -98,25 +135,48 @@ class AppDatabase {
 
   findUserById(id) {
     const stmt = this.db.prepare(`
-      SELECT id, username, role, full_name, phone, pairing_code, is_private, created_at
+      SELECT id, username, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private, created_at
       FROM users WHERE id = ?
     `);
     return stmt.get(id) || null;
   }
 
-  findUserByPairingCode(code) {
+  findUserByClientUuid(clientUuid) {
     const stmt = this.db.prepare(`
-      SELECT id, username, role, full_name, phone, pairing_code, is_private
-      FROM users WHERE pairing_code = ? AND role = 'athlete'
+      SELECT id, username, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private
+      FROM users WHERE client_uuid = ?
     `);
-    return stmt.get(code) || null;
+    return stmt.get(clientUuid) || null;
   }
 
-  updateProfile(userId, fullName, phone) {
+  findUserByPairingCode(code) {
+    const cleanCode = String(code || '').trim();
     const stmt = this.db.prepare(`
-      UPDATE users SET full_name = ?, phone = ? WHERE id = ?
+      SELECT id, username, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private
+      FROM users WHERE pairing_code = ? AND role = 'athlete'
     `);
-    return stmt.run(fullName, phone, userId);
+    return stmt.get(cleanCode) || null;
+  }
+
+  updateProfile(userId, fullName, phone, avatarBase64 = null) {
+    if (avatarBase64 !== null && avatarBase64 !== undefined) {
+      const stmt = this.db.prepare(`
+        UPDATE users SET full_name = ?, phone = ?, avatar_base64 = ? WHERE id = ?
+      `);
+      return stmt.run(fullName, phone, avatarBase64, userId);
+    } else {
+      const stmt = this.db.prepare(`
+        UPDATE users SET full_name = ?, phone = ? WHERE id = ?
+      `);
+      return stmt.run(fullName, phone, userId);
+    }
+  }
+
+  updateCoachInfo(athleteId, coachName, coachPhone) {
+    const stmt = this.db.prepare(`
+      UPDATE users SET coach_name = ?, coach_phone = ? WHERE id = ?
+    `);
+    return stmt.run(coachName, coachPhone, athleteId);
   }
 
   updateAthletePrivacy(athleteId, isPrivate) {
@@ -153,88 +213,167 @@ class AppDatabase {
     return true;
   }
 
+  unpairTrainerAndAthlete(trainerId, athleteId) {
+    const stmt = this.db.prepare(`
+      DELETE FROM trainer_clients WHERE trainer_id = ? AND athlete_id = ?
+    `);
+    stmt.run(trainerId, athleteId);
+
+    const coachClearStmt = this.db.prepare(`
+      UPDATE users SET coach_name = '', coach_phone = '' WHERE id = ?
+    `);
+    coachClearStmt.run(athleteId);
+    return true;
+  }
+
+  unpairAthleteBySelf(athleteId) {
+    const stmt = this.db.prepare(`
+      DELETE FROM trainer_clients WHERE athlete_id = ?
+    `);
+    stmt.run(athleteId);
+
+    const coachClearStmt = this.db.prepare(`
+      UPDATE users SET coach_name = '', coach_phone = '' WHERE id = ?
+    `);
+    coachClearStmt.run(athleteId);
+    return true;
+  }
+
   getTrainerClients(trainerId) {
     const stmt = this.db.prepare(`
-      SELECT u.id, u.username, u.full_name, u.phone, u.pairing_code, tc.paired_at,
+      SELECT u.id, u.username, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.pairing_code, tc.paired_at,
              (SELECT COUNT(*) FROM workout_sessions ws WHERE ws.athlete_id = u.id) as sessions_count,
              (SELECT COALESCE(SUM(s.weight_kg * s.reps), 0) FROM workout_sets s 
-              JOIN workout_sessions ws ON s.session_id = ws.id WHERE ws.athlete_id = u.id) as total_tonnage
-      FROM trainer_clients tc
-      JOIN users u ON tc.athlete_id = u.id
+              JOIN workout_sessions ws ON s.session_id = ws.id 
+              WHERE ws.athlete_id = u.id AND s.is_completed = 1) as total_tonnage
+      FROM users u
+      JOIN trainer_clients tc ON u.id = tc.athlete_id
       WHERE tc.trainer_id = ?
       ORDER BY tc.paired_at DESC
     `);
     return stmt.all(trainerId);
   }
 
-  getPairedTrainer(athleteId) {
+  getAthleteCoach(athleteId) {
     const stmt = this.db.prepare(`
-      SELECT u.id, u.username, u.full_name, u.phone
-      FROM trainer_clients tc
-      JOIN users u ON tc.trainer_id = u.id
+      SELECT u.id, u.username, u.full_name, u.phone, u.avatar_base64, tc.paired_at
+      FROM users u
+      JOIN trainer_clients tc ON u.id = tc.trainer_id
       WHERE tc.athlete_id = ?
       LIMIT 1
     `);
     return stmt.get(athleteId) || null;
   }
 
-  unpairAthlete(athleteId) {
-    const stmt = this.db.prepare(`
-      DELETE FROM trainer_clients WHERE athlete_id = ?
-    `);
-    return stmt.run(athleteId);
-  }
-
-  unpairTrainerClient(trainerId, athleteId) {
-    const stmt = this.db.prepare(`
-      DELETE FROM trainer_clients WHERE trainer_id = ? AND athlete_id = ?
-    `);
-    return stmt.run(trainerId, athleteId);
-  }
-
   // --- Workout Operations ---
 
   getOrCreateSession(athleteId, date) {
+    const selectStmt = this.db.prepare(`
+      SELECT id, athlete_id, date, notes, completed, is_self_workout_allowed, assigned_by_trainer_id
+      FROM workout_sessions WHERE athlete_id = ? AND date = ?
+    `);
+    let session = selectStmt.get(athleteId, date);
+    if (!session) {
+      const insertStmt = this.db.prepare(`
+        INSERT INTO workout_sessions (athlete_id, date, is_self_workout_allowed, completed)
+        VALUES (?, ?, 0, 0)
+      `);
+      const result = insertStmt.run(athleteId, date);
+      session = {
+        id: Number(result.lastInsertRowid),
+        athlete_id: athleteId,
+        date,
+        notes: '',
+        completed: 0,
+        is_self_workout_allowed: 0,
+        assigned_by_trainer_id: null
+      };
+    }
+    return session;
+  }
+
+  assignTrainerWorkout(trainerId, athleteId, date, isSelfAllowed = 0, notes = '') {
     const selectStmt = this.db.prepare(`
       SELECT id FROM workout_sessions WHERE athlete_id = ? AND date = ?
     `);
     let session = selectStmt.get(athleteId, date);
     if (!session) {
       const insertStmt = this.db.prepare(`
-        INSERT INTO workout_sessions (athlete_id, date) VALUES (?, ?)
+        INSERT INTO workout_sessions (athlete_id, date, is_self_workout_allowed, assigned_by_trainer_id, notes)
+        VALUES (?, ?, ?, ?, ?)
       `);
-      const res = insertStmt.run(athleteId, date);
-      session = { id: Number(res.lastInsertRowid) };
+      const result = insertStmt.run(athleteId, date, isSelfAllowed ? 1 : 0, trainerId, notes);
+      return Number(result.lastInsertRowid);
+    } else {
+      const updateStmt = this.db.prepare(`
+        UPDATE workout_sessions
+        SET is_self_workout_allowed = ?, assigned_by_trainer_id = ?, notes = ?
+        WHERE id = ?
+      `);
+      updateStmt.run(isSelfAllowed ? 1 : 0, trainerId, notes, session.id);
+      return session.id;
     }
-    return session.id;
   }
 
-  addWorkoutSet(athleteId, date, exerciseName, weightKg, reps, rpe = 8.0) {
-    const sessionId = this.getOrCreateSession(athleteId, date);
-    const stmt = this.db.prepare(`
-      INSERT INTO workout_sets (session_id, exercise_name, weight_kg, reps, rpe, is_completed)
-      VALUES (?, ?, ?, ?, ?, 1)
+  getWorkoutSessionWithSets(athleteId, date) {
+    const sessionStmt = this.db.prepare(`
+      SELECT id, athlete_id, date, notes, completed, is_self_workout_allowed, assigned_by_trainer_id
+      FROM workout_sessions WHERE athlete_id = ? AND date = ?
     `);
-    const res = stmt.run(sessionId, exerciseName, weightKg, reps, rpe);
+    const session = sessionStmt.get(athleteId, date);
+    if (!session) {
+      return { session: null, sets: [] };
+    }
+
+    const setsStmt = this.db.prepare(`
+      SELECT id, session_id, exercise_name, weight_kg, reps, rpe, is_completed,
+             set_number, target_weight_kg, target_reps, actual_weight_kg, actual_reps, created_at
+      FROM workout_sets WHERE session_id = ? ORDER BY id ASC
+    `);
+    const sets = setsStmt.all(session.id);
+    return { session, sets };
+  }
+
+  getAthleteHistory(athleteId, exerciseName = null) {
+    let sql = `
+      SELECT s.id, ws.date, s.exercise_name, s.weight_kg, s.reps, s.rpe, s.is_completed, s.created_at
+      FROM workout_sets s
+      JOIN workout_sessions ws ON s.session_id = ws.id
+      WHERE ws.athlete_id = ? AND s.is_completed = 1
+    `;
+    const params = [athleteId];
+    if (exerciseName) {
+      sql += ' AND s.exercise_name = ?';
+      params.push(exerciseName);
+    }
+    sql += ' ORDER BY ws.date DESC, s.id DESC';
+    const stmt = this.db.prepare(sql);
+    return stmt.all(...params);
+  }
+
+  addWorkoutSet(sessionId, exerciseName, weightKg, reps, rpe = 8.0, isCompleted = 1) {
+    const stmt = this.db.prepare(`
+      INSERT INTO workout_sets (session_id, exercise_name, weight_kg, reps, rpe, is_completed, actual_weight_kg, actual_reps)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const res = stmt.run(sessionId, exerciseName, weightKg, reps, rpe, isCompleted ? 1 : 0, weightKg, reps);
     return Number(res.lastInsertRowid);
   }
 
-  getWorkoutSets(athleteId, date) {
-    const stmt = this.db.prepare(`
-      SELECT s.id, s.exercise_name, s.weight_kg, s.reps, s.rpe, s.is_completed, s.created_at
-      FROM workout_sets s
-      JOIN workout_sessions ws ON s.session_id = ws.id
-      WHERE ws.athlete_id = ? AND ws.date = ?
-      ORDER BY s.id ASC
-    `);
-    return stmt.all(athleteId, date);
-  }
-
-  toggleWorkoutSet(setId, isCompleted) {
-    const stmt = this.db.prepare(`
-      UPDATE workout_sets SET is_completed = ? WHERE id = ?
-    `);
-    return stmt.run(isCompleted ? 1 : 0, setId);
+  toggleWorkoutSet(setId, isCompleted = null) {
+    let stmt;
+    if (isCompleted === null) {
+      stmt = this.db.prepare(`
+        UPDATE workout_sets SET is_completed = CASE WHEN is_completed = 1 THEN 0 ELSE 1 END WHERE id = ?
+      `);
+      stmt.run(setId);
+    } else {
+      stmt = this.db.prepare(`
+        UPDATE workout_sets SET is_completed = ? WHERE id = ?
+      `);
+      stmt.run(isCompleted ? 1 : 0, setId);
+    }
+    return this.getWorkoutSetById(setId);
   }
 
   deleteWorkoutSet(setId) {
@@ -266,19 +405,20 @@ class AppDatabase {
     return stmt.get(athleteId, exerciseName) || null;
   }
 
-  // --- Leaderboard / Competitions (Zero Mocks) ---
+  // --- Leaderboard / Competitions (Strict Zero-Mocks, Real Finished Workouts Only) ---
 
   getLeaderboard() {
     const stmt = this.db.prepare(`
-      SELECT u.id, u.full_name,
+      SELECT u.id, u.full_name, u.avatar_base64,
              COUNT(DISTINCT ws.id) as workouts_count,
              COALESCE(SUM(s.weight_kg * s.reps), 0) as total_tonnage,
              ROUND(COUNT(DISTINCT ws.id) * 100 + COALESCE(SUM(s.weight_kg * s.reps), 0) * 0.1) as points
       FROM users u
-      LEFT JOIN workout_sessions ws ON u.id = ws.athlete_id
-      LEFT JOIN workout_sets s ON ws.id = s.session_id
+      JOIN workout_sessions ws ON u.id = ws.athlete_id
+      JOIN workout_sets s ON ws.id = s.session_id AND s.is_completed = 1
       WHERE u.role = 'athlete' AND u.is_private = 0
-      GROUP BY u.id, u.full_name
+      GROUP BY u.id, u.full_name, u.avatar_base64
+      HAVING workouts_count > 0 AND total_tonnage > 0
       ORDER BY points DESC, total_tonnage DESC
     `);
     return stmt.all();
@@ -298,7 +438,7 @@ class AppDatabase {
   getUserByToken(token) {
     const now = Date.now();
     const stmt = this.db.prepare(`
-      SELECT u.id, u.username, u.role, u.full_name, u.phone, u.pairing_code, u.is_private
+      SELECT u.id, u.username, u.role, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.coach_name, u.coach_phone, u.pairing_code, u.is_private
       FROM auth_tokens t
       JOIN users u ON t.user_id = u.id
       WHERE t.token = ? AND t.expires_at > ?
@@ -310,11 +450,7 @@ class AppDatabase {
     const stmt = this.db.prepare(`
       DELETE FROM auth_tokens WHERE token = ?
     `);
-    return stmt.run(token);
-  }
-
-  close() {
-    this.db.close();
+    stmt.run(token);
   }
 }
 

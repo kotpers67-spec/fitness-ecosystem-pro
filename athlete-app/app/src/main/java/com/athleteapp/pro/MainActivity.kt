@@ -20,6 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.athleteapp.pro.ui.AthleteViewModel
+import com.athleteapp.pro.ui.screens.AthleteAuthScreen
 import com.athleteapp.pro.ui.screens.AthleteHistoryScreen
 import com.athleteapp.pro.ui.screens.AthleteSettingsScreen
 import com.athleteapp.pro.ui.screens.AthleteTodayScreen
@@ -42,80 +43,86 @@ class MainActivity : ComponentActivity() {
             val settings by viewModel.settings.collectAsState()
             val themeName = settings?.currentThemeName ?: "Cyber Lime"
             val lang = settings?.language ?: "ru"
+            val isLoggedIn by viewModel.isLoggedIn.collectAsState()
 
             AthleteProTheme(themeName = themeName) {
-                val navController = rememberNavController()
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
-
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize(),
-                        containerColor = MaterialTheme.colorScheme.background,
-                    bottomBar = {
-                        NavigationBar {
-                            NavigationBarItem(
-                                selected = currentRoute == "today",
-                                onClick = {
-                                    navController.navigate("today") {
-                                        popUpTo("today") { inclusive = true }
-                                    }
-                                },
-                                icon = { Icon(Icons.Default.FitnessCenter, contentDescription = null) },
-                                label = { Text(if (lang == "en") "Workout" else "Тренировка") }
-                            )
-                            NavigationBarItem(
-                                selected = currentRoute == "history",
-                                onClick = {
-                                    navController.navigate("history") {
-                                        popUpTo("today")
-                                    }
-                                },
-                                icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, contentDescription = null) },
-                                label = { Text(if (lang == "en") "Progress" else "Прогресс") }
-                            )
-                            NavigationBarItem(
-                                selected = currentRoute == "leaderboard",
-                                onClick = {
-                                    navController.navigate("leaderboard") {
-                                        popUpTo("today")
-                                    }
-                                },
-                                icon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
-                                label = { Text(if (lang == "en") "Leaderboard" else "Состязания") }
-                            )
-                            NavigationBarItem(
-                                selected = currentRoute == "settings",
-                                onClick = {
-                                    navController.navigate("settings") {
-                                        popUpTo("today")
-                                    }
-                                },
-                                icon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                label = { Text(if (lang == "en") "Profile" else "Профиль") }
-                            )
-                        }
-                    }
-                ) { innerPadding ->
-                    NavHost(
-                        navController = navController,
-                        startDestination = "today",
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable("today") {
-                            AthleteTodayScreen(viewModel = viewModel)
-                        }
-                        composable("history") {
-                            AthleteHistoryScreen(viewModel = viewModel)
-                        }
-                        composable("leaderboard") {
-                            com.athleteapp.pro.ui.screens.LeaderboardScreen(viewModel = viewModel)
-                        }
-                        composable("settings") {
-                            AthleteSettingsScreen(viewModel = viewModel)
+                    if (!isLoggedIn) {
+                        AthleteAuthScreen(viewModel = viewModel)
+                    } else {
+                        val navController = rememberNavController()
+                        val navBackStackEntry by navController.currentBackStackEntryAsState()
+                        val currentRoute = navBackStackEntry?.destination?.route
+
+                        Scaffold(
+                            modifier = Modifier.fillMaxSize(),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            bottomBar = {
+                                NavigationBar {
+                                    NavigationBarItem(
+                                        selected = currentRoute == "today",
+                                        onClick = {
+                                            navController.navigate("today") {
+                                                popUpTo("today") { inclusive = true }
+                                            }
+                                        },
+                                        icon = { Icon(Icons.Default.FitnessCenter, contentDescription = null) },
+                                        label = { Text(if (lang == "en") "Workout" else "Тренировка") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = currentRoute == "history",
+                                        onClick = {
+                                            navController.navigate("history") {
+                                                popUpTo("today")
+                                            }
+                                        },
+                                        icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, contentDescription = null) },
+                                        label = { Text(if (lang == "en") "Progress" else "Прогресс") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = currentRoute == "leaderboard",
+                                        onClick = {
+                                            navController.navigate("leaderboard") {
+                                                popUpTo("today")
+                                            }
+                                        },
+                                        icon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
+                                        label = { Text(if (lang == "en") "Leaderboard" else "Состязания") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = currentRoute == "settings",
+                                        onClick = {
+                                            navController.navigate("settings") {
+                                                popUpTo("today")
+                                            }
+                                        },
+                                        icon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                        label = { Text(if (lang == "en") "Profile" else "Профиль") }
+                                    )
+                                }
+                            }
+                        ) { innerPadding ->
+                            NavHost(
+                                navController = navController,
+                                startDestination = "today",
+                                modifier = Modifier.padding(innerPadding)
+                            ) {
+                                composable("today") {
+                                    AthleteTodayScreen(viewModel = viewModel)
+                                }
+                                composable("history") {
+                                    AthleteHistoryScreen(viewModel = viewModel)
+                                }
+                                composable("leaderboard") {
+                                    com.athleteapp.pro.ui.screens.LeaderboardScreen(viewModel = viewModel)
+                                }
+                                composable("settings") {
+                                    AthleteSettingsScreen(viewModel = viewModel)
+                                }
+                            }
                         }
                     }
                 }
@@ -123,7 +130,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-}
-
-
-

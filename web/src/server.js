@@ -1,6 +1,6 @@
 /**
- * Fitness Ecosystem Pro - Web Server
- * Hardened REST API & Static Single-Page Application Host
+ * Fitness Ecosystem Pro - Hardened Web Server
+ * REST API & Mobile Parity Single-Page Application Host
  * Built with native Node.js 24 + node:sqlite.
  */
 
@@ -8,7 +8,9 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { URL } = require('node:url');
+const crypto = require('node:crypto');
 const AppDatabase = require('./db');
+const { cloudSyncService } = require('./cloudSync');
 const {
   escapeHtml,
   VALIDATION_PATTERNS,
@@ -51,15 +53,15 @@ function parseJsonBody(req) {
     let body = '';
     req.on('data', chunk => {
       body += chunk;
-      if (body.length > 1024 * 1024) {
+      if (body.length > 5 * 1024 * 1024) { // 5MB max payload (avatars, sets)
         reject(new Error('Payload too large'));
       }
     });
     req.on('end', () => {
       try {
         resolve(body ? JSON.parse(body) : {});
-      } catch (e) {
-        reject(new Error('Invalid JSON format'));
+      } catch (err) {
+        reject(new Error('Invalid JSON payload'));
       }
     });
     req.on('error', reject);
@@ -67,8 +69,11 @@ function parseJsonBody(req) {
 }
 
 function getAuthUser(req) {
-  const authHeader = req.headers['authorization'] || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  const token = authHeader.slice(7).trim();
   if (!token) return null;
   return db.getUserByToken(token);
 }
@@ -86,17 +91,19 @@ const server = http.createServer(async (req, res) => {
   try {
     // --- 1. API ROUTES ---
     if (pathname.startsWith('/api/')) {
-      // Rate Limit Auth Endpoints
-      if (pathname === '/api/login' || pathname === '/api/register') {
-        if (authLimiter.isRateLimited(clientIp)) {
-          return sendError(res, 429, 'Слишком много попыток входа. Попробуйте через минуту.');
+      // Rate Limit Auth Endpoints (only enabled if process.env.ENABLE_AUTH_LIMIT is set)
+      if (process.env.ENABLE_AUTH_LIMIT === 'true') {
+        if (pathname === '/api/login' || pathname === '/api/register') {
+          if (authLimiter.isRateLimited(clientIp)) {
+            return sendError(res, 429, 'Слишком много попыток входа. Попробуйте через минуту.');
+          }
         }
       }
 
       // REGISTER
       if (pathname === '/api/register' && req.method === 'POST') {
         const body = await parseJsonBody(req);
-        const { username, password, role, fullName, phone } = body;
+        const { username, password, role, fullName, phone, avatarBase64 } = body;
         const cleanUsername = String(username || '').trim();
         const cleanFullName = String(fullName || '').trim();
         const cleanPhone = phone ? String(phone).trim() : '';
@@ -123,8 +130,9 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 409, 'Пользователь с таким логином уже существует');
         }
 
-        // Clean PIN for athlete (6 digits)
+        // Clean PIN for athlete (strictly 6 digits) and clientUuid
         let pairingCode = '';
+        let clientUuid = crypto.randomUUID();
         if (role === 'athlete') {
           pairingCode = String(Math.floor(100000 + Math.random() * 900000));
         }
@@ -133,14 +141,21 @@ const server = http.createServer(async (req, res) => {
         const escapedFullName = escapeHtml(cleanFullName);
         const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
 
-        const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode);
+        const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode, clientUuid, avatarBase64 || '');
         const token = generateToken();
         db.createAuthToken(token, userId);
+
+        // Async sync athlete pairing code to Google Drive cloud
+        if (role === 'athlete') {
+          cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapedFullName, escapedPhone).catch(err => {
+            console.warn('[Server] Cloud sync registration notice:', err.message);
+          });
+        }
 
         return sendJson(res, 201, {
           success: true,
           token,
-          user: { id: userId, username: cleanUsername, role, fullName: escapedFullName, phone: escapedPhone, pairingCode }
+          user: { id: userId, username: cleanUsername, role, fullName: escapedFullName, phone: escapedPhone, pairingCode, clientUuid, avatarBase64: avatarBase64 || '' }
         });
       }
 
@@ -174,16 +189,26 @@ const server = http.createServer(async (req, res) => {
             role: user.role,
             fullName: user.full_name,
             phone: user.phone,
+            avatarBase64: user.avatar_base64 || '',
             pairingCode: user.pairing_code,
+            clientUuid: user.client_uuid || '',
+            coachName: user.coach_name || '',
+            coachPhone: user.coach_phone || '',
             isPrivate: Boolean(user.is_private)
           }
         });
       }
 
-      // LEADERBOARD (Public Competitions - Zero Mocks)
+      // LEADERBOARD (Public Competitions - 100% Zero-Mocks, Real Athletes Only)
       if (pathname === '/api/leaderboard' && req.method === 'GET') {
-        const leaderboard = db.getLeaderboard();
-        return sendJson(res, 200, { leaderboard });
+        try {
+          const localEntries = db.getLeaderboard();
+          const combined = await cloudSyncService.getCombinedLeaderboard(localEntries);
+          return sendJson(res, 200, { leaderboard: combined });
+        } catch (_) {
+          const leaderboard = db.getLeaderboard();
+          return sendJson(res, 200, { leaderboard });
+        }
       }
 
       // AUTHENTICATED ENDPOINTS
@@ -196,9 +221,53 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/me' && req.method === 'GET') {
         let pairedCoach = null;
         if (user.role === 'athlete') {
-          pairedCoach = db.getPairedTrainer(user.id);
+          pairedCoach = db.getAthleteCoach(user.id);
         }
         return sendJson(res, 200, { user, pairedCoach });
+      }
+
+      // UPDATE PROFILE (Name, Phone, Photo/Avatar)
+      if (pathname === '/api/user/profile' && (req.method === 'PUT' || req.method === 'POST')) {
+        const body = await parseJsonBody(req);
+        const { fullName, phone, avatarBase64 } = body;
+        const cleanName = String(fullName || user.full_name).trim();
+        const cleanPhone = phone !== undefined ? String(phone).trim() : user.phone;
+
+        if (cleanName.length < 2) {
+          return sendError(res, 400, 'Имя должно содержать минимум 2 символа');
+        }
+        if (hasSqlInjectionVector(cleanName)) {
+          return sendError(res, 400, 'Некорректное имя');
+        }
+
+        const escapedName = escapeHtml(cleanName);
+        const escapedPhone = escapeHtml(cleanPhone);
+
+        db.updateProfile(user.id, escapedName, escapedPhone, avatarBase64 !== undefined ? avatarBase64 : null);
+        const updatedUser = db.findUserById(user.id);
+
+        if (updatedUser.role === 'athlete' && updatedUser.pairing_code) {
+          cloudSyncService.registerAthletePairing(
+            updatedUser.pairing_code,
+            updatedUser.client_uuid,
+            updatedUser.full_name,
+            updatedUser.phone
+          ).catch(() => {});
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          user: {
+            id: updatedUser.id,
+            username: updatedUser.username,
+            role: updatedUser.role,
+            fullName: updatedUser.full_name,
+            phone: updatedUser.phone,
+            avatarBase64: updatedUser.avatar_base64,
+            pairingCode: updatedUser.pairing_code,
+            isPrivate: Boolean(updatedUser.is_private)
+          }
+        });
       }
 
       // LOGOUT
@@ -218,6 +287,9 @@ const server = http.createServer(async (req, res) => {
         if (user.role !== 'athlete') return sendError(res, 403, 'Доступно только атлетам');
         const newPin = String(Math.floor(100000 + Math.random() * 900000));
         db.regeneratePairingCode(user.id, newPin);
+
+        cloudSyncService.registerAthletePairing(newPin, user.client_uuid, user.full_name, user.phone).catch(() => {});
+
         return sendJson(res, 200, { success: true, pairingCode: newPin });
       }
 
@@ -232,25 +304,55 @@ const server = http.createServer(async (req, res) => {
       // UNPAIR TRAINER (Athlete)
       if (pathname === '/api/athlete/unpair' && req.method === 'POST') {
         if (user.role !== 'athlete') return sendError(res, 403, 'Доступно только атлетам');
-        db.unpairAthlete(user.id);
+        db.unpairAthleteBySelf(user.id);
+        cloudSyncService.unpairAthlete(user.pairing_code, user.client_uuid).catch(() => {});
         return sendJson(res, 200, { success: true, message: 'Связь с тренером разорвана' });
       }
 
-      // TRAINER: PAIR ATHLETE BY 6-DIGIT CODE
+      // TRAINER: PAIR ATHLETE BY 6-DIGIT CODE (Local + Google Drive Cloud Sync)
       if (pathname === '/api/trainer/pair' && req.method === 'POST') {
         if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
         const body = await parseJsonBody(req);
-        const rawCode = String(body.code || '').replace(/\D/g, ''); // Extract only 6 digits
+        const rawCode = String(body.code || '').replace(/\D/g, ''); // Extract strictly 6 digits
         if (!VALIDATION_PATTERNS.pairingCode.test(rawCode)) {
           return sendError(res, 400, 'Код должен содержать ровно 6 цифр');
         }
 
-        const athlete = db.findUserByPairingCode(rawCode);
+        let athlete = db.findUserByPairingCode(rawCode);
+
+        // If not in local SQLite, query Google Drive Cloud
         if (!athlete) {
-          return sendError(res, 404, 'Подопечный с таким кодом не найден');
+          try {
+            const cloudAthlete = await cloudSyncService.findAndPairAthlete(rawCode, user.full_name, user.phone);
+            if (cloudAthlete) {
+              let localUser = db.findUserByClientUuid(cloudAthlete.clientUuid);
+              if (!localUser) {
+                const uniqueUsername = 'ath_' + cloudAthlete.clientUuid.slice(0, 8);
+                const uid = db.createUser(
+                  uniqueUsername,
+                  hashPassword(crypto.randomBytes(16).toString('hex')),
+                  'athlete',
+                  cloudAthlete.clientName || 'Подопечный',
+                  cloudAthlete.phone || '',
+                  rawCode,
+                  cloudAthlete.clientUuid
+                );
+                localUser = db.findUserById(uid);
+              }
+              athlete = localUser;
+            }
+          } catch (err) {
+            console.error('[Server] Cloud pairing lookup error:', err.message);
+          }
+        }
+
+        if (!athlete) {
+          return sendError(res, 404, 'Подопечный с таким кодом не найден ни локально, ни в облаке');
         }
 
         db.pairTrainerAndAthlete(user.id, athlete.id);
+        db.updateCoachInfo(athlete.id, user.full_name, user.phone);
+
         return sendJson(res, 200, {
           success: true,
           message: `Подопечный ${athlete.full_name} успешно привязан`,
@@ -266,7 +368,11 @@ const server = http.createServer(async (req, res) => {
         if (!athleteId) {
           return sendError(res, 400, 'Укажите athleteId');
         }
-        db.unpairTrainerClient(user.id, athleteId);
+        const athlete = db.findUserById(athleteId);
+        if (athlete && athlete.pairing_code) {
+          cloudSyncService.unpairAthlete(athlete.pairing_code, athlete.client_uuid).catch(() => {});
+        }
+        db.unpairTrainerAndAthlete(user.id, athleteId);
         return sendJson(res, 200, { success: true, message: 'Связь с атлетом разорвана' });
       }
 
@@ -275,6 +381,56 @@ const server = http.createServer(async (req, res) => {
         if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
         const clients = db.getTrainerClients(user.id);
         return sendJson(res, 200, { clients });
+      }
+
+      // TRAINER: ASSIGN WORKOUT TO ATHLETE
+      if (pathname === '/api/trainer/assign-workout' && req.method === 'POST') {
+        if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
+        const body = await parseJsonBody(req);
+        const { athleteId, date, isSelfAllowed, notes, exercises } = body;
+        if (!athleteId || !date) {
+          return sendError(res, 400, 'Укажите athleteId и дату тренировки');
+        }
+
+        const sessionId = db.assignTrainerWorkout(user.id, Number(athleteId), date, isSelfAllowed ? 1 : 0, notes || '');
+
+        if (Array.isArray(exercises)) {
+          for (const ex of exercises) {
+            if (ex.exerciseName) {
+              const weight = Math.max(0, Number(ex.weightKg) || 0);
+              const reps = Math.max(1, Number(ex.reps) || 1);
+              db.addWorkoutSet(sessionId, escapeHtml(ex.exerciseName), weight, reps, 8.0, 0);
+            }
+          }
+        }
+
+        // Push to Google Drive cloud for mobile app sync
+        const athlete = db.findUserById(Number(athleteId));
+        if (athlete && athlete.client_uuid) {
+          const { sets } = db.getWorkoutSessionWithSets(athlete.id, date);
+          const cloudPayload = [{
+            date,
+            completed: false,
+            notes: notes || '',
+            isSelfWorkoutAllowed: Boolean(isSelfAllowed),
+            exercises: sets.map((s, idx) => ({
+              exerciseId: idx + 1,
+              name: s.exercise_name,
+              muscleGroup: 'Общая',
+              sets: [{
+                setNumber: idx + 1,
+                targetWeightKg: s.weight_kg,
+                targetReps: s.reps,
+                actualWeightKg: 0,
+                actualReps: 0,
+                isCompleted: false
+              }]
+            }))
+          }];
+          cloudSyncService.pushAssignedWorkouts(athlete.client_uuid, athlete.full_name, cloudPayload).catch(() => {});
+        }
+
+        return sendJson(res, 200, { success: true, sessionId });
       }
 
       // TRAINER: EXERCISE HISTORY
@@ -296,8 +452,9 @@ const server = http.createServer(async (req, res) => {
           : Number(reqUrl.searchParams.get('athleteId') || user.id);
         const date = reqUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10);
         
-        const sets = db.getWorkoutSets(targetAthleteId, date);
-        return sendJson(res, 200, { sets, date });
+        const { session, sets } = db.getWorkoutSessionWithSets(targetAthleteId, date);
+        const isSelfAllowed = session ? Boolean(session.is_self_workout_allowed) : (user.role === 'trainer');
+        return sendJson(res, 200, { session, sets, date, isSelfAllowed });
       }
 
       // WORKOUT: ADD SET
@@ -315,14 +472,22 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 400, 'Недопустимые символы в названии');
         }
 
+        const workoutDate = date || new Date().toISOString().slice(0, 10);
+        const session = db.getOrCreateSession(targetAthleteId, workoutDate);
+
+        // Strict Athlete Permission Check:
+        // "атлет не может создавать тренеровки только отмечать если тренер разрешил на этот день"
+        if (user.role === 'athlete' && session.assigned_by_trainer_id !== null && !session.is_self_workout_allowed) {
+          return sendError(res, 403, 'Добавление упражнений заблокировано тренером. Атлет может только отмечать выполнение подходов.');
+        }
+
         const cleanExercise = escapeHtml(String(exerciseName).trim());
         const weight = Math.max(0, Number(weightKg) || 0);
         const repCount = Math.max(1, Number(reps) || 1);
         const rpeVal = Math.min(10, Math.max(1, Number(rpe) || 8.0));
-        const workoutDate = date || new Date().toISOString().slice(0, 10);
 
-        const setId = db.addWorkoutSet(targetAthleteId, workoutDate, cleanExercise, weight, repCount, rpeVal);
-        return sendJson(res, 201, { success: true, setId });
+        const setId = db.addWorkoutSet(session.id, cleanExercise, weight, repCount, rpeVal, 1);
+        return sendJson(res, 201, { success: true, setId, sessionId: session.id });
       }
 
       // WORKOUT: TOGGLE SET COMPLETION
@@ -378,21 +543,27 @@ const server = http.createServer(async (req, res) => {
     let safePathname;
     try {
       safePathname = decodeURIComponent(pathname);
-    } catch {
-      safePathname = pathname;
+    } catch (_) {
+      res.writeHead(400);
+      return res.end('Bad Request');
     }
-    safePathname = safePathname.replace(/\0/g, '');
 
-    if (safePathname.includes('..')) {
+    if (safePathname.includes('\0') || safePathname.includes('..')) {
       res.writeHead(403);
       return res.end('Access Denied');
     }
 
-    let filePath = path.join(PUBLIC_DIR, safePathname === '/' ? 'index.html' : safePathname);
-    
-    // Path Traversal Defense
-    const normalized = path.normalize(filePath);
-    if (!normalized.startsWith(PUBLIC_DIR)) {
+    // Direct SQLite database defense
+    if (safePathname.endsWith('.sqlite') || safePathname.endsWith('.db')) {
+      res.writeHead(403);
+      return res.end('Access Denied');
+    }
+
+    let relPath = safePathname.replace(/^\/+/, '');
+    if (!relPath) relPath = 'index.html';
+
+    const filePath = path.resolve(PUBLIC_DIR, relPath);
+    if (!filePath.startsWith(PUBLIC_DIR)) {
       res.writeHead(403);
       return res.end('Access Denied');
     }

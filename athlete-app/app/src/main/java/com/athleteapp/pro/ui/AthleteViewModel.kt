@@ -96,6 +96,57 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     private var sessionJob: Job? = null
     private var historyJob: Job? = null
 
+    private val authPrefs = application.getSharedPreferences("athlete_auth", Context.MODE_PRIVATE)
+    private val _isLoggedIn = MutableStateFlow(authPrefs.getBoolean("is_logged_in", false))
+    val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
+
+    fun login(username: String, pass: String): Boolean {
+        val savedUser = authPrefs.getString("username", "") ?: ""
+        val savedHash = authPrefs.getString("password_hash", "") ?: ""
+        val inputHash = hashPassword(pass)
+        if (savedUser.isNotEmpty() && savedUser.equals(username.trim(), ignoreCase = true) && savedHash == inputHash) {
+            authPrefs.edit().putBoolean("is_logged_in", true).apply()
+            _isLoggedIn.value = true
+            return true
+        }
+        return false
+    }
+
+    fun register(fullName: String, username: String, password: String, phone: String) {
+        val inputHash = hashPassword(password)
+        authPrefs.edit()
+            .putString("username", username.trim())
+            .putString("password_hash", inputHash)
+            .putString("full_name", fullName.trim())
+            .putString("phone", phone.trim())
+            .putBoolean("is_logged_in", true)
+            .apply()
+        _isLoggedIn.value = true
+
+        viewModelScope.launch {
+            val current = profile.value ?: AthleteProfileEntity()
+            val pin = if (current.pairingPin.length == 6) current.pairingPin else String.format(Locale.US, "%06d", Random().nextInt(1000000))
+            dao.saveProfile(
+                current.copy(
+                    fullName = fullName.trim(),
+                    phone = phone.trim(),
+                    pairingPin = pin
+                )
+            )
+            autoSync()
+        }
+    }
+
+    fun logout() {
+        authPrefs.edit().putBoolean("is_logged_in", false).apply()
+        _isLoggedIn.value = false
+    }
+
+    private fun hashPassword(password: String): String {
+        val bytes = java.security.MessageDigest.getInstance("SHA-256").digest(password.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
     private val prefs = application.getSharedPreferences("athlete_settings", Context.MODE_PRIVATE)
     var isAutoInstallUpdatesEnabled: Boolean
         get() = prefs.getBoolean("auto_install_updates", true)

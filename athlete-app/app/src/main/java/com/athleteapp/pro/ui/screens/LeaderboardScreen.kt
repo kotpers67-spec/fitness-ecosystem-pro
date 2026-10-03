@@ -63,13 +63,13 @@ fun LeaderboardScreen(
         )
     }
 
-    // Только реальные участники: текущий атлет + участники из облачной синхронизации (Zero-Mocks)
+    // Только реальные участники с выполненными тренировками (Zero-Mocks)
     val entries = remember(myEntry, cloudAthletes, isPrivate) {
         val rawList = mutableListOf<LeaderboardEntry>()
-        if (!isPrivate) {
+        if (!isPrivate && (myEntry.workoutsCount > 0 || myEntry.tonnageKg > 0)) {
             rawList.add(myEntry)
         }
-        rawList.addAll(cloudAthletes.filter { !it.isMe })
+        rawList.addAll(cloudAthletes.filter { !it.isMe && (it.workoutsCount > 0 || it.tonnageKg > 0) })
         rawList
             .sortedByDescending { it.points }
             .mapIndexed { index, entry -> entry.copy(rank = index + 1) }

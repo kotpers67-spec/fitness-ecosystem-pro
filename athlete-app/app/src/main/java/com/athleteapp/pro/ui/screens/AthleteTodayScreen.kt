@@ -55,7 +55,6 @@ fun AthleteTodayScreen(
     val isSelfAllowed = currentSession?.isSelfWorkoutAllowed == true
 
     val lang = settings?.language ?: "ru"
-    var showAddExerciseDialog by remember { mutableStateOf(false) }
 
     // Group sets by exercise
     val setsByExercise = remember(sets) {
@@ -216,43 +215,6 @@ fun AthleteTodayScreen(
 
 
 
-            // 3. Client Goal Card
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.FitnessCenter,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Text(
-                                text = "ЦЕЛЬ НА СЕЗОН",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = profile?.goal ?: "Регулярные тренировки и прогресс весов",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-            }
-
             // 4. Exercise Matrix Cards
             if (setsByExercise.isEmpty()) {
                 item {
@@ -266,16 +228,10 @@ fun AthleteTodayScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "На сегодня тренировка не запланирована",
+                                text = "На сегодня тренер не назначил упражнений",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(onClick = { showAddExerciseDialog = true }) {
-                                Icon(Icons.Default.Add, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Добавить упражнение")
-                            }
                         }
                     }
                 }
@@ -284,13 +240,11 @@ fun AthleteTodayScreen(
                     val exerciseName = exerciseSets.firstOrNull()?.exerciseName ?: "Упражнение"
                     val muscleGroup = exerciseSets.firstOrNull()?.muscleGroup ?: ""
                     val matchedExercise = exercises.find { it.id == exerciseId }
-                    val recommendation = viewModel.getRecommendationForExercise(exerciseId)
 
                     AthleteExerciseCard(
                         exerciseName = exerciseName,
                         muscleGroup = muscleGroup,
                         sets = exerciseSets,
-                        recommendation = recommendation,
                         isSelfAllowed = isSelfAllowed,
                         onToggleSet = { viewModel.toggleSetCompletion(it) },
                         onUpdateSet = { set, w, r -> viewModel.updateSetValues(set, w, r) },
@@ -301,86 +255,10 @@ fun AthleteTodayScreen(
                         onDeleteSet = { viewModel.deleteSet(it) }
                     )
                 }
-
-                item {
-                    OutlinedButton(
-                        onClick = { showAddExerciseDialog = true },
-                        enabled = isSelfAllowed,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (isSelfAllowed) "Добавить еще упражнение" else "Добавление упражнений заблокировано")
-                    }
-                }
             }
 
             item { Spacer(modifier = Modifier.height(32.dp)) }
         }
-    }
-
-    if (showAddExerciseDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddExerciseDialog = false },
-            title = { Text("Выбор упражнения") },
-            text = {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(exercises, key = { it.id }) { ex ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.addSetToExercise(ex)
-                                    showAddExerciseDialog = false
-                                },
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = ex.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = ex.muscleGroup,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Icon(
-                                    Icons.Default.AddCircle,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showAddExerciseDialog = false }) {
-                    Text("Закрыть")
-                }
-            }
-        )
     }
 }
 
@@ -389,7 +267,6 @@ fun AthleteExerciseCard(
     exerciseName: String,
     muscleGroup: String,
     sets: List<MyWorkoutSetEntity>,
-    recommendation: NeuroRecommendation,
     isSelfAllowed: Boolean,
     onToggleSet: (MyWorkoutSetEntity) -> Unit,
     onUpdateSet: (MyWorkoutSetEntity, Double, Int) -> Unit,
@@ -422,53 +299,16 @@ fun AthleteExerciseCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                FilledTonalButton(
-                    onClick = onAddSet,
-                    enabled = isSelfAllowed,
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier.heightIn(min = 36.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("+ Сет", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Neuro-Adaptive Suggestion Tip
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.AutoGraph,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Цель: ${recommendation.recommendedWeightKg} кг × ${recommendation.recommendedReps} (RPE ${recommendation.targetRpe})",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = recommendation.recommendationReason,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                if (isSelfAllowed) {
+                    FilledTonalButton(
+                        onClick = onAddSet,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.heightIn(min = 36.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("+ Сет", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

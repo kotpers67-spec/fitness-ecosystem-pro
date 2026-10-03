@@ -61,38 +61,45 @@
             </div>
             <div class="form-group">
               <label for="login-password" class="field-label">Пароль</label>
-              <input type="password" id="login-password" class="app-input" placeholder="••••••••" autocomplete="current-password" required>
+              <input type="password" id="login-password" class="app-input" placeholder="Введите пароль" autocomplete="current-password" required>
             </div>
-            <button type="submit" class="app-btn btn-primary" style="margin-top: 8px;">Войти в аккаунт</button>
+            <button type="submit" class="app-btn btn-primary" id="btn-submit-login">Войти в аккаунт</button>
           </form>
 
           <!-- Form: Register -->
           <form id="form-register" style="display: none;">
             <div class="form-group">
-              <label for="reg-role" class="field-label">Тип аккаунта</label>
-              <select id="reg-role" class="app-input app-select" required>
-                <option value="athlete">Атлет (Дневник, QR-код, PIN для тренера)</option>
-                <option value="trainer">Тренер (База подопечных, сопряжение, программы)</option>
-              </select>
-              <span class="field-hint">Роль фиксируется при создании аккаунта</span>
-            </div>
-            <div class="form-group">
               <label for="reg-username" class="field-label">Логин</label>
-              <input type="text" id="reg-username" class="app-input" placeholder="ivan_pro" autocomplete="username" required>
+              <input type="text" id="reg-username" class="app-input" placeholder="3-30 символов" autocomplete="username" required>
             </div>
             <div class="form-group">
-              <label for="reg-fullname" class="field-label">Имя и Фамилия</label>
-              <input type="text" id="reg-fullname" class="app-input" placeholder="Иван Петров" required>
+              <label for="reg-fullname" class="field-label">ФИО</label>
+              <input type="text" id="reg-fullname" class="app-input" placeholder="Иван Иванов" required>
             </div>
             <div class="form-group">
               <label for="reg-phone" class="field-label">Телефон</label>
-              <input type="tel" id="reg-phone" class="app-input" placeholder="+7 999 123-45-67">
+              <input type="tel" id="reg-phone" class="app-input" placeholder="+7 999 000-00-00">
             </div>
             <div class="form-group">
-              <label for="reg-password" class="field-label">Пароль (от 6 символов)</label>
-              <input type="password" id="reg-password" class="app-input" placeholder="••••••••" autocomplete="new-password" required>
+              <label for="reg-password" class="field-label">Пароль</label>
+              <input type="password" id="reg-password" class="app-input" placeholder="Минимум 6 символов" autocomplete="new-password" required>
             </div>
-            <button type="submit" class="app-btn btn-primary" style="margin-top: 8px;">Зарегистрироваться</button>
+            <div class="form-group">
+              <label class="field-label">Выберите вашу роль (нельзя изменить позже)</label>
+              <div class="role-selector-cards">
+                <label class="role-card selected">
+                  <input type="radio" name="reg-role" value="athlete" checked>
+                  <div class="role-card-title">АТЛЕТ</div>
+                  <div class="role-card-desc">Тренировки по плану, отметка подходов, рейтинг</div>
+                </label>
+                <label class="role-card">
+                  <input type="radio" name="reg-role" value="trainer">
+                  <div class="role-card-title">ТРЕНЕР</div>
+                  <div class="role-card-desc">Ведение подопечных, назначение тренировок</div>
+                </label>
+              </div>
+            </div>
+            <button type="submit" class="app-btn btn-primary" id="btn-submit-register">Создать аккаунт</button>
           </form>
         </div>
       </section>
@@ -101,43 +108,28 @@
 
       <!-- Athlete Screen 1: ТРЕНИРОВКА (Today) -->
       <section id="screen-athlete-workout" class="screen-container" style="display: none;">
-        <!-- Date Bar -->
+        <!-- Date Navigator -->
         <div class="date-navigator">
-          <button class="icon-nav-btn" id="btn-date-prev">◀</button>
+          <button class="icon-nav-btn" id="btn-athlete-date-prev">◀</button>
           <div class="date-center">
             <span class="date-label" id="athlete-date-display">Сегодня</span>
             <input type="date" id="athlete-date-picker" class="date-picker-hidden">
           </div>
-          <button class="icon-nav-btn" id="btn-date-next">▶</button>
+          <button class="icon-nav-btn" id="btn-athlete-date-next">▶</button>
         </div>
 
-        <!-- Coach permission status banner -->
-        <div class="status-card-banner">
-          <div class="status-icon-circle">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-            </svg>
-          </div>
+        <!-- Coach Assignment Notice -->
+        <div class="app-card notice-card" id="athlete-assignment-notice">
+          <div class="notice-icon">📋</div>
           <div>
-            <div class="status-title">Самостоятельная тренировка разрешена</div>
-            <div class="status-sub">Отмечайте фактически выполненные веса и повторения</div>
+            <div class="notice-title" id="athlete-assignment-title">ТРЕНИРОВОЧНЫЙ ПЛАН</div>
+            <div class="notice-desc" id="athlete-assignment-desc">Упражнения назначаются тренером. Вы отмечаете выполнение подходов галочкой.</div>
           </div>
         </div>
 
-        <!-- Season Goal Card -->
-        <div class="app-card goal-card">
-          <div class="goal-header">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
-            </svg>
-            <span>ЦЕЛЬ НА СЕЗОН</span>
-          </div>
-          <div class="goal-text" id="athlete-season-goal">Регулярные силовые тренировки и стабильный прогресс весов</div>
-        </div>
-
-        <!-- Add Set Box -->
-        <div class="app-card">
-          <div class="card-title">Запись подхода</div>
+        <!-- Add Set Box (Only shown if trainer explicitly allowed self workout) -->
+        <div class="app-card" id="athlete-add-set-box" style="display: none;">
+          <div class="card-title">Самостоятельное добавление подхода</div>
 
           <!-- Quick chips -->
           <div class="chip-scroll-row" id="athlete-chips">
@@ -225,25 +217,44 @@
         </div>
       </section>
 
-      <!-- Athlete Screen 4: ПРОФИЛЬ (Settings, Pairing & QR) -->
+      <!-- Athlete Screen 4: ПРОФИЛЬ (Settings, Edit, Pairing & QR) -->
       <section id="screen-athlete-profile" class="screen-container" style="display: none;">
         <h2 class="screen-heading">ПРОФИЛЬ АТЛЕТА</h2>
 
-        <!-- Card: User Info -->
+        <!-- Card: User Info & Editing -->
         <div class="app-card user-profile-card">
-          <div class="profile-avatar-large">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-            </svg>
+          <div class="profile-header-row">
+            <div class="profile-avatar-large" id="athlete-avatar-preview">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+              </svg>
+            </div>
+            <div class="profile-details">
+              <h3 class="profile-name" id="profile-full-name">Атлет</h3>
+              <span class="profile-sub" id="profile-username">@username</span>
+              <span class="profile-sub" id="profile-phone">+7 999 000-00-00</span>
+            </div>
           </div>
-          <div class="profile-details">
-            <h3 class="profile-name" id="profile-full-name">Атлет</h3>
-            <span class="profile-sub" id="profile-username">@username</span>
-            <span class="profile-sub" id="profile-phone">+7 999 000-00-00</span>
+
+          <!-- Edit Profile Form -->
+          <div class="profile-edit-section">
+            <label class="file-upload-btn" style="margin-bottom: 10px;">
+              <span>📷 Изменить фото профиля</span>
+              <input type="file" id="athlete-avatar-input" accept="image/*" style="display: none;">
+            </label>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label class="field-label">ФИО атлета</label>
+              <input type="text" id="athlete-edit-name" class="app-input" placeholder="Ваше имя">
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="field-label">Номер телефона</label>
+              <input type="tel" id="athlete-edit-phone" class="app-input" placeholder="+7 999 000-00-00">
+            </div>
+            <button id="btn-save-athlete-profile" class="app-btn btn-primary">Сохранить изменения</button>
           </div>
         </div>
 
-        <!-- Card: 6-Digit PIN & QR CODE (No links!) -->
+        <!-- Card: 6-Digit PIN & QR CODE (Strictly No Links!) -->
         <div class="app-card pairing-card">
           <div class="card-title">СВЯЗЬ С ТРЕНЕРОМ</div>
           <p class="card-desc">Покажите QR-код тренеру или продиктуйте 6 цифр кода</p>
@@ -285,7 +296,7 @@
         <div class="app-card" id="card-paired-coach" style="display: none;">
           <div class="card-title">ВАШ ТРЕНЕР</div>
           <div class="coach-info-row">
-            <div class="coach-avatar-small">Т</div>
+            <div class="coach-avatar-small" id="paired-coach-avatar">Т</div>
             <div>
               <div class="coach-name" id="paired-coach-name">Алексей Романов</div>
               <div class="coach-phone" id="paired-coach-phone">+7 (999) 123-45-67</div>
@@ -312,14 +323,14 @@
         <div class="app-card client-picker-card">
           <div class="client-picker-row">
             <div class="picker-left">
-              <div class="avatar-circle">
+              <div class="avatar-circle" id="trainer-active-client-avatar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                 </svg>
               </div>
               <div>
-                <div class="active-client-name" id="trainer-active-client-name">Выберите подопечного</div>
-                <div class="active-client-phone" id="trainer-active-client-phone">—</div>
+                <span class="picker-label">ВЫБРАННЫЙ КЛИЕНТ</span>
+                <h3 class="picker-name" id="trainer-active-client-name">Нет подопечных</h3>
               </div>
             </div>
             <select id="trainer-client-select" class="app-input app-select" style="max-width: 140px;">
@@ -328,19 +339,20 @@
           </div>
         </div>
 
-        <!-- Pair Client Button & Form Box -->
+        <!-- Add Client Card (Pairing by 6-digit PIN) -->
         <div class="app-card">
-          <div class="card-title">ПРИВЯЗАТЬ ПОДОПЕЧНОГО</div>
-          <p class="card-desc">Введите 6 цифр кода подопечного (слитно, без дефиса) или загрузите фото QR</p>
+          <div class="card-title">ПРИВЯЗАТЬ НОВОГО ПОДОПЕЧНОГО</div>
+          <p class="card-desc">Введите 6 цифр из приложения Athlete Pro или загрузите фото с QR-кодом</p>
 
           <form id="form-trainer-pair">
-            <div class="form-group" style="margin-bottom: 10px;">
-              <input type="text" id="input-pair-code" class="app-input tabular-nums" placeholder="739102 (6 цифр)" maxlength="6" pattern="\d{6}" required>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label for="input-pairing-code" class="field-label">6-значный цифровой код подопечного</label>
+              <input type="text" id="input-pairing-code" class="app-input pin-input-field tabular-nums" placeholder="123456" maxlength="6" inputmode="numeric" required>
             </div>
 
             <div class="pair-actions-row">
               <label class="file-upload-btn">
-                <span>Загрузить QR из фото</span>
+                <span>📷 QR из фото</span>
                 <input type="file" id="input-qr-file" accept="image/*" style="display: none;">
               </label>
               <button type="submit" class="app-btn btn-primary" style="flex: 1;">Связать</button>
@@ -357,7 +369,7 @@
         </div>
       </section>
 
-      <!-- Trainer Screen 2: ТРЕНИРОВКА (Workout Logging) -->
+      <!-- Trainer Screen 2: ТРЕНИРОВКА (Workout Assignment) -->
       <section id="screen-trainer-workout" class="screen-container" style="display: none;">
         <h2 class="screen-heading">ТРЕНИРОВКА ПОДОПЕЧНОГО</h2>
 
@@ -376,9 +388,21 @@
           <button class="icon-nav-btn" id="btn-trainer-date-next">▶</button>
         </div>
 
-        <!-- Add Set for Client -->
+        <!-- Assign Workout Box -->
         <div class="app-card" id="trainer-add-set-box">
-          <div class="card-title">Назначить подход</div>
+          <div class="card-title">Назначить упражнение подопечному</div>
+
+          <!-- Self Workout Permission Toggle -->
+          <div class="privacy-row" style="margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+            <div>
+              <div class="privacy-title" style="font-size: 13px;">РАЗРЕШИТЬ САМОСТОЯТЕЛЬНУЮ ТРЕНИРОВКУ</div>
+              <div class="privacy-desc">Атлет сможет добавлять свои подходы на этот день</div>
+            </div>
+            <label class="switch-toggle">
+              <input type="checkbox" id="trainer-allow-self-workout">
+              <span class="slider"></span>
+            </label>
+          </div>
 
           <form id="form-trainer-add-set">
             <div class="form-group" style="margin-bottom: 10px;">
@@ -386,11 +410,11 @@
             </div>
             <div class="triple-input-grid">
               <div>
-                <label class="field-label">Вес (кг)</label>
+                <label class="field-label">Целевой вес (кг)</label>
                 <input type="number" step="0.5" min="0" id="trainer-input-weight" class="app-input tabular-nums" placeholder="80" required>
               </div>
               <div>
-                <label class="field-label">Повторы</label>
+                <label class="field-label">Целевые повторы</label>
                 <input type="number" step="1" min="1" id="trainer-input-reps" class="app-input tabular-nums" placeholder="10" required>
               </div>
               <div>
@@ -398,11 +422,11 @@
                 <input type="number" step="0.5" min="1" max="10" id="trainer-input-rpe" class="app-input tabular-nums" value="8.0">
               </div>
             </div>
-            <button type="submit" class="app-btn btn-primary" style="margin-top: 10px;">Сохранить подход</button>
+            <button type="submit" class="app-btn btn-primary" style="margin-top: 10px;">Назначить подход</button>
           </form>
         </div>
 
-        <!-- Client's sets for today -->
+        <!-- Client's sets for date -->
         <div id="trainer-workout-matrix" class="workout-matrix">
           <!-- Rendered dynamically -->
         </div>
@@ -424,29 +448,48 @@
         </div>
       </section>
 
-      <!-- Trainer Screen 4: НАСТРОЙКИ (Trainer Settings) -->
+      <!-- Trainer Screen 4: НАСТРОЙКИ (Settings & Edit Profile) -->
       <section id="screen-trainer-settings" class="screen-container" style="display: none;">
-        <h2 class="screen-heading">НАСТРОЙКИ ТРЕНЕРА</h2>
+        <h2 class="screen-heading">ПРОФИЛЬ ТРЕНЕРА</h2>
 
         <div class="app-card user-profile-card">
-          <div class="profile-avatar-large">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-            </svg>
+          <div class="profile-header-row">
+            <div class="profile-avatar-large" id="trainer-avatar-preview">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+              </svg>
+            </div>
+            <div class="profile-details">
+              <h3 class="profile-name" id="trainer-full-name">Тренер</h3>
+              <span class="profile-sub" id="trainer-username">@trainer</span>
+              <span class="profile-sub" id="trainer-phone">+7 999 000-00-00</span>
+            </div>
           </div>
-          <div class="profile-details">
-            <h3 class="profile-name" id="trainer-profile-name">Тренер</h3>
-            <span class="profile-sub" id="trainer-profile-username">@trainer</span>
-            <span class="profile-sub" id="trainer-profile-phone">+7 999 123-45-67</span>
+
+          <!-- Edit Profile Form -->
+          <div class="profile-edit-section">
+            <label class="file-upload-btn" style="margin-bottom: 10px;">
+              <span>📷 Изменить фото профиля</span>
+              <input type="file" id="trainer-avatar-input" accept="image/*" style="display: none;">
+            </label>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label class="field-label">ФИО тренера</label>
+              <input type="text" id="trainer-edit-name" class="app-input" placeholder="Ваше имя">
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="field-label">Номер телефона</label>
+              <input type="tel" id="trainer-edit-phone" class="app-input" placeholder="+7 999 000-00-00">
+            </div>
+            <button id="btn-save-trainer-profile" class="app-btn btn-primary">Сохранить изменения</button>
           </div>
         </div>
 
+        <!-- Ecosystem Status Card -->
         <div class="app-card">
-          <div class="card-title">ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ</div>
-          <p class="card-desc">Локальная база данных SQLite активна. Все данные защищены сквозным шифрованием.</p>
-          <div class="status-indicator-row">
-            <span class="pulse-dot"></span>
-            <span class="status-text">Локальный сервер в сети</span>
+          <div class="card-title">СИНХРОНИЗАЦИЯ И СТАТУС</div>
+          <div class="status-badge-row">
+            <span class="status-indicator-dot online"></span>
+            <span class="status-text">Синхронизация с облаком и смартфонами активна</span>
           </div>
         </div>
 
@@ -459,12 +502,12 @@
 
     <!-- Bottom Navigation Bar (Jetpack Compose NavigationBar Style) -->
     <nav class="app-bottom-nav" id="app-bottom-nav" style="display: none;">
-      <!-- Dynamic navigation items for Athlete or Trainer -->
+      <!-- Navigation items rendered dynamically for athlete vs trainer -->
+      <div id="nav-items-container" class="nav-items-wrapper"></div>
     </nav>
 
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container"></div>
-
   </div>
 
   <script src="/qr.js"></script>
