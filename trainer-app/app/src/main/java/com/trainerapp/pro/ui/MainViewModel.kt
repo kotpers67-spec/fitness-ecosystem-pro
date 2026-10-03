@@ -145,13 +145,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             val x = (width - edge) / 2
                             val y = (height - edge) / 2
                             val squareBitmap = android.graphics.Bitmap.createBitmap(originalBitmap, x, y, edge, edge)
-                            val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(squareBitmap, 512, 512, true)
+                            val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(squareBitmap, 128, 128, true)
 
                             val file = java.io.File(context.filesDir, "trainer_avatar.jpg")
-                            java.io.FileOutputStream(file).use { out ->
-                                scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
-                            }
-                            val bytes = file.readBytes()
+                            var quality = 75
+                            var bytes: ByteArray
+                            do {
+                                java.io.ByteArrayOutputStream().use { baos ->
+                                    scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, baos)
+                                    bytes = baos.toByteArray()
+                                }
+                                quality -= 10
+                            } while (bytes.size > 15 * 1024 && quality >= 35)
+
+                            file.writeBytes(bytes)
                             val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                             editor.putString("trainer_photo_uri", file.absolutePath)
                             editor.putString("trainer_avatar_base64", b64)
@@ -174,18 +181,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch(Dispatchers.IO) {
             // Убеждаемся, что у существующих клиентов есть clientUuid (миграция legacy)
-            val clientList = clients.filter { it.isNotEmpty() }.first()
-            clientList.forEach { client ->
-                if (client.clientUuid.isBlank()) {
-                    val defaultUuid = if (client.id == 1L) "f47ac10b-58cc-4372-a567-0e02b2c3d479" else java.util.UUID.randomUUID().toString()
-                    val defaultPin = if (client.id == 1L) "739102" else ""
-                    dao.updateClient(client.copy(clientUuid = defaultUuid, pairingCode = defaultPin))
+            val initialClients = clients.first()
+            if (initialClients.isNotEmpty()) {
+                initialClients.forEach { client ->
+                    if (client.clientUuid.isBlank()) {
+                        val defaultUuid = if (client.id == 1L) "f47ac10b-58cc-4372-a567-0e02b2c3d479" else java.util.UUID.randomUUID().toString()
+                        val defaultPin = if (client.id == 1L) "739102" else ""
+                        dao.updateClient(client.copy(clientUuid = defaultUuid, pairingCode = defaultPin))
+                    }
                 }
             }
             // Автоматическая фоновая синхронизация и проверка обновлений каждые 45 секунд
             var lastUpdateCheck = 0L
             var lastAutoUpdateVersion: String? = null
-            while (true) {
+            while (isActive) {
                 selectedClientId.value?.let {
                     syncActiveClientWithGoogleDrive()
                 }

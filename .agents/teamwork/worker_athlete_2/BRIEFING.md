@@ -1,4 +1,4 @@
-# BRIEFING — 2026-10-03T21:05:00Z
+# BRIEFING — 2026-10-03T21:17:00Z
 
 ## Mission
 Athlete Pro User Directives & Zero-Mocks Refinement: remove mock participants from LeaderboardScreen, replace QrCodeView with shareable link/intent in AthleteSettingsScreen, audit seeds, pass tests, build release APK.
@@ -20,7 +20,7 @@ Athlete Pro User Directives & Zero-Mocks Refinement: remove mock participants fr
 
 ## Current Parent
 - Conversation ID: 193ba9da-86df-408a-8ad4-d32fb01dfd34
-- Updated: not yet
+- Updated: 2026-10-03T21:17:00Z
 
 ## Task Summary
 - **What to build**: Real leaderboards in LeaderboardScreen, share link & intent in AthleteSettingsScreen, verify DB zero-mocks, build and test release.
@@ -29,14 +29,19 @@ Athlete Pro User Directives & Zero-Mocks Refinement: remove mock participants fr
 - **Code layout**: F:\Projects\fitness-ecosystem-pro\athlete-app/
 
 ## Change Tracker
-- **Files modified**: none yet
-- **Build status**: pending
+- **Files modified**:
+  - `athlete-app/.../ui/screens/LeaderboardScreen.kt`: Zero-mock real athlete entries + cloud sync athletes + elegant Empty State.
+  - `athlete-app/.../ui/screens/AthleteSettingsScreen.kt`: Replaced QrCodeView with direct pairing link card (`https://fitnessapp.pro/pair?code=$cleanPin`), copy to clipboard button with Toast, and Share Intent button.
+  - `athlete-app/.../data/sync/GoogleDriveAthleteSyncManager.kt`: Real athlete extraction from cloud sync clients payload into `cloudAthletes` StateFlow.
+  - `athlete-app/.../ui/AthleteViewModel.kt`: Exposed `cloudAthletes` StateFlow.
+  - `athlete-app/.../data/sync/AthleteSyncRemediationTest.kt`: Added tests for empty state, real data ranking, pairing link format and share text.
+- **Build status**: PASS (all 31 unit tests pass, assembleRelease succeeds)
 - **Pending issues**: none
 
 ## Quality Status
-- **Build/test result**: pending
-- **Lint status**: pending
-- **Tests added/modified**: pending
+- **Build/test result**: PASS (gradlew.bat testDebugUnitTest 31/31 passed, assembleRelease generated signed APK)
+- **Lint status**: clean
+- **Tests added/modified**: 3 new tests in `AthleteSyncRemediationTest.kt`
 
 ## Loaded Skills
 - none

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0d0d0d">
+  <meta name="description" content="Fitness Ecosystem Pro — Swiss Clean UI Workout Tracker & Coaching Portal">
+  <title>Fitness Ecosystem Pro</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Header Shell -->
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="#" class="brand" id="brand-link">
+        <span class="brand-badge">PRO</span>
+        <span class="brand-title">FITNESS ECOSYSTEM</span>
+      </a>
+
+      <div class="header-actions" id="header-auth-actions" style="display: none;">
+        <div class="user-badge">
+          <span id="user-display-name" class="truncate" style="max-width: 160px; font-weight: 600;">Пользователь</span>
+          <span id="user-role-pill" class="role-pill athlete">Атлет</span>
+        </div>
+        <button id="btn-toggle-role" class="btn btn-secondary btn-sm" title="Сменить роль">
+          Сменить роль
+        </button>
+        <button id="btn-logout" class="btn btn-secondary btn-sm" title="Выйти из аккаунта">
+          Выйти
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+
+    <!-- 1. AUTH SCREEN (Unauthenticated) -->
+    <section id="auth-section" class="bento-grid" style="display: none; justify-content: center; margin-top: 40px;">
+      <div class="bento-col-12" style="max-width: 440px; margin: 0 auto;">
+        <div class="bento-card">
+          <div class="bento-header" style="justify-content: center; margin-bottom: 24px;">
+            <div style="text-align: center;">
+              <h1 class="bento-title" style="font-size: 22px; margin-bottom: 6px;">Вход в систему</h1>
+              <p class="label-micro">Безопасная локальная экосистема</p>
+            </div>
+          </div>
+
+          <!-- Auth Mode Switcher -->
+          <div class="nav-tabs" style="margin-bottom: 20px; justify-content: center;">
+            <button id="tab-login" class="tab-btn active">Вход</button>
+            <button id="tab-register" class="tab-btn">Регистрация</button>
+          </div>
+
+          <!-- Login Form -->
+          <form id="form-login">
+            <div style="margin-bottom: 14px;">
+              <label for="login-username" class="label-micro" style="display: block; margin-bottom: 6px;">Логин</label>
+              <input type="text" id="login-username" class="input-field" placeholder="athlete_pro" autocomplete="username" required>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <label for="login-password" class="label-micro" style="display: block; margin-bottom: 6px;">Пароль</label>
+              <input type="password" id="login-password" class="input-field" placeholder="••••••••" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Войти</button>
+          </form>
+
+          <!-- Register Form -->
+          <form id="form-register" style="display: none;">
+            <div style="margin-bottom: 12px;">
+              <label for="reg-username" class="label-micro" style="display: block; margin-bottom: 6px;">Логин</label>
+              <input type="text" id="reg-username" class="input-field" placeholder="pro_lifter" autocomplete="username" required>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label for="reg-fullname" class="label-micro" style="display: block; margin-bottom: 6px;">Имя и Фамилия</label>
+              <input type="text" id="reg-fullname" class="input-field" placeholder="Алексей Смирнов" required>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label for="reg-phone" class="label-micro" style="display: block; margin-bottom: 6px;">Телефон (опционально)</label>
+              <input type="tel" id="reg-phone" class="input-field" placeholder="+7 999 000-00-00">
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label for="reg-role" class="label-micro" style="display: block; margin-bottom: 6px;">Роль</label>
+              <select id="reg-role" class="input-field" style="cursor: pointer;">
+                <option value="athlete">Атлет (Дневник, QR, PIN)</option>
+                <option value="trainer">Тренер (Клиенты, Тоннаж)</option>
+              </select>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <label for="reg-password" class="label-micro" style="display: block; margin-bottom: 6px;">Пароль (от 6 символов)</label>
+              <input type="password" id="reg-password" class="input-field" placeholder="••••••••" autocomplete="new-password" required>
+            </div>
+            <button type="submit" class="btn btn-emerald" style="width: 100%;">Создать аккаунт</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. DASHBOARD SHELL (Authenticated) -->
+    <div id="dashboard-section" style="display: none;">
+
+      <!-- Nav Tabs -->
+      <nav class="nav-tabs" id="main-nav-tabs">
+        <!-- Dynamically rendered based on active role -->
+      </nav>
+
+      <!-- VIEW A: ATHLETE WORKOUTS -->
+      <section id="view-athlete-workouts" class="bento-grid">
+        <!-- Logger Card -->
+        <div class="bento-col-5">
+          <div class="bento-card">
+            <div class="bento-header">
+              <h2 class="bento-title">Запись подхода</h2>
+              <input type="date" id="workout-date-picker" class="input-field" style="max-width: 160px; min-height: 36px; padding: 4px 10px;">
+            </div>
+
+            <div class="chips-container" id="quick-exercise-chips">
+              <button type="button" class="chip" data-exercise="Жим лёжа">Жим лёжа</button>
+              <button type="button" class="chip" data-exercise="Приседания">Приседания</button>
+              <button type="button" class="chip" data-exercise="Становая тяга">Становая тяга</button>
+              <button type="button" class="chip" data-exercise="Подтягивания">Подтягивания</button>
+              <button type="button" class="chip" data-exercise="Жим стоя">Жим стоя</button>
+              <button type="button" class="chip" data-exercise="Брусья">Брусья</button>
+            </div>
+
+            <!-- Previous workout stats banner -->
+            <div id="last-stats-banner" style="display: none; margin-bottom: 16px; padding: 8px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 12px; color: var(--accent-emerald);">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <form id="form-add-set">
+              <div style="margin-bottom: 12px;">
+                <label for="input-exercise-name" class="label-micro" style="display: block; margin-bottom: 6px;">Упражнение</label>
+                <input type="text" id="input-exercise-name" class="input-field" placeholder="Название упражнения" required>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 18px;">
+                <div>
+                  <label for="input-weight" class="label-micro" style="display: block; margin-bottom: 6px;">Вес (кг)</label>
+                  <input type="number" step="0.5" min="0" id="input-weight" class="input-field tabular-nums" placeholder="80" required>
+                </div>
+                <div>
+                  <label for="input-reps" class="label-micro" style="display: block; margin-bottom: 6px;">Повторения</label>
+                  <input type="number" step="1" min="1" id="input-reps" class="input-field tabular-nums" placeholder="10" required>
+                </div>
+                <div>
+                  <label for="input-rpe" class="label-micro" style="display: block; margin-bottom: 6px;">RPE (1-10)</label>
+                  <input type="number" step="0.5" min="1" max="10" id="input-rpe" class="input-field tabular-nums" value="8.0" placeholder="8.0">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-emerald" style="width: 100%;">
+                <span>+ Добавить подход</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Sets List Card -->
+        <div class="bento-col-7">
+          <div class="bento-card">
+            <div class="bento-header">
+              <div>
+                <h2 class="bento-title">Подходы на дату</h2>
+                <span id="daily-tonnage-label" class="label-micro" style="color: var(--accent-emerald);">Тоннаж: 0 кг</span>
+              </div>
+            </div>
+
+            <div id="sets-container" class="sets-list">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW B: ATHLETE PAIRING & QR -->
+      <section id="view-athlete-pairing" class="bento-grid" style="display: none;">
+        <!-- QR & PIN Card -->
+        <div class="bento-col-6">
+          <div class="bento-card">
+            <div class="bento-header">
+              <h2 class="bento-title">QR-код и 6-значный PIN</h2>
+              <span class="label-micro">Для тренера</span>
+            </div>
+
+            <div class="qr-container" id="athlete-qr-container">
+              <!-- Clean Pure Vector SVG rendered by qr.js -->
+            </div>
+
+            <div class="pin-display-wrapper">
+              <div class="label-micro" style="margin-bottom: 6px;">Код сопряжения</div>
+              <div id="athlete-pin-code" class="pin-code-large tabular-nums">------</div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+              <button id="btn-copy-pin" class="btn btn-secondary">
+                <span>Скопировать PIN</span>
+              </button>
+              <button id="btn-copy-link" class="btn btn-secondary">
+                <span>Скопировать ссылку</span>
+              </button>
+            </div>
+
+            <button id="btn-regenerate-pin" class="btn btn-secondary" style="width: 100%;">
+              <span>Перегенерировать PIN</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Coach Status & Privacy Card -->
+        <div class="bento-col-6">
+          <!-- Coach Status -->
+          <div class="bento-card" style="margin-bottom: 16px;">
+            <div class="bento-header">
+              <h2 class="bento-title">Привязанный тренер</h2>
+            </div>
+            <div id="coach-info-container">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Privacy Settings -->
+          <div class="bento-card">
+            <div class="bento-header">
+              <h2 class="bento-title">Приватность профиля</h2>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+              <div>
+                <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Публичный лидерборд</div>
+                <div style="font-size: 12px; color: var(--text-muted);">
+                  Отображать ваши тренировки и тоннаж в общем рейтинге атлетов.
+                </div>
+              </div>
+              <label style="position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0;">
+                <input type="checkbox" id="privacy-toggle-checkbox" style="opacity: 0; width: 0; height: 0;">
+                <span id="privacy-toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #262626; border: 1px solid var(--border-subtle); border-radius: 24px; transition: 0.2s;"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW C: TRAINER CLIENTS -->
+      <section id="view-trainer-clients" class="bento-grid" style="display: none;">
+        <!-- Quick Pair Input Card -->
+        <div class="bento-col-12">
+          <div class="bento-card">
+            <div class="bento-header">
+              <div>
+                <h2 class="bento-title">Мгновенная привязка подопечного</h2>
+                <p class="label-micro" style="margin-top: 4px;">Введите 6 цифр из приложения или экрана атлета (без дефисов)</p>
+              </div>
+            </div>
+            <form id="form-trainer-pair" style="display: flex; gap: 12px; max-width: 500px;">
+              <input type="text" id="trainer-pair-code" class="input-field tabular-nums" placeholder="739102" maxlength="6" style="font-size: 18px; font-weight: 700; letter-spacing: 0.1em;" required>
+              <button type="submit" class="btn btn-primary" style="flex-shrink: 0;">Привязать атлета</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Clients Grid -->
+        <div class="bento-col-12">
+          <div class="bento-card">
+            <div class="bento-header">
+              <h2 class="bento-title">Список подопечных</h2>
+            </div>
+            <div id="trainer-clients-container" class="bento-grid">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW D: LEADERBOARD (Competitions - Zero Mocks) -->
+      <section id="view-leaderboard" class="bento-grid" style="display: none;">
+        <div class="bento-col-12">
+          <div class="bento-card">
+            <div class="bento-header">
+              <div>
+                <h2 class="bento-title">Таблица лидеров (Рейтинг)</h2>
+                <p class="label-micro" style="margin-top: 4px;">100% реальные данные SQLite — честные результаты</p>
+              </div>
+              <button id="btn-refresh-leaderboard" class="btn btn-secondary btn-sm">Обновить</button>
+            </div>
+
+            <div class="table-wrapper">
+              <table class="swiss-table">
+                <thead>
+                  <tr>
+                    <th style="width: 70px;">Место</th>
+                    <th>Атлет</th>
+                    <th style="text-align: right;">Тренировок</th>
+                    <th style="text-align: right;">Тоннаж (кг)</th>
+                    <th style="text-align: right;">Очки</th>
+                  </tr>
+                </thead>
+                <tbody id="leaderboard-tbody">
+                  <!-- Rendered dynamically from real SQLite -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="/qr.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-# BRIEFING — 2026-10-03T18:04:30Z
+# BRIEFING — 2026-10-03T18:22:10Z
 
 ## Mission
 Full end-to-end code audit of fitness ecosystem (Trainer Pro and Athlete Pro), remediate all defects, bump to v1.0.5, execute strict Zero-Mocks verification on Pixel 8 API 36, and deploy release v1.0.5 to GitHub and Cloud.
@@ -16,12 +16,11 @@ Full end-to-end code audit of fitness ecosystem (Trainer Pro and Athlete Pro), r
 1. **Decompose**:
    - Survey: 3 Explorers (Completed)
    - Baseline M1 & M2: Implemented & Gate Approved (Completed)
-   - Refinement M1 & M2: Implement user directives (eliminate leaderboard mocks, QR to link & share, 6-digit pin without dashes) [In Progress]
-   - M3: Pixel 8 Zero-Mocks Verification [Pending]
-   - M4: GitHub & Cloud Release [Pending]
+   - Refinement M1 & M2: User directives implemented & rebuilt (Completed)
+   - M3: Pixel 8 Zero-Mocks Verification (In Progress via Release Worker)
+   - M4: GitHub & Cloud Release (In Progress via Release Worker)
 2. **Dispatch & Execute**:
-   - Worker Trainer 2: 1ad42852-1c46-459c-bc63-ce6915bc6b85
-   - Worker Athlete 2: 33c5322f-4191-4a53-9f6f-402a17723682
+   - Release Worker: bcd0c24e-cdbc-4033-bca5-4e7a963ceafb
 3. **On failure** (in this order):
    - Retry: nudge stuck agent or re-send task
    - Replace: spawn fresh agent with partial progress
@@ -32,12 +31,12 @@ Full end-to-end code audit of fitness ecosystem (Trainer Pro and Athlete Pro), r
 4. **Succession**: Self-succeed at 16 spawns
 - **Work items**:
   1. Survey & Codebase Exploration [done]
-  2. Baseline Defect Remediation & Bump to v1.0.5 [done]
-  3. User Directives Refinement (Zero-Mocks Leaderboard, QR->Link, Pin format) [in-progress]
-  4. Zero-Mocks Verification on Pixel 8 [pending]
-  5. Release v1.0.5 Deployment [pending]
-- **Current phase**: 2 (User Directives Refinement)
-- **Current focus**: Parallel implementation of user directives in Trainer Pro and Athlete Pro
+  2. Defect Remediation & Bump to v1.0.5 [done]
+  3. User Directives Refinement [done]
+  4. Zero-Mocks Verification on Pixel 8 [in-progress]
+  5. Release v1.0.5 Deployment (GitHub + Cloud) [in-progress]
+- **Current phase**: 3 & 4 (Emulator Execution & Release Deploy)
+- **Current focus**: Executing live ADB flows on emulator-5554, capturing screenshots, updating cloud updates node, and publishing GitHub release
 
 ## 🔒 Key Constraints
 - Strict dispatch-only orchestrator: NEVER write source code, NEVER run tests directly, NEVER explore codebase directly.
@@ -48,15 +47,12 @@ Full end-to-end code audit of fitness ecosystem (Trainer Pro and Athlete Pro), r
 
 ## Current Parent
 - Conversation ID: 88dcacf8-425a-436a-a6fd-1c0f6b4fd77e
-- Updated: 2026-10-03T18:04:30Z
+- Updated: 2026-10-03T18:22:10Z
 
 ## Key Decisions Made
 - Project pattern selected.
-- Baseline M1/M2 gate passed (Reviewer APPROVE, Auditor CLEAN).
-- Two new critical user directives incorporated:
-  1. Remove all mock participants from LeaderboardScreen.kt, strictly real users/cloud only with empty state.
-  2. Replace QrCodeView with copy link & share buttons; allow 6-digit pairing code input without dashes.
-- Dispatched Worker Trainer 2 and Worker Athlete 2.
+- All code modifications completed and verified by unit tests (68/68 passing).
+- Worker Release dispatched to execute ADB commands, capture screenshots, update Google Apps Script updates node, and publish GitHub release v1.0.5.
 
 ## Team Roster
 | Agent | Type | Work Item | Status | Conv ID |
@@ -68,13 +64,15 @@ Full end-to-end code audit of fitness ecosystem (Trainer Pro and Athlete Pro), r
 | worker_athlete_1 | teamwork_preview_worker | Baseline fixes in Athlete Pro | completed | 92a54980-ffa8-4792-b688-71d42b121c47 |
 | reviewer_1 | teamwork_preview_reviewer | Code & build verification M1 & M2 | completed | 8607668f-ad9e-49f8-b78c-302734114ea4 |
 | auditor_1 | teamwork_preview_auditor | Forensic Zero-Mocks integrity audit | completed | 4c970576-162c-4d7d-aafd-acbc18febade |
-| worker_trainer_2 | teamwork_preview_worker | Pin no-dashes & settings cleanup | in-progress | 1ad42852-1c46-459c-bc63-ce6915bc6b85 |
-| worker_athlete_2 | teamwork_preview_worker | Zero-mocks leaderboard & link share | in-progress | 33c5322f-4191-4a53-9f6f-402a17723682 |
+| worker_trainer_2 | teamwork_preview_worker | Pin no-dashes & settings cleanup | completed | 1ad42852-1c46-459c-bc63-ce6915bc6b85 |
+| worker_athlete_2 | teamwork_preview_worker | Zero-mocks leaderboard & link share | completed | 33c5322f-4191-4a53-9f6f-402a17723682 |
+| qa_pixel8_1 | qa-reality-checker | Zero-Mocks Pixel 8 E2E Review | completed | 5e812b38-39e9-45c5-9009-3be6e85eca51 |
+| worker_release_1 | teamwork_preview_worker | Pixel 8 ADB Execution & Release Deploy | in-progress | bcd0c24e-cdbc-4033-bca5-4e7a963ceafb |
 
 ## Succession Status
 - Succession required: no
-- Spawn count: 9 / 16
-- Pending subagents: 1ad42852-1c46-459c-bc63-ce6915bc6b85, 33c5322f-4191-4a53-9f6f-402a17723682
+- Spawn count: 11 / 16
+- Pending subagents: bcd0c24e-cdbc-4033-bca5-4e7a963ceafb
 - Predecessor: none
 - Successor: not yet spawned
 

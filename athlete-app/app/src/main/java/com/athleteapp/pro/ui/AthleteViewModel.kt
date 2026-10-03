@@ -331,14 +331,20 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                 val x = (width - edge) / 2
                 val y = (height - edge) / 2
                 val squareBitmap = Bitmap.createBitmap(originalBitmap, x, y, edge, edge)
-                val scaledBitmap = Bitmap.createScaledBitmap(squareBitmap, 512, 512, true)
+                val scaledBitmap = Bitmap.createScaledBitmap(squareBitmap, 128, 128, true)
 
                 val avatarFile = File(context.filesDir, "athlete_avatar.jpg")
-                FileOutputStream(avatarFile).use { out ->
-                    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
-                }
+                var quality = 75
+                var bytes: ByteArray
+                do {
+                    java.io.ByteArrayOutputStream().use { baos ->
+                        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, baos)
+                        bytes = baos.toByteArray()
+                    }
+                    quality -= 10
+                } while (bytes.size > 15 * 1024 && quality >= 35)
 
-                val bytes = avatarFile.readBytes()
+                avatarFile.writeBytes(bytes)
                 val base64Str = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 val savedPath = avatarFile.absolutePath
                 val current = profile.value ?: AthleteProfileEntity()

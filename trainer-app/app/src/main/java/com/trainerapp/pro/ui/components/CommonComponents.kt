@@ -250,18 +250,20 @@ fun ClientAvatar(
     contentDescription: String = "Аватар"
 ) {
     val bitmap = remember(photoUri, avatarBase64) {
-        if (!photoUri.isNullOrBlank()) {
-            val file = java.io.File(photoUri)
-            if (file.exists()) {
-                android.graphics.BitmapFactory.decodeFile(photoUri)?.asImageBitmap()
-            } else null
-        } else if (!avatarBase64.isNullOrBlank()) {
-            try {
+        try {
+            if (!photoUri.isNullOrBlank()) {
+                val file = java.io.File(photoUri)
+                if (file.exists()) {
+                    android.graphics.BitmapFactory.decodeFile(photoUri)?.asImageBitmap()
+                } else null
+            } else if (!avatarBase64.isNullOrBlank()) {
                 val cleanB64 = if (avatarBase64.contains(",")) avatarBase64.substringAfter(",") else avatarBase64
                 val bytes = android.util.Base64.decode(cleanB64, android.util.Base64.NO_WRAP)
                 android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            } catch (_: Exception) { null }
-        } else null
+            } else null
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     Box(

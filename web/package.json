@@ -1,0 +1,11 @@
+{
+  "name": "fitness-ecosystem-web",
+  "version": "1.0.0",
+  "description": "Fitness Ecosystem Pro Web Portal - Athlete & Trainer Dashboards with Zero-Trust Security, Hardened Auth, and Anti-Injection Protection",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test tests/security.test.js",
+    "test:security": "node --test tests/security.test.js"
+  }
+}

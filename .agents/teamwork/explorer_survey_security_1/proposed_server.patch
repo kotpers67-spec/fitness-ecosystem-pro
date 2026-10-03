@@ -1,0 +1,28 @@
+--- a/web/src/server.js
++++ b/web/src/server.js
+@@ -303,11 +303,18 @@
+     // --- 2. STATIC FILES SERVING ---
+-    let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
+-    
+-    // Path Traversal Defense
++    let safePathname;
++    try {
++      safePathname = decodeURIComponent(pathname);
++    } catch (_) {
++      res.writeHead(400);
++      return res.end('Bad Request');
++    }
++    let filePath = path.join(PUBLIC_DIR, safePathname === '/' ? 'index.html' : safePathname);
++
++    // Path Traversal Defense
+     const normalized = path.normalize(filePath);
+-    if (!normalized.startsWith(PUBLIC_DIR)) {
++    if (!normalized.startsWith(PUBLIC_DIR + path.sep) && normalized !== PUBLIC_DIR) {
+       res.writeHead(403);
+       return res.end('Access Denied');
+     }
+@@ -338,4 +345,4 @@
+ }
+ 
+-module.exports = { server, db };
++module.exports = { server, db, authLimiter };

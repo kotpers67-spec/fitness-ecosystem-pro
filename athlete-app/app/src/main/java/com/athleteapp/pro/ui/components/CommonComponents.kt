@@ -39,20 +39,20 @@ fun AthleteAvatar(
     contentDescription: String = "Аватар"
 ) {
     val bitmap = remember(avatarPath) {
-        if (!avatarPath.isNullOrBlank()) {
-            val file = File(avatarPath)
-            if (file.exists()) {
-                BitmapFactory.decodeFile(avatarPath)?.asImageBitmap()
-            } else {
-                try {
+        try {
+            if (!avatarPath.isNullOrBlank()) {
+                val file = File(avatarPath)
+                if (file.exists()) {
+                    BitmapFactory.decodeFile(avatarPath)?.asImageBitmap()
+                } else {
                     val cleanB64 = if (avatarPath.contains(",")) avatarPath.substringAfter(",") else avatarPath
                     val bytes = android.util.Base64.decode(cleanB64, android.util.Base64.NO_WRAP)
                     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                } catch (_: Exception) {
-                    null
                 }
-            }
-        } else null
+            } else null
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     Box(
@@ -100,7 +100,7 @@ fun QrCodeView(
                 }
             }
             bmp.asImageBitmap()
-        } catch (e: Exception) {
+        } catch (_: Throwable) {
             null
         }
     }
