@@ -399,7 +399,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
 
     fun syncWithCoachGoogleDrive() {
         viewModelScope.launch {
-            _syncMessage.value = "Синхронизация через Google Диск..."
+            _syncMessage.value = "Синхронизация данных..."
             val current = settings.value ?: AthleteAppSettingsEntity()
             val athleteId = if (current.athleteId > 0) current.athleteId else 1L
             val result = googleDriveSync.syncWithCoach(athleteId)

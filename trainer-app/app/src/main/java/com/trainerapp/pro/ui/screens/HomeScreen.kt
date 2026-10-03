@@ -518,7 +518,7 @@ fun HomeScreen(
                             )
                             Spacer(Modifier.width(10.dp))
                             Text(
-                                "Связывание через Google Диск...",
+                                "Связывание и синхронизация данных...",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )

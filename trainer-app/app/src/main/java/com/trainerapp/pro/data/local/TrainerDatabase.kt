@@ -23,7 +23,7 @@ import androidx.room.migration.Migration
         AppointmentEntity::class,
         AppSettingsEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class TrainerDatabase : RoomDatabase() {
@@ -41,6 +41,13 @@ abstract class TrainerDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE clients ADD COLUMN photoUri TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE clients ADD COLUMN avatarBase64 TEXT DEFAULT NULL")
+            }
+        }
+
         fun getDatabase(context: Context, scope: CoroutineScope): TrainerDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -48,7 +55,7 @@ abstract class TrainerDatabase : RoomDatabase() {
                     TrainerDatabase::class.java,
                     "trainer_pro.db"
                 )
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .addCallback(DatabaseCallback(scope))
                 .build()

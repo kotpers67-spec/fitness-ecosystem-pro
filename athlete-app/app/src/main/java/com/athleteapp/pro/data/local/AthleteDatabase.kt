@@ -22,7 +22,7 @@ import java.time.LocalDate
         MyAnthropometryEntity::class,
         AthleteAppSettingsEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AthleteDatabase : RoomDatabase() {
@@ -89,6 +89,16 @@ abstract class AthleteDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `athlete_profile` ADD COLUMN `avatarBase64` TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE `athlete_profile` ADD COLUMN `pairedCoachPhone` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `athlete_profile` ADD COLUMN `pairedCoachPhotoUri` TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE `athlete_profile` ADD COLUMN `pairedCoachAvatarBase64` TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE `athlete_profile` ADD COLUMN `isPrivateLeaderboard` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.IO)): AthleteDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -97,7 +107,7 @@ abstract class AthleteDatabase : RoomDatabase() {
                     "athlete_pro.db"
                 )
                 .addCallback(DatabaseCallback(scope))
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

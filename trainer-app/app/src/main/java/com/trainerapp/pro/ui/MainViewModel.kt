@@ -440,7 +440,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _syncStatus.value = "Ошибка: подопечный не выбран"
                 return@launch
             }
-            _syncStatus.value = "Синхронизация с Google Диском..."
+            _syncStatus.value = "Синхронизация данных..."
             val result = googleDriveSync.syncClient(dao, client)
             if (result.isSuccess) {
                 _syncStatus.value = result.getOrNull()
