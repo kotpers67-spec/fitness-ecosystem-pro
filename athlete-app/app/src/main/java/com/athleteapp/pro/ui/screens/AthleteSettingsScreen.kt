@@ -329,33 +329,54 @@ fun AthleteSettingsScreen(
                         }
 
                         if (isPaired) {
+                            val coachPhone = profile?.pairedCoachPhone ?: ""
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surface,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.VerifiedUser,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Привязан к тренеру",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        AthleteAvatar(
+                                            avatarPath = profile?.pairedCoachPhotoUri ?: profile?.pairedCoachAvatarBase64,
+                                            size = 52.dp,
+                                            defaultResId = R.drawable.avatar_coach
                                         )
-                                        Text(
-                                            text = coachName,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Привязан к тренеру",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                            Text(
+                                                text = coachName,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Black
+                                            )
+                                            if (coachPhone.isNotBlank()) {
+                                                Text(
+                                                    text = coachPhone,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                        }
+
+                                        if (coachPhone.isNotBlank()) {
+                                            IconButton(onClick = {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$coachPhone"))
+                                                    context.startActivity(intent)
+                                                } catch (_: Exception) {}
+                                            }) {
+                                                Icon(Icons.Default.Phone, contentDescription = "Позвонить", tint = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -434,7 +455,50 @@ fun AthleteSettingsScreen(
                 }
             }
 
-            // 2. Language Switcher (RU / EN)
+            // 2. Privacy Switcher for Leaderboard / Competitions
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "ПРИВАТНОСТЬ В СОСТЯЗАНИЯХ",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Switch(
+                                checked = profile?.isPrivateLeaderboard == true,
+                                onCheckedChange = { viewModel.setPrivateLeaderboard(it) }
+                            )
+                        }
+                        Text(
+                            text = if (profile?.isPrivateLeaderboard == true)
+                                "Приватность ВКЛЮЧЕНА: Вы не участвуете в состязаниях и скрыты из общего рейтинга."
+                            else
+                                "Приватность ВЫКЛЮЧЕНА: Вы участвуете в состязаниях и ваш рейтинг виден в таблице лидеров.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // 3. Language Switcher (RU / EN)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -478,7 +542,7 @@ fun AthleteSettingsScreen(
                 }
             }
 
-            // 3. Google Drive Cloud Sync with Coach (100% Secure & Zero-Login)
+            // 3. Cloud Sync with Coach (100% Secure & Zero-Login)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -495,7 +559,7 @@ fun AthleteSettingsScreen(
                                 Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "ОБЛАКО GOOGLE ДИСК",
+                                    text = "СИНХРОНИЗАЦИЯ ДАННЫХ",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -506,7 +570,7 @@ fun AthleteSettingsScreen(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                             ) {
                                 Text(
-                                    text = "ПОДКЛЮЧЕНО",
+                                    text = "АКТИВНО",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.primary,
@@ -530,11 +594,14 @@ fun AthleteSettingsScreen(
                         ) {
                             Icon(Icons.Default.Sync, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Синхронизировать с тренером")
+                            Text("Синхронизировать данные")
                         }
                     }
                 }
             }
+
+
+
             // 4. Color Theme Selector
             item {
                 Card(
@@ -599,7 +666,8 @@ fun AthleteSettingsScreen(
                 var isCheckingUpdate by remember { mutableStateOf(false) }
                 var updateResult by remember { mutableStateOf<com.athleteapp.pro.data.update.AthleteUpdateCheckResult?>(null) }
                 var updateStatusText by remember { mutableStateOf<String?>(null) }
-                val updateService = remember { com.athleteapp.pro.data.update.AthleteUpdateService(context) }
+                var isAutoInstall by remember { mutableStateOf(viewModel.isAutoInstallUpdatesEnabled) }
+                val currentVersionName = remember { viewModel.updateService.getCurrentVersionName() }
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -627,7 +695,7 @@ fun AthleteSettingsScreen(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                             ) {
                                 Text(
-                                    text = "v1.0.1",
+                                    text = "v$currentVersionName",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.primary,
@@ -637,17 +705,35 @@ fun AthleteSettingsScreen(
                         }
 
                         Text(
-                            text = "Автоматическая проверка и загрузка обновлений с GitHub.",
+                            text = "Автоматическая проверка и загрузка обновлений приложения.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Автоматическая установка обновлений", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Фоновое скачивание и запуск установки в фоне", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = isAutoInstall,
+                                onCheckedChange = {
+                                    isAutoInstall = it
+                                    viewModel.isAutoInstallUpdatesEnabled = it
+                                }
+                            )
+                        }
 
                         Button(
                             onClick = {
                                 isCheckingUpdate = true
                                 updateStatusText = "Проверка релизов на GitHub..."
                                 scope.launch {
-                                    val res = updateService.checkForUpdates()
+                                    val res = viewModel.updateService.checkForUpdates()
                                     isCheckingUpdate = false
                                     if (res.isSuccess) {
                                         val data = res.getOrNull()
@@ -681,7 +767,7 @@ fun AthleteSettingsScreen(
                             Button(
                                 onClick = {
                                     updateStatusText = "Загрузка обновления..."
-                                    updateService.downloadAndInstallApk(updateResult!!.downloadUrl!!)
+                                    viewModel.updateService.downloadAndInstallApk(updateResult!!.downloadUrl!!)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),

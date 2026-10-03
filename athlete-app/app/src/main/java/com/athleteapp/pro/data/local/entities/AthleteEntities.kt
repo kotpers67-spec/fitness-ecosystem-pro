@@ -20,7 +20,11 @@ data class AthleteProfileEntity(
     val avatarBase64: String? = null,
     val pairingPin: String = "",
     val isPairedWithCoach: Boolean = false,
-    val pairedCoachName: String = ""
+    val pairedCoachName: String = "",
+    val pairedCoachPhone: String = "",
+    val pairedCoachPhotoUri: String? = null,
+    val pairedCoachAvatarBase64: String? = null,
+    val isPrivateLeaderboard: Boolean = false
 )
 
 @Entity(tableName = "assigned_exercises")

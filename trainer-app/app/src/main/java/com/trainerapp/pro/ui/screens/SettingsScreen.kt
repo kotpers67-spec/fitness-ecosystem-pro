@@ -134,6 +134,19 @@ fun SettingsScreen(
         }
     }
 
+    var trainerFirstName by remember { mutableStateOf(viewModel.trainerFirstName) }
+    var trainerLastName by remember { mutableStateOf(viewModel.trainerLastName) }
+    var trainerPhone by remember { mutableStateOf(viewModel.trainerPhone) }
+    var selectedTrainerPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
+    val trainerPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            selectedTrainerPhotoUri = uri
+            viewModel.saveTrainerProfile(context, trainerFirstName, trainerLastName, trainerPhone, uri)
+            Toast.makeText(context, "Фото тренера обновлено!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -153,6 +166,87 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+
+            // 0. КАРТОЧКА И ПРОФИЛЬ ТРЕНЕРА
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Badge, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "ПРОФИЛЬ И КАРТОЧКА ТРЕНЕРА",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            com.trainerapp.pro.ui.components.ClientAvatar(
+                                photoUri = selectedTrainerPhotoUri?.toString() ?: viewModel.trainerPhotoUri,
+                                avatarBase64 = viewModel.trainerAvatarBase64,
+                                size = 64.dp,
+                                defaultResId = com.trainerapp.pro.R.drawable.avatar_coach
+                            )
+
+                            OutlinedButton(
+                                onClick = { trainerPhotoLauncher.launch("image/*") },
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Изменить фото", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = trainerFirstName,
+                            onValueChange = { trainerFirstName = it },
+                            label = { Text("Имя") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = trainerLastName,
+                            onValueChange = { trainerLastName = it },
+                            label = { Text("Фамилия") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = trainerPhone,
+                            onValueChange = { trainerPhone = it },
+                            label = { Text("Телефон для связи") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        Button(
+                            onClick = {
+                                viewModel.saveTrainerProfile(context, trainerFirstName, trainerLastName, trainerPhone, selectedTrainerPhotoUri)
+                                Toast.makeText(context, "Профиль тренера сохранен!", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("СОХРАНИТЬ ПРОФИЛЬ ТРЕНЕРА", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
 
             // 1. ЯЗЫК ИНТЕРФЕЙСА (RU / EN)
             item {
@@ -225,7 +319,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 3. ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ GOOGLE ДИСК (ZERO-LOGIN & ШИФРОВАНИЕ)
+            // 3. ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ ДАННЫХ (ZERO-LOGIN & ШИФРОВАНИЕ)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -242,7 +336,7 @@ fun SettingsScreen(
                                 Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = "ОБЛАКО GOOGLE ДИСК",
+                                    text = "СИНХРОНИЗАЦИЯ ДАННЫХ",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -253,7 +347,7 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                             ) {
                                 Text(
-                                    text = "ПОДКЛЮЧЕНО",
+                                    text = "АКТИВНО",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.primary,
@@ -297,7 +391,7 @@ fun SettingsScreen(
                             } else {
                                 Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Синхронизировать с Google Диском", fontSize = 13.sp)
+                                Text("Синхронизировать данные", fontSize = 13.sp)
                             }
                         }
 
@@ -319,7 +413,8 @@ fun SettingsScreen(
                 var isCheckingUpdate by remember { mutableStateOf(false) }
                 var updateResult by remember { mutableStateOf<UpdateCheckResult?>(null) }
                 var updateStatusText by remember { mutableStateOf<String?>(null) }
-                val updateService = remember { com.trainerapp.pro.data.update.UpdateService(context) }
+                var isAutoInstall by remember { mutableStateOf(viewModel.isAutoInstallUpdatesEnabled) }
+                val currentVersionName = remember { viewModel.updateService.getCurrentVersionName() }
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -347,7 +442,7 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                             ) {
                                 Text(
-                                    text = "v1.0.1",
+                                    text = "v$currentVersionName",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.primary,
@@ -357,17 +452,35 @@ fun SettingsScreen(
                         }
 
                         Text(
-                            text = "Автоматическая проверка и скачивание новых релизов с GitHub.",
+                            text = "Автоматическая проверка и загрузка новых релизов приложения.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.secondary
                         )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Автоматическая установка обновлений", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Фоновое скачивание и запуск установки в фоне", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary)
+                            }
+                            Switch(
+                                checked = isAutoInstall,
+                                onCheckedChange = {
+                                    isAutoInstall = it
+                                    viewModel.isAutoInstallUpdatesEnabled = it
+                                }
+                            )
+                        }
 
                         Button(
                             onClick = {
                                 isCheckingUpdate = true
                                 updateStatusText = "Запрос к GitHub Releases..."
                                 scope.launch {
-                                    val res = updateService.checkForUpdates()
+                                    val res = viewModel.updateService.checkForUpdates()
                                     isCheckingUpdate = false
                                     if (res.isSuccess) {
                                         val data = res.getOrNull()
@@ -401,7 +514,7 @@ fun SettingsScreen(
                             Button(
                                 onClick = {
                                     updateStatusText = "Загрузка и установка обновления..."
-                                    updateService.downloadAndInstallApk(updateResult!!.downloadUrl!!)
+                                    viewModel.updateService.downloadAndInstallApk(updateResult!!.downloadUrl!!)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),

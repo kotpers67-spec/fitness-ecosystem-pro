@@ -86,14 +86,14 @@ class GoogleDriveSyncManager {
             }
 
             if (!rootObj.has("updates")) {
-                val defaultUpdates = JsonObject().apply {
-                    addProperty("trainerVersion", "1.0.3")
-                    addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.3/trainer-pro-v1.0.3.apk")
-                    addProperty("athleteVersion", "1.0.3")
-                    addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.3/athlete-pro-v1.0.3.apk")
-                    addProperty("notes", "Версия 1.0.3: Автофоновые обновления, экспорт в мессенджеры и импорт из файлов.")
-                }
-                rootObj.add("updates", defaultUpdates)
+            val defaultUpdates = JsonObject().apply {
+                addProperty("trainerVersion", "1.0.4")
+                addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.4/trainer-pro-v1.0.4.apk")
+                addProperty("athleteVersion", "1.0.4")
+                addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.4/athlete-pro-v1.0.4.apk")
+                addProperty("notes", "Версия 1.0.4: Карточка тренера, синхронизация фото, состязания и статистика упражнений.")
+            }
+            rootObj.add("updates", defaultUpdates)
             }
 
             // Ключом в облаке строго является clientUuid для изоляции данных подопечных
@@ -120,7 +120,13 @@ class GoogleDriveSyncManager {
      * Разрешает подопечного по 6-значному PIN-коду или QR-коду (JSON) из реестра pairing в Google Диске.
      * Создает или обновляет ClientEntity в локальной БД тренера и фиксирует статус PAIRED в облаке.
      */
-    suspend fun findAndPairAthlete(dao: TrainerDao, inputCodeOrJson: String): Result<ClientEntity> = withContext(Dispatchers.IO) {
+    suspend fun findAndPairAthlete(
+        dao: TrainerDao,
+        inputCodeOrJson: String,
+        coachName: String = "Алексей Романов",
+        coachPhone: String = "+7 (999) 123-45-67",
+        coachAvatarBase64: String? = null
+    ): Result<ClientEntity> = withContext(Dispatchers.IO) {
         try {
             val trimmedInput = inputCodeOrJson.trim()
             if (trimmedInput.isBlank()) {
@@ -239,12 +245,6 @@ class GoogleDriveSyncManager {
                 }
             }
 
-            // Если в облаке нет записи и нет UUID из QR, код не найден
-            if (athleteUuid.isNullOrBlank() && foundPairingKey == null) {
-                val formattedPin = if (cleanPin.length == 6) "${cleanPin.substring(0, 3)}-${cleanPin.substring(3)}" else cleanPin
-                return@withContext Result.failure(Exception("Подопечный с кодом $formattedPin не найден в облаке. Убедитесь, что Athlete Pro открыт на экране спаривания."))
-            }
-
             val finalUuid = athleteUuid ?: UUID.randomUUID().toString()
             val finalName = athleteName?.takeIf { it.isNotBlank() } ?: "Подопечный ${cleanPin.take(3)}-${cleanPin.takeLast(3)}"
             val finalPhone = athletePhone ?: ""
@@ -303,6 +303,11 @@ class GoogleDriveSyncManager {
                 pairingEntry.addProperty("pin", cleanPin)
                 pairingEntry.addProperty("clientUuid", finalUuid)
                 pairingEntry.addProperty("clientName", client.fullName)
+                pairingEntry.addProperty("coachName", coachName)
+                pairingEntry.addProperty("coachPhone", coachPhone)
+                if (!coachAvatarBase64.isNullOrBlank()) {
+                    pairingEntry.addProperty("coachAvatarBase64", coachAvatarBase64)
+                }
                 pairingEntry.addProperty("status", "PAIRED")
                 pairingEntry.addProperty("pairedAt", System.currentTimeMillis().toString())
 

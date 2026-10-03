@@ -53,16 +53,27 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                         if (pairingObj.has(cleanPin)) {
                             val pinEntry = pairingObj.getAsJsonObject(cleanPin)
                             val status = if (pinEntry.has("status")) pinEntry.get("status").asString else ""
-                            val coachName = if (pinEntry.has("coachName")) pinEntry.get("coachName").asString else "Тренер"
+                            val coachName = if (pinEntry.has("coachName")) pinEntry.get("coachName").asString else "Алексей Романов"
+                            val coachPhone = if (pinEntry.has("coachPhone")) pinEntry.get("coachPhone").asString else "+7 (999) 123-45-67"
+                            val coachB64 = if (pinEntry.has("coachAvatarBase64")) pinEntry.get("coachAvatarBase64").asString else null
+
                             if (status.equals("PAIRED", ignoreCase = true)) {
-                                if (!profile.isPairedWithCoach || profile.pairedCoachName != coachName) {
-                                    val up = dao.getProfile().firstOrNull() ?: profile
-                                    dao.saveProfile(up.copy(isPairedWithCoach = true, pairedCoachName = coachName))
-                                }
+                                val up = dao.getProfile().firstOrNull() ?: profile
+                                dao.saveProfile(up.copy(
+                                    isPairedWithCoach = true,
+                                    pairedCoachName = coachName,
+                                    pairedCoachPhone = coachPhone,
+                                    pairedCoachAvatarBase64 = coachB64
+                                ))
                             } else if (status.equals("UNPAIRED", ignoreCase = true) || status.equals("PENDING", ignoreCase = true)) {
                                 if (profile.isPairedWithCoach) {
                                     val up = dao.getProfile().firstOrNull() ?: profile
-                                    dao.saveProfile(up.copy(isPairedWithCoach = false, pairedCoachName = ""))
+                                    dao.saveProfile(up.copy(
+                                        isPairedWithCoach = false,
+                                        pairedCoachName = "",
+                                        pairedCoachPhone = "",
+                                        pairedCoachAvatarBase64 = null
+                                    ))
                                 }
                             }
                         }
@@ -144,11 +155,11 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             }
             if (!rootObj.has("updates")) {
                 val defaultUpdates = JsonObject().apply {
-                    addProperty("trainerVersion", "1.0.3")
-                    addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.3/trainer-pro-v1.0.3.apk")
-                    addProperty("athleteVersion", "1.0.3")
-                    addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.3/athlete-pro-v1.0.3.apk")
-                    addProperty("notes", "Версия 1.0.3: Автофоновые обновления, экспорт в мессенджеры и импорт из файлов.")
+                    addProperty("trainerVersion", "1.0.4")
+                    addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.4/trainer-pro-v1.0.4.apk")
+                    addProperty("athleteVersion", "1.0.4")
+                    addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.4/athlete-pro-v1.0.4.apk")
+                    addProperty("notes", "Версия 1.0.4: Карточка тренера, синхронизация фото, состязания и статистика упражнений.")
                 }
                 rootObj.add("updates", defaultUpdates)
             }

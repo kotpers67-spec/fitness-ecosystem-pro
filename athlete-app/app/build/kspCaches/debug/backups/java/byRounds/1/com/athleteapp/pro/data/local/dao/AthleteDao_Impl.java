@@ -67,7 +67,7 @@ public final class AthleteDao_Impl implements AthleteDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR REPLACE INTO `athlete_profile` (`id`,`clientUuid`,`athleteIdInCoachBase`,`fullName`,`phone`,`goal`,`notes`,`restrictions`,`avatarPath`,`photoUri`,`avatarBase64`,`pairingPin`,`isPairedWithCoach`,`pairedCoachName`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        return "INSERT OR REPLACE INTO `athlete_profile` (`id`,`clientUuid`,`athleteIdInCoachBase`,`fullName`,`phone`,`goal`,`notes`,`restrictions`,`avatarPath`,`photoUri`,`avatarBase64`,`pairingPin`,`isPairedWithCoach`,`pairedCoachName`,`pairedCoachPhone`,`pairedCoachPhotoUri`,`pairedCoachAvatarBase64`,`isPrivateLeaderboard`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -100,6 +100,19 @@ public final class AthleteDao_Impl implements AthleteDao {
         final int _tmp = entity.isPairedWithCoach() ? 1 : 0;
         statement.bindLong(13, _tmp);
         statement.bindString(14, entity.getPairedCoachName());
+        statement.bindString(15, entity.getPairedCoachPhone());
+        if (entity.getPairedCoachPhotoUri() == null) {
+          statement.bindNull(16);
+        } else {
+          statement.bindString(16, entity.getPairedCoachPhotoUri());
+        }
+        if (entity.getPairedCoachAvatarBase64() == null) {
+          statement.bindNull(17);
+        } else {
+          statement.bindString(17, entity.getPairedCoachAvatarBase64());
+        }
+        final int _tmp_1 = entity.isPrivateLeaderboard() ? 1 : 0;
+        statement.bindLong(18, _tmp_1);
       }
     };
     this.__insertionAdapterOfAssignedExerciseEntity = new EntityInsertionAdapter<AssignedExerciseEntity>(__db) {
@@ -558,6 +571,10 @@ public final class AthleteDao_Impl implements AthleteDao {
           final int _cursorIndexOfPairingPin = CursorUtil.getColumnIndexOrThrow(_cursor, "pairingPin");
           final int _cursorIndexOfIsPairedWithCoach = CursorUtil.getColumnIndexOrThrow(_cursor, "isPairedWithCoach");
           final int _cursorIndexOfPairedCoachName = CursorUtil.getColumnIndexOrThrow(_cursor, "pairedCoachName");
+          final int _cursorIndexOfPairedCoachPhone = CursorUtil.getColumnIndexOrThrow(_cursor, "pairedCoachPhone");
+          final int _cursorIndexOfPairedCoachPhotoUri = CursorUtil.getColumnIndexOrThrow(_cursor, "pairedCoachPhotoUri");
+          final int _cursorIndexOfPairedCoachAvatarBase64 = CursorUtil.getColumnIndexOrThrow(_cursor, "pairedCoachAvatarBase64");
+          final int _cursorIndexOfIsPrivateLeaderboard = CursorUtil.getColumnIndexOrThrow(_cursor, "isPrivateLeaderboard");
           final AthleteProfileEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -602,7 +619,25 @@ public final class AthleteDao_Impl implements AthleteDao {
             _tmpIsPairedWithCoach = _tmp != 0;
             final String _tmpPairedCoachName;
             _tmpPairedCoachName = _cursor.getString(_cursorIndexOfPairedCoachName);
-            _result = new AthleteProfileEntity(_tmpId,_tmpClientUuid,_tmpAthleteIdInCoachBase,_tmpFullName,_tmpPhone,_tmpGoal,_tmpNotes,_tmpRestrictions,_tmpAvatarPath,_tmpPhotoUri,_tmpAvatarBase64,_tmpPairingPin,_tmpIsPairedWithCoach,_tmpPairedCoachName);
+            final String _tmpPairedCoachPhone;
+            _tmpPairedCoachPhone = _cursor.getString(_cursorIndexOfPairedCoachPhone);
+            final String _tmpPairedCoachPhotoUri;
+            if (_cursor.isNull(_cursorIndexOfPairedCoachPhotoUri)) {
+              _tmpPairedCoachPhotoUri = null;
+            } else {
+              _tmpPairedCoachPhotoUri = _cursor.getString(_cursorIndexOfPairedCoachPhotoUri);
+            }
+            final String _tmpPairedCoachAvatarBase64;
+            if (_cursor.isNull(_cursorIndexOfPairedCoachAvatarBase64)) {
+              _tmpPairedCoachAvatarBase64 = null;
+            } else {
+              _tmpPairedCoachAvatarBase64 = _cursor.getString(_cursorIndexOfPairedCoachAvatarBase64);
+            }
+            final boolean _tmpIsPrivateLeaderboard;
+            final int _tmp_1;
+            _tmp_1 = _cursor.getInt(_cursorIndexOfIsPrivateLeaderboard);
+            _tmpIsPrivateLeaderboard = _tmp_1 != 0;
+            _result = new AthleteProfileEntity(_tmpId,_tmpClientUuid,_tmpAthleteIdInCoachBase,_tmpFullName,_tmpPhone,_tmpGoal,_tmpNotes,_tmpRestrictions,_tmpAvatarPath,_tmpPhotoUri,_tmpAvatarBase64,_tmpPairingPin,_tmpIsPairedWithCoach,_tmpPairedCoachName,_tmpPairedCoachPhone,_tmpPairedCoachPhotoUri,_tmpPairedCoachAvatarBase64,_tmpIsPrivateLeaderboard);
           } else {
             _result = null;
           }
@@ -1053,6 +1088,80 @@ public final class AthleteDao_Impl implements AthleteDao {
         }
       }
     }, $completion);
+  }
+
+  @Override
+  public Flow<List<MyWorkoutSetEntity>> getAllSets() {
+    final String _sql = "SELECT * FROM my_workout_sets ORDER BY sessionId ASC, exerciseOrder ASC, setNumber ASC";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 0);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"my_workout_sets"}, new Callable<List<MyWorkoutSetEntity>>() {
+      @Override
+      @NonNull
+      public List<MyWorkoutSetEntity> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
+          final int _cursorIndexOfSessionId = CursorUtil.getColumnIndexOrThrow(_cursor, "sessionId");
+          final int _cursorIndexOfExerciseId = CursorUtil.getColumnIndexOrThrow(_cursor, "exerciseId");
+          final int _cursorIndexOfExerciseName = CursorUtil.getColumnIndexOrThrow(_cursor, "exerciseName");
+          final int _cursorIndexOfMuscleGroup = CursorUtil.getColumnIndexOrThrow(_cursor, "muscleGroup");
+          final int _cursorIndexOfExerciseOrder = CursorUtil.getColumnIndexOrThrow(_cursor, "exerciseOrder");
+          final int _cursorIndexOfSetNumber = CursorUtil.getColumnIndexOrThrow(_cursor, "setNumber");
+          final int _cursorIndexOfTargetWeightKg = CursorUtil.getColumnIndexOrThrow(_cursor, "targetWeightKg");
+          final int _cursorIndexOfTargetReps = CursorUtil.getColumnIndexOrThrow(_cursor, "targetReps");
+          final int _cursorIndexOfActualWeightKg = CursorUtil.getColumnIndexOrThrow(_cursor, "actualWeightKg");
+          final int _cursorIndexOfActualReps = CursorUtil.getColumnIndexOrThrow(_cursor, "actualReps");
+          final int _cursorIndexOfIsCompleted = CursorUtil.getColumnIndexOrThrow(_cursor, "isCompleted");
+          final int _cursorIndexOfRpe = CursorUtil.getColumnIndexOrThrow(_cursor, "rpe");
+          final List<MyWorkoutSetEntity> _result = new ArrayList<MyWorkoutSetEntity>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final MyWorkoutSetEntity _item;
+            final long _tmpId;
+            _tmpId = _cursor.getLong(_cursorIndexOfId);
+            final long _tmpSessionId;
+            _tmpSessionId = _cursor.getLong(_cursorIndexOfSessionId);
+            final long _tmpExerciseId;
+            _tmpExerciseId = _cursor.getLong(_cursorIndexOfExerciseId);
+            final String _tmpExerciseName;
+            _tmpExerciseName = _cursor.getString(_cursorIndexOfExerciseName);
+            final String _tmpMuscleGroup;
+            _tmpMuscleGroup = _cursor.getString(_cursorIndexOfMuscleGroup);
+            final int _tmpExerciseOrder;
+            _tmpExerciseOrder = _cursor.getInt(_cursorIndexOfExerciseOrder);
+            final int _tmpSetNumber;
+            _tmpSetNumber = _cursor.getInt(_cursorIndexOfSetNumber);
+            final double _tmpTargetWeightKg;
+            _tmpTargetWeightKg = _cursor.getDouble(_cursorIndexOfTargetWeightKg);
+            final int _tmpTargetReps;
+            _tmpTargetReps = _cursor.getInt(_cursorIndexOfTargetReps);
+            final double _tmpActualWeightKg;
+            _tmpActualWeightKg = _cursor.getDouble(_cursorIndexOfActualWeightKg);
+            final int _tmpActualReps;
+            _tmpActualReps = _cursor.getInt(_cursorIndexOfActualReps);
+            final boolean _tmpIsCompleted;
+            final int _tmp;
+            _tmp = _cursor.getInt(_cursorIndexOfIsCompleted);
+            _tmpIsCompleted = _tmp != 0;
+            final Double _tmpRpe;
+            if (_cursor.isNull(_cursorIndexOfRpe)) {
+              _tmpRpe = null;
+            } else {
+              _tmpRpe = _cursor.getDouble(_cursorIndexOfRpe);
+            }
+            _item = new MyWorkoutSetEntity(_tmpId,_tmpSessionId,_tmpExerciseId,_tmpExerciseName,_tmpMuscleGroup,_tmpExerciseOrder,_tmpSetNumber,_tmpTargetWeightKg,_tmpTargetReps,_tmpActualWeightKg,_tmpActualReps,_tmpIsCompleted,_tmpRpe);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
   }
 
   @Override

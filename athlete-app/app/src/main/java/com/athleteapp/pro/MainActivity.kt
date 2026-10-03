@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -77,6 +78,16 @@ class MainActivity : ComponentActivity() {
                                 label = { Text(if (lang == "en") "Progress" else "Прогресс") }
                             )
                             NavigationBarItem(
+                                selected = currentRoute == "leaderboard",
+                                onClick = {
+                                    navController.navigate("leaderboard") {
+                                        popUpTo("today")
+                                    }
+                                },
+                                icon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
+                                label = { Text(if (lang == "en") "Leaderboard" else "Состязания") }
+                            )
+                            NavigationBarItem(
                                 selected = currentRoute == "settings",
                                 onClick = {
                                     navController.navigate("settings") {
@@ -99,6 +110,9 @@ class MainActivity : ComponentActivity() {
                         }
                         composable("history") {
                             AthleteHistoryScreen(viewModel = viewModel)
+                        }
+                        composable("leaderboard") {
+                            com.athleteapp.pro.ui.screens.LeaderboardScreen(viewModel = viewModel)
                         }
                         composable("settings") {
                             AthleteSettingsScreen(viewModel = viewModel)

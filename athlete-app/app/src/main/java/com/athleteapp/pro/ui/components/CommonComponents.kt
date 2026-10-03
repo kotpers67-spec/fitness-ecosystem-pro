@@ -35,14 +35,23 @@ fun AthleteAvatar(
     modifier: Modifier = Modifier,
     size: Dp = 40.dp,
     borderWidth: Dp = 1.5.dp,
-    contentDescription: String = "Аватар атлета"
+    defaultResId: Int = R.drawable.avatar_athlete,
+    contentDescription: String = "Аватар"
 ) {
     val bitmap = remember(avatarPath) {
         if (!avatarPath.isNullOrBlank()) {
             val file = File(avatarPath)
             if (file.exists()) {
                 BitmapFactory.decodeFile(avatarPath)?.asImageBitmap()
-            } else null
+            } else {
+                try {
+                    val cleanB64 = if (avatarPath.contains(",")) avatarPath.substringAfter(",") else avatarPath
+                    val bytes = android.util.Base64.decode(cleanB64, android.util.Base64.NO_WRAP)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                } catch (_: Exception) {
+                    null
+                }
+            }
         } else null
     }
 
@@ -62,7 +71,7 @@ fun AthleteAvatar(
             )
         } else {
             Image(
-                painter = painterResource(id = R.drawable.avatar_athlete),
+                painter = painterResource(id = defaultResId),
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop

@@ -84,7 +84,7 @@ public final class TrainerDao_Impl implements TrainerDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR REPLACE INTO `clients` (`id`,`fullName`,`phone`,`goal`,`membershipStatus`,`membershipExpiryDate`,`notes`,`clientUuid`,`pairingCode`,`createdAt`) VALUES (nullif(?, 0),?,?,?,?,?,?,?,?,?)";
+        return "INSERT OR REPLACE INTO `clients` (`id`,`fullName`,`phone`,`goal`,`membershipStatus`,`membershipExpiryDate`,`notes`,`clientUuid`,`pairingCode`,`createdAt`,`photoUri`,`avatarBase64`) VALUES (nullif(?, 0),?,?,?,?,?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -100,6 +100,16 @@ public final class TrainerDao_Impl implements TrainerDao {
         statement.bindString(8, entity.getClientUuid());
         statement.bindString(9, entity.getPairingCode());
         statement.bindLong(10, entity.getCreatedAt());
+        if (entity.getPhotoUri() == null) {
+          statement.bindNull(11);
+        } else {
+          statement.bindString(11, entity.getPhotoUri());
+        }
+        if (entity.getAvatarBase64() == null) {
+          statement.bindNull(12);
+        } else {
+          statement.bindString(12, entity.getAvatarBase64());
+        }
       }
     };
     this.__insertionAdapterOfExerciseEntity = new EntityInsertionAdapter<ExerciseEntity>(__db) {
@@ -332,7 +342,7 @@ public final class TrainerDao_Impl implements TrainerDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "UPDATE OR ABORT `clients` SET `id` = ?,`fullName` = ?,`phone` = ?,`goal` = ?,`membershipStatus` = ?,`membershipExpiryDate` = ?,`notes` = ?,`clientUuid` = ?,`pairingCode` = ?,`createdAt` = ? WHERE `id` = ?";
+        return "UPDATE OR ABORT `clients` SET `id` = ?,`fullName` = ?,`phone` = ?,`goal` = ?,`membershipStatus` = ?,`membershipExpiryDate` = ?,`notes` = ?,`clientUuid` = ?,`pairingCode` = ?,`createdAt` = ?,`photoUri` = ?,`avatarBase64` = ? WHERE `id` = ?";
       }
 
       @Override
@@ -348,7 +358,17 @@ public final class TrainerDao_Impl implements TrainerDao {
         statement.bindString(8, entity.getClientUuid());
         statement.bindString(9, entity.getPairingCode());
         statement.bindLong(10, entity.getCreatedAt());
-        statement.bindLong(11, entity.getId());
+        if (entity.getPhotoUri() == null) {
+          statement.bindNull(11);
+        } else {
+          statement.bindString(11, entity.getPhotoUri());
+        }
+        if (entity.getAvatarBase64() == null) {
+          statement.bindNull(12);
+        } else {
+          statement.bindString(12, entity.getAvatarBase64());
+        }
+        statement.bindLong(13, entity.getId());
       }
     };
     this.__updateAdapterOfExerciseEntity = new EntityDeletionOrUpdateAdapter<ExerciseEntity>(__db) {
@@ -818,6 +838,8 @@ public final class TrainerDao_Impl implements TrainerDao {
           final int _cursorIndexOfClientUuid = CursorUtil.getColumnIndexOrThrow(_cursor, "clientUuid");
           final int _cursorIndexOfPairingCode = CursorUtil.getColumnIndexOrThrow(_cursor, "pairingCode");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
+          final int _cursorIndexOfPhotoUri = CursorUtil.getColumnIndexOrThrow(_cursor, "photoUri");
+          final int _cursorIndexOfAvatarBase64 = CursorUtil.getColumnIndexOrThrow(_cursor, "avatarBase64");
           final List<ClientEntity> _result = new ArrayList<ClientEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final ClientEntity _item;
@@ -841,7 +863,19 @@ public final class TrainerDao_Impl implements TrainerDao {
             _tmpPairingCode = _cursor.getString(_cursorIndexOfPairingCode);
             final long _tmpCreatedAt;
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
-            _item = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt);
+            final String _tmpPhotoUri;
+            if (_cursor.isNull(_cursorIndexOfPhotoUri)) {
+              _tmpPhotoUri = null;
+            } else {
+              _tmpPhotoUri = _cursor.getString(_cursorIndexOfPhotoUri);
+            }
+            final String _tmpAvatarBase64;
+            if (_cursor.isNull(_cursorIndexOfAvatarBase64)) {
+              _tmpAvatarBase64 = null;
+            } else {
+              _tmpAvatarBase64 = _cursor.getString(_cursorIndexOfAvatarBase64);
+            }
+            _item = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt,_tmpPhotoUri,_tmpAvatarBase64);
             _result.add(_item);
           }
           return _result;
@@ -880,6 +914,8 @@ public final class TrainerDao_Impl implements TrainerDao {
           final int _cursorIndexOfClientUuid = CursorUtil.getColumnIndexOrThrow(_cursor, "clientUuid");
           final int _cursorIndexOfPairingCode = CursorUtil.getColumnIndexOrThrow(_cursor, "pairingCode");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
+          final int _cursorIndexOfPhotoUri = CursorUtil.getColumnIndexOrThrow(_cursor, "photoUri");
+          final int _cursorIndexOfAvatarBase64 = CursorUtil.getColumnIndexOrThrow(_cursor, "avatarBase64");
           final ClientEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -902,7 +938,19 @@ public final class TrainerDao_Impl implements TrainerDao {
             _tmpPairingCode = _cursor.getString(_cursorIndexOfPairingCode);
             final long _tmpCreatedAt;
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
-            _result = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt);
+            final String _tmpPhotoUri;
+            if (_cursor.isNull(_cursorIndexOfPhotoUri)) {
+              _tmpPhotoUri = null;
+            } else {
+              _tmpPhotoUri = _cursor.getString(_cursorIndexOfPhotoUri);
+            }
+            final String _tmpAvatarBase64;
+            if (_cursor.isNull(_cursorIndexOfAvatarBase64)) {
+              _tmpAvatarBase64 = null;
+            } else {
+              _tmpAvatarBase64 = _cursor.getString(_cursorIndexOfAvatarBase64);
+            }
+            _result = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt,_tmpPhotoUri,_tmpAvatarBase64);
           } else {
             _result = null;
           }
@@ -939,6 +987,8 @@ public final class TrainerDao_Impl implements TrainerDao {
           final int _cursorIndexOfClientUuid = CursorUtil.getColumnIndexOrThrow(_cursor, "clientUuid");
           final int _cursorIndexOfPairingCode = CursorUtil.getColumnIndexOrThrow(_cursor, "pairingCode");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
+          final int _cursorIndexOfPhotoUri = CursorUtil.getColumnIndexOrThrow(_cursor, "photoUri");
+          final int _cursorIndexOfAvatarBase64 = CursorUtil.getColumnIndexOrThrow(_cursor, "avatarBase64");
           final ClientEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -961,7 +1011,19 @@ public final class TrainerDao_Impl implements TrainerDao {
             _tmpPairingCode = _cursor.getString(_cursorIndexOfPairingCode);
             final long _tmpCreatedAt;
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
-            _result = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt);
+            final String _tmpPhotoUri;
+            if (_cursor.isNull(_cursorIndexOfPhotoUri)) {
+              _tmpPhotoUri = null;
+            } else {
+              _tmpPhotoUri = _cursor.getString(_cursorIndexOfPhotoUri);
+            }
+            final String _tmpAvatarBase64;
+            if (_cursor.isNull(_cursorIndexOfAvatarBase64)) {
+              _tmpAvatarBase64 = null;
+            } else {
+              _tmpAvatarBase64 = _cursor.getString(_cursorIndexOfAvatarBase64);
+            }
+            _result = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt,_tmpPhotoUri,_tmpAvatarBase64);
           } else {
             _result = null;
           }
@@ -998,6 +1060,8 @@ public final class TrainerDao_Impl implements TrainerDao {
           final int _cursorIndexOfClientUuid = CursorUtil.getColumnIndexOrThrow(_cursor, "clientUuid");
           final int _cursorIndexOfPairingCode = CursorUtil.getColumnIndexOrThrow(_cursor, "pairingCode");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
+          final int _cursorIndexOfPhotoUri = CursorUtil.getColumnIndexOrThrow(_cursor, "photoUri");
+          final int _cursorIndexOfAvatarBase64 = CursorUtil.getColumnIndexOrThrow(_cursor, "avatarBase64");
           final ClientEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -1020,7 +1084,19 @@ public final class TrainerDao_Impl implements TrainerDao {
             _tmpPairingCode = _cursor.getString(_cursorIndexOfPairingCode);
             final long _tmpCreatedAt;
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
-            _result = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt);
+            final String _tmpPhotoUri;
+            if (_cursor.isNull(_cursorIndexOfPhotoUri)) {
+              _tmpPhotoUri = null;
+            } else {
+              _tmpPhotoUri = _cursor.getString(_cursorIndexOfPhotoUri);
+            }
+            final String _tmpAvatarBase64;
+            if (_cursor.isNull(_cursorIndexOfAvatarBase64)) {
+              _tmpAvatarBase64 = null;
+            } else {
+              _tmpAvatarBase64 = _cursor.getString(_cursorIndexOfAvatarBase64);
+            }
+            _result = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt,_tmpPhotoUri,_tmpAvatarBase64);
           } else {
             _result = null;
           }
@@ -1842,6 +1918,8 @@ public final class TrainerDao_Impl implements TrainerDao {
           final int _cursorIndexOfClientUuid = CursorUtil.getColumnIndexOrThrow(_cursor, "clientUuid");
           final int _cursorIndexOfPairingCode = CursorUtil.getColumnIndexOrThrow(_cursor, "pairingCode");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
+          final int _cursorIndexOfPhotoUri = CursorUtil.getColumnIndexOrThrow(_cursor, "photoUri");
+          final int _cursorIndexOfAvatarBase64 = CursorUtil.getColumnIndexOrThrow(_cursor, "avatarBase64");
           final List<ClientEntity> _result = new ArrayList<ClientEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final ClientEntity _item;
@@ -1865,7 +1943,19 @@ public final class TrainerDao_Impl implements TrainerDao {
             _tmpPairingCode = _cursor.getString(_cursorIndexOfPairingCode);
             final long _tmpCreatedAt;
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
-            _item = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt);
+            final String _tmpPhotoUri;
+            if (_cursor.isNull(_cursorIndexOfPhotoUri)) {
+              _tmpPhotoUri = null;
+            } else {
+              _tmpPhotoUri = _cursor.getString(_cursorIndexOfPhotoUri);
+            }
+            final String _tmpAvatarBase64;
+            if (_cursor.isNull(_cursorIndexOfAvatarBase64)) {
+              _tmpAvatarBase64 = null;
+            } else {
+              _tmpAvatarBase64 = _cursor.getString(_cursorIndexOfAvatarBase64);
+            }
+            _item = new ClientEntity(_tmpId,_tmpFullName,_tmpPhone,_tmpGoal,_tmpMembershipStatus,_tmpMembershipExpiryDate,_tmpNotes,_tmpClientUuid,_tmpPairingCode,_tmpCreatedAt,_tmpPhotoUri,_tmpAvatarBase64);
             _result.add(_item);
           }
           return _result;

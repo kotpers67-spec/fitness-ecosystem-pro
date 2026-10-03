@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -235,4 +236,55 @@ fun OneRepMaxCalculatorDialog(
             }
         }
     )
+}
+
+
+@Composable
+fun ClientAvatar(
+    photoUri: String?,
+    avatarBase64: String?,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 38.dp,
+    borderWidth: androidx.compose.ui.unit.Dp = 1.5.dp,
+    defaultResId: Int = com.trainerapp.pro.R.drawable.avatar_athlete,
+    contentDescription: String = "Аватар"
+) {
+    val bitmap = remember(photoUri, avatarBase64) {
+        if (!photoUri.isNullOrBlank()) {
+            val file = java.io.File(photoUri)
+            if (file.exists()) {
+                android.graphics.BitmapFactory.decodeFile(photoUri)?.asImageBitmap()
+            } else null
+        } else if (!avatarBase64.isNullOrBlank()) {
+            try {
+                val cleanB64 = if (avatarBase64.contains(",")) avatarBase64.substringAfter(",") else avatarBase64
+                val bytes = android.util.Base64.decode(cleanB64, android.util.Base64.NO_WRAP)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            } catch (_: Exception) { null }
+        } else null
+    }
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .border(borderWidth, MaterialTheme.colorScheme.primary, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = bitmap,
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+        } else {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = defaultResId),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+        }
+    }
 }

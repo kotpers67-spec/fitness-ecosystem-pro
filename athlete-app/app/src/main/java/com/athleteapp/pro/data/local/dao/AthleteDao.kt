@@ -72,6 +72,9 @@ interface AthleteDao {
     suspend fun getCompletedSetsForExercise(exerciseId: Long): List<MyWorkoutSetEntity>
 
     @Query("SELECT * FROM my_workout_sets ORDER BY sessionId ASC, exerciseOrder ASC, setNumber ASC")
+    fun getAllSets(): Flow<List<MyWorkoutSetEntity>>
+
+    @Query("SELECT * FROM my_workout_sets ORDER BY sessionId ASC, exerciseOrder ASC, setNumber ASC")
     suspend fun getAllSetsSync(): List<MyWorkoutSetEntity>
 
     @Query("SELECT * FROM my_workout_sessions ORDER BY date ASC")

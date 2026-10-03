@@ -37,7 +37,7 @@ public final class TrainerDatabase_Impl extends TrainerDatabase {
     final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(3) {
       @Override
       public void createAllTables(@NonNull final SupportSQLiteDatabase db) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS `clients` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fullName` TEXT NOT NULL, `phone` TEXT NOT NULL, `goal` TEXT NOT NULL, `membershipStatus` TEXT NOT NULL, `membershipExpiryDate` TEXT NOT NULL, `notes` TEXT NOT NULL, `clientUuid` TEXT NOT NULL, `pairingCode` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `clients` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fullName` TEXT NOT NULL, `phone` TEXT NOT NULL, `goal` TEXT NOT NULL, `membershipStatus` TEXT NOT NULL, `membershipExpiryDate` TEXT NOT NULL, `notes` TEXT NOT NULL, `clientUuid` TEXT NOT NULL, `pairingCode` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `photoUri` TEXT, `avatarBase64` TEXT)");
         db.execSQL("CREATE TABLE IF NOT EXISTS `anthropometry` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `clientId` INTEGER NOT NULL, `date` TEXT NOT NULL, `weightKg` REAL NOT NULL, `chestCm` REAL, `waistCm` REAL, `hipsCm` REAL, `bicepsCm` REAL, `thighCm` REAL, FOREIGN KEY(`clientId`) REFERENCES `clients`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )");
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_anthropometry_clientId` ON `anthropometry` (`clientId`)");
         db.execSQL("CREATE TABLE IF NOT EXISTS `exercises` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `muscleGroup` TEXT NOT NULL, `defaultRestSeconds` INTEGER NOT NULL, `isCustom` INTEGER NOT NULL, `description` TEXT NOT NULL)");
@@ -51,7 +51,7 @@ public final class TrainerDatabase_Impl extends TrainerDatabase {
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_appointments_clientId` ON `appointments` (`clientId`)");
         db.execSQL("CREATE TABLE IF NOT EXISTS `app_settings` (`id` INTEGER NOT NULL, `currentThemeName` TEXT NOT NULL, `currentLayoutStyleName` TEXT NOT NULL, `selectedClientId` INTEGER, `language` TEXT NOT NULL, `githubToken` TEXT NOT NULL, `githubRepo` TEXT NOT NULL, `soundEnabled` INTEGER NOT NULL, `vibrationEnabled` INTEGER NOT NULL, `autoStartTimer` INTEGER NOT NULL, `defaultRestTimeSeconds` INTEGER NOT NULL, `bleSyncEnabled` INTEGER NOT NULL, PRIMARY KEY(`id`))");
         db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)");
-        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5a2c4b918203b4b7718a4e964a8e2a83')");
+        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4fb7365c4c385f2f830b12bfb055ee08')");
       }
 
       @Override
@@ -107,7 +107,7 @@ public final class TrainerDatabase_Impl extends TrainerDatabase {
       @NonNull
       public RoomOpenHelper.ValidationResult onValidateSchema(
           @NonNull final SupportSQLiteDatabase db) {
-        final HashMap<String, TableInfo.Column> _columnsClients = new HashMap<String, TableInfo.Column>(10);
+        final HashMap<String, TableInfo.Column> _columnsClients = new HashMap<String, TableInfo.Column>(12);
         _columnsClients.put("id", new TableInfo.Column("id", "INTEGER", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsClients.put("fullName", new TableInfo.Column("fullName", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsClients.put("phone", new TableInfo.Column("phone", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
@@ -118,6 +118,8 @@ public final class TrainerDatabase_Impl extends TrainerDatabase {
         _columnsClients.put("clientUuid", new TableInfo.Column("clientUuid", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsClients.put("pairingCode", new TableInfo.Column("pairingCode", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsClients.put("createdAt", new TableInfo.Column("createdAt", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsClients.put("photoUri", new TableInfo.Column("photoUri", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsClients.put("avatarBase64", new TableInfo.Column("avatarBase64", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
         final HashSet<TableInfo.ForeignKey> _foreignKeysClients = new HashSet<TableInfo.ForeignKey>(0);
         final HashSet<TableInfo.Index> _indicesClients = new HashSet<TableInfo.Index>(0);
         final TableInfo _infoClients = new TableInfo("clients", _columnsClients, _foreignKeysClients, _indicesClients);
@@ -247,7 +249,7 @@ public final class TrainerDatabase_Impl extends TrainerDatabase {
         }
         return new RoomOpenHelper.ValidationResult(true, null);
       }
-    }, "5a2c4b918203b4b7718a4e964a8e2a83", "7c4fd0152feb6decf83ebf56d2fcf595");
+    }, "4fb7365c4c385f2f830b12bfb055ee08", "da4c494618b92d77899571a31e15efd7");
     final SupportSQLiteOpenHelper.Configuration _sqliteConfig = SupportSQLiteOpenHelper.Configuration.builder(config.context).name(config.name).callback(_openCallback).build();
     final SupportSQLiteOpenHelper _helper = config.sqliteOpenHelperFactory.create(_sqliteConfig);
     return _helper;

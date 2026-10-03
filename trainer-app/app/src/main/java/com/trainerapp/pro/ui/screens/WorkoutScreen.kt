@@ -428,6 +428,12 @@ fun WorkoutScreen(
             onSelect = { exerciseId ->
                 viewModel.addExerciseToSession(exerciseId)
                 showAddExerciseDialog = false
+            },
+            onViewStats = { exerciseId ->
+                scope.launch {
+                    statsSummary = viewModel.getLastExerciseStats(exerciseId)
+                    showExerciseStatsDialog = true
+                }
             }
         )
     }
@@ -651,7 +657,8 @@ fun SetRowItem(
 fun AddExerciseToSessionDialog(
     exercises: List<ExerciseEntity>,
     onDismiss: () -> Unit,
-    onSelect: (Long) -> Unit
+    onSelect: (Long) -> Unit,
+    onViewStats: (Long) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedMuscleGroup by remember { mutableStateOf("Все") }
@@ -705,11 +712,18 @@ fun AddExerciseToSessionDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(ex.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                     Text(ex.muscleGroup, fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary)
                                 }
-                                Icon(Icons.Default.AddCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = { onViewStats(ex.id) }) {
+                                        Icon(Icons.Default.BarChart, contentDescription = "Статистика", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    IconButton(onClick = { onSelect(ex.id) }) {
+                                        Icon(Icons.Default.AddCircle, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
                             }
                         }
                     }

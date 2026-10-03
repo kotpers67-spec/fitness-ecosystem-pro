@@ -82,6 +82,7 @@ class GitHubSyncManager {
             pairingCode = client.pairingCode,
             syncTimestamp = System.currentTimeMillis(),
             clientName = client.fullName,
+            avatarBase64 = client.avatarBase64,
             assignedWorkouts = assignedWorkouts,
             anthropometry = syncAnthropometry
         )
@@ -210,6 +211,11 @@ class GitHubSyncManager {
 
             var updatedSetsCount = 0
             var addedAnthroCount = 0
+
+            val existingClient = dao.getClientById(clientId)
+            if (existingClient != null && !payload.avatarBase64.isNullOrBlank() && existingClient.avatarBase64 != payload.avatarBase64) {
+                dao.updateClient(existingClient.copy(avatarBase64 = payload.avatarBase64))
+            }
 
             // 1. Обновляем сессии и выполненные подходы
             for (syncWorkout in payload.assignedWorkouts) {

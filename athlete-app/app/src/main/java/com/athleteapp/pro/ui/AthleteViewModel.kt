@@ -55,6 +55,12 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     val anthropometry: StateFlow<List<MyAnthropometryEntity>> = dao.getAllAnthropometry()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allSessions: StateFlow<List<MyWorkoutSessionEntity>> = dao.getAllSessions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allSets: StateFlow<List<MyWorkoutSetEntity>> = dao.getAllSets()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Current Session & Sets
     private val _currentSession = MutableStateFlow<MyWorkoutSessionEntity?>(null)
     val currentSession: StateFlow<MyWorkoutSessionEntity?> = _currentSession.asStateFlow()
@@ -89,6 +95,11 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     private var sessionJob: Job? = null
     private var historyJob: Job? = null
 
+    private val prefs = application.getSharedPreferences("athlete_settings", Context.MODE_PRIVATE)
+    var isAutoInstallUpdatesEnabled: Boolean
+        get() = prefs.getBoolean("auto_install_updates", true)
+        set(value) = prefs.edit().putBoolean("auto_install_updates", value).apply()
+
     init {
         loadSessionForDate(_selectedDate.value)
 
@@ -111,7 +122,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                     val updateInfo = checkRes.getOrNull()
                     if (updateInfo?.isUpdateAvailable == true && !updateInfo.downloadUrl.isNullOrBlank()) {
                         _availableUpdate.value = updateInfo
-                        if (updateInfo.latestVersion != lastAutoUpdateVersion) {
+                        if (isAutoInstallUpdatesEnabled && updateInfo.latestVersion != lastAutoUpdateVersion) {
                             lastAutoUpdateVersion = updateInfo.latestVersion
                             updateService.downloadAndInstallApk(updateInfo.downloadUrl)
                         }
@@ -358,6 +369,15 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
             _syncMessage.value = "Отключение от тренера..."
             val result = googleDriveSync.unpairFromCoach()
             _syncMessage.value = if (result.isSuccess) result.getOrNull() else "Ошибка: ${result.exceptionOrNull()?.message}"
+        }
+    }
+
+    fun setPrivateLeaderboard(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = profile.value ?: AthleteProfileEntity()
+            dao.saveProfile(current.copy(isPrivateLeaderboard = enabled))
+            _syncMessage.value = if (enabled) "Приватность включена: Вы скрыты в состязаниях" else "Приватность отключена: Вы участвуете в состязаниях"
+            autoSync()
         }
     }
 

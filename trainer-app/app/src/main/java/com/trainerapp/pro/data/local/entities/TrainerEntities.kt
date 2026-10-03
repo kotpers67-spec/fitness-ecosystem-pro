@@ -18,7 +18,9 @@ data class ClientEntity(
     val notes: String = "",
     val clientUuid: String = UUID.randomUUID().toString(),
     val pairingCode: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val photoUri: String? = null,
+    val avatarBase64: String? = null
 )
 
 @Entity(

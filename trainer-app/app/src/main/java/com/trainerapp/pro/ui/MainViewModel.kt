@@ -109,6 +109,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var loadSessionJob: Job? = null
 
+    private val prefs = application.getSharedPreferences("trainer_settings", android.content.Context.MODE_PRIVATE)
+    var isAutoInstallUpdatesEnabled: Boolean
+        get() = prefs.getBoolean("auto_install_updates", true)
+        set(value) = prefs.edit().putBoolean("auto_install_updates", value).apply()
+
+    val trainerFirstName: String
+        get() = prefs.getString("trainer_first_name", "Алексей") ?: "Алексей"
+    val trainerLastName: String
+        get() = prefs.getString("trainer_last_name", "Романов") ?: "Романов"
+    val trainerPhone: String
+        get() = prefs.getString("trainer_phone", "+7 (999) 123-45-67") ?: "+7 (999) 123-45-67"
+    val trainerPhotoUri: String?
+        get() = prefs.getString("trainer_photo_uri", null)
+    val trainerAvatarBase64: String?
+        get() = prefs.getString("trainer_avatar_base64", null)
+
+    fun saveTrainerProfile(context: android.content.Context, firstName: String, lastName: String, phone: String, photoUri: android.net.Uri?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val editor = prefs.edit()
+                .putString("trainer_first_name", firstName)
+                .putString("trainer_last_name", lastName)
+                .putString("trainer_phone", phone)
+
+            if (photoUri != null) {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(photoUri)
+                    if (inputStream != null) {
+                        val originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                        inputStream.close()
+                        if (originalBitmap != null) {
+                            val width = originalBitmap.width
+                            val height = originalBitmap.height
+                            val edge = minOf(width, height)
+                            val x = (width - edge) / 2
+                            val y = (height - edge) / 2
+                            val squareBitmap = android.graphics.Bitmap.createBitmap(originalBitmap, x, y, edge, edge)
+                            val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(squareBitmap, 512, 512, true)
+
+                            val file = java.io.File(context.filesDir, "trainer_avatar.jpg")
+                            java.io.FileOutputStream(file).use { out ->
+                                scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+                            }
+                            val bytes = file.readBytes()
+                            val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                            editor.putString("trainer_photo_uri", file.absolutePath)
+                            editor.putString("trainer_avatar_base64", b64)
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+            editor.apply()
+            selectedClientId.value?.let { syncActiveClientWithGoogleDrive() }
+        }
+    }
+
     init {
         viewModelScope.launch {
             clients.collect { clientList ->
@@ -140,7 +195,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val updateInfo = checkRes.getOrNull()
                     if (updateInfo?.isUpdateAvailable == true && !updateInfo.downloadUrl.isNullOrBlank()) {
                         _availableUpdate.value = updateInfo
-                        if (updateInfo.latestVersion != lastAutoUpdateVersion) {
+                        if (isAutoInstallUpdatesEnabled && updateInfo.latestVersion != lastAutoUpdateVersion) {
                             lastAutoUpdateVersion = updateInfo.latestVersion
                             updateService.downloadAndInstallApk(updateInfo.downloadUrl)
                         }
