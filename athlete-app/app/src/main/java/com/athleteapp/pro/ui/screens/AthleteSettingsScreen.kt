@@ -32,6 +32,7 @@ import androidx.core.content.FileProvider
 import com.athleteapp.pro.R
 import com.athleteapp.pro.ui.AthleteViewModel
 import com.athleteapp.pro.ui.components.AthleteAvatar
+import com.athleteapp.pro.ui.components.QrCodeView
 import com.athleteapp.pro.ui.i18n.AthleteLanguage
 import com.athleteapp.pro.ui.i18n.AthleteStrings
 import com.athleteapp.pro.ui.theme.AthleteThemePreset
@@ -393,15 +394,12 @@ fun AthleteSettingsScreen(
                             }
                         } else {
                             Text(
-                                text = "Назовите 6-значный код или отправьте ссылку тренеру для привязки:",
+                                text = "Покажите QR-код тренеру или назовите 6-значный код:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            val pairingLink = "https://fitnessapp.pro/pair?code=$cleanPin"
-                            val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-
-                            // Карточка с PIN-кодом и ссылкой для привязки
+                            // Карточка с PIN-кодом (слитно, без дефиса)
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surface,
@@ -431,70 +429,28 @@ fun AthleteSettingsScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.secondary
                                     )
-
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(vertical = 4.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                    )
-
-                                    Text(
-                                        text = "ССЫЛКА ДЛЯ ПРИВЯЗКИ",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = pairingLink,
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                fontFamily = FontFamily.Monospace
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
                                 }
                             }
 
-                            // Кнопка: Скопировать ссылку для тренера
-                            Button(
-                                onClick = {
-                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(pairingLink))
-                                    Toast.makeText(context, "Ссылка скопирована в буфер", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            // QR-код для быстрого сканирования тренером
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Скопировать ссылку для тренера", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
-                            }
-
-                            // Кнопка: Отправить тренеру
-                            OutlinedButton(
-                                onClick = {
-                                    try {
-                                        val shareText = "Код для привязки к тренеру: $cleanPin\n$pairingLink"
-                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                            putExtra(Intent.EXTRA_TEXT, shareText)
-                                            type = "text/plain"
-                                        }
-                                        val shareIntent = Intent.createChooser(sendIntent, "Отправить тренеру")
-                                        context.startActivity(shareIntent)
-                                    } catch (_: Exception) {}
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Share, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Отправить тренеру")
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = Color.White,
+                                    modifier = Modifier.padding(8.dp)
+                                ) {
+                                    QrCodeView(
+                                        content = cleanPin,
+                                        modifier = Modifier
+                                            .size(220.dp)
+                                            .padding(12.dp)
+                                    )
+                                }
                             }
 
                             OutlinedButton(

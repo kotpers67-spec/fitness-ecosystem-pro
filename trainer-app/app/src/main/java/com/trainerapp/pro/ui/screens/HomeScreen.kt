@@ -548,7 +548,7 @@ fun HomeScreen(
                     }
 
                     Text(
-                        "Или введите 6 цифр кода (без дефиса) или вставьте ссылку подопечного:",
+                        "Или введите 6 цифр кода подопечного (слитно, без дефиса):",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.secondary
                     )
