@@ -42,25 +42,35 @@ data class UpdateCheckResult(
 class UpdateService(private val context: Context) {
 
     private val gson = Gson()
-    private val currentVersionName = "1.0.0"
-    private val repoOwner = "kotpe"
-    private val repoName = "trainer-app-android"
+    private val repoOwner = "santiyastudio-lgtm"
+    private val repoName = "fitness-ecosystem-pro"
+
+    private fun getCurrentVersionName(): String {
+        return try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            pInfo.versionName ?: "1.0.1"
+        } catch (_: Exception) {
+            "1.0.1"
+        }
+    }
 
     suspend fun checkForUpdates(): Result<UpdateCheckResult> = withContext(Dispatchers.IO) {
         try {
+            val currentVersionName = getCurrentVersionName()
             val apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
             val url = URL(apiUrl)
             val conn = url.openConnection() as HttpURLConnection
             conn.setRequestProperty("Accept", "application/vnd.github+json")
             conn.setRequestProperty("User-Agent", "TrainerPro-App")
-            conn.connectTimeout = 5000
-            conn.readTimeout = 5000
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
 
             if (conn.responseCode == 200) {
                 val json = conn.inputStream.bufferedReader().readText()
                 val release = gson.fromJson(json, GitHubRelease::class.java)
                 val cleanTag = release.tag_name.removePrefix("v").trim()
-                val apkAsset = release.assets.find { it.name.endsWith(".apk") }
+                val apkAsset = release.assets.find { it.name.contains("trainer", ignoreCase = true) && it.name.endsWith(".apk") }
+                    ?: release.assets.find { it.name.endsWith(".apk") }
 
                 val isNewer = isVersionNewer(cleanTag, currentVersionName)
                 Result.success(
@@ -73,7 +83,6 @@ class UpdateService(private val context: Context) {
                     )
                 )
             } else {
-                // If repo not yet public/has no releases, report up-to-date
                 Result.success(
                     UpdateCheckResult(
                         isUpdateAvailable = false,

@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.trainerapp.pro.NeuroAdaptiveStressTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-03T14:42:11.870Z" hostname="KOT" time="0.006">
+<testsuite name="com.trainerapp.pro.NeuroAdaptiveStressTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-03T15:03:10.924Z" hostname="KOT" time="0.005">
   <properties/>
-  <testcase name="testMathematicalSoundness_zeroWeightAndReps" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.001"/>
+  <testcase name="testMathematicalSoundness_zeroWeightAndReps" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.002"/>
   <testcase name="testRestIntervalDynamics" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.001"/>
   <testcase name="testRpeBoundaries_zeroTenNull" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testNegativeRpe_fatigueCalculationSafe" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testNanFatigueDampener_readinessScoreSafe" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testExtremeRpe_overTen" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testUncompletedSetsCountedInTonnageSemantics" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.0"/>
-  <testcase name="testEmptyHistory_readinessAndRecommendation" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.002"/>
+  <testcase name="testEmptyHistory_readinessAndRecommendation" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.001"/>
   <testcase name="testEmptySets_tonnageAndVolume" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.0"/>
-  <testcase name="testProgressionRunawaySimulation" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.001"/>
+  <testcase name="testProgressionRunawaySimulation" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.0"/>
   <testcase name="testExtremeValues_highRepsAndHeavyWeights" classname="com.trainerapp.pro.NeuroAdaptiveStressTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
