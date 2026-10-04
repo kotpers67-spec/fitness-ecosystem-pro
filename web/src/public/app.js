@@ -150,6 +150,8 @@
     profileFullName: document.getElementById('profile-full-name'),
     profileUsername: document.getElementById('profile-username'),
     profilePhone: document.getElementById('profile-phone'),
+    profileRestrictionsBadgeRow: document.getElementById('profile-restrictions-badge-row'),
+    profileRestrictionsDisplay: document.getElementById('profile-restrictions-display'),
     athleteAvatarPreview: document.getElementById('athlete-avatar-preview'),
     athleteAvatarInput: document.getElementById('athlete-avatar-input'),
     athleteEditName: document.getElementById('athlete-edit-name'),
@@ -1259,9 +1261,19 @@
     el.profileUsername.textContent = `@${state.user.username}`;
     el.profilePhone.textContent = state.user.phone || 'Телефон не указан';
 
+    const restrictions = state.user.restrictions || '';
+    if (el.profileRestrictionsBadgeRow && el.profileRestrictionsDisplay) {
+      if (restrictions.trim()) {
+        el.profileRestrictionsDisplay.textContent = restrictions.trim();
+        el.profileRestrictionsBadgeRow.style.display = 'block';
+      } else {
+        el.profileRestrictionsBadgeRow.style.display = 'none';
+      }
+    }
+
     if (el.athleteEditName) el.athleteEditName.value = state.user.fullName || state.user.full_name || '';
     if (el.athleteEditPhone) el.athleteEditPhone.value = state.user.phone || '';
-    if (el.athleteEditRestrictions) el.athleteEditRestrictions.value = state.user.restrictions || '';
+    if (el.athleteEditRestrictions) el.athleteEditRestrictions.value = restrictions;
 
     const avatarB64 = state.user.avatar_base64 || state.user.avatarBase64;
     if (avatarB64 && el.athleteAvatarPreview) {
@@ -2191,6 +2203,78 @@
             state.pending2FAUserId = res.userId;
             open2FALoginModal(res.expiresInSeconds || 300);
             showToast(res.message || 'Включена 2FA аутентификация: вход в 1 клик заблокирован политикой безопасности. Введите 6-значный код из Telegram', 'info');
+          } else if (res.status === 'PENDING_APPROVAL') {
+            clearInterval(state.tgSessionPollInterval);
+            state.tgSessionPollInterval = null;
+            resetTgAuthModal();
+            el.dialogTelegramAuth?.close();
+
+            let pendingBox = document.getElementById('register-pending-notice');
+            if (!pendingBox) {
+              pendingBox = document.createElement('div');
+              pendingBox.id = 'register-pending-notice';
+              pendingBox.className = 'pending-approval-box';
+              el.formRegister.parentNode.insertBefore(pendingBox, el.formRegister.nextSibling);
+            }
+            el.formRegister.style.display = 'none';
+            el.formLogin.style.display = 'none';
+            pendingBox.style.display = 'block';
+
+            pendingBox.innerHTML = `
+              <div class="pending-approval-title" id="trainer-approval-status-title">⏳ ЗАЯВКА НА РАССМОТРЕНИИ</div>
+              <p class="pending-approval-text" id="trainer-approval-status-desc">
+                Ваша заявка на создание аккаунта тренера принята!
+              </p>
+              <p class="pending-approval-text" id="trainer-approval-subtext" style="font-size: 12px; margin-top: 8px;">
+                В течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.
+              </p>
+              <div class="owners-links-row" style="margin-top: 10px;">
+                <a href="https://t.me/SantiLA213" target="_blank" class="owner-chip">💬 @SantiLA213</a>
+                <a href="https://t.me/Spirit5449" target="_blank" class="owner-chip">💬 @Spirit5449</a>
+              </div>
+              <div id="trainer-approved-actions" style="display: none; margin-top: 14px;">
+                <button type="button" class="app-btn btn-primary" id="btn-approved-login" style="width: 100%;">
+                  👉 Войти в аккаунт тренера
+                </button>
+              </div>
+            `;
+            showToast('Заявка на аккаунт тренера отправлена на рассмотрение (до 72 ч)!', 'info');
+
+            // Poll for approval
+            const checkUsername = res.username;
+            if (checkUsername) {
+              if (state.trainerApprovalPoll) clearInterval(state.trainerApprovalPoll);
+              state.trainerApprovalPoll = setInterval(async () => {
+                try {
+                  const statusRes = await api(`/api/auth/trainer-status?username=${encodeURIComponent(checkUsername)}`);
+                  if (statusRes && statusRes.isApproved) {
+                    clearInterval(state.trainerApprovalPoll);
+                    const titleEl = document.getElementById('trainer-approval-status-title');
+                    const descEl = document.getElementById('trainer-approval-status-desc');
+                    const actionsEl = document.getElementById('trainer-approved-actions');
+                    const loginBtn = document.getElementById('btn-approved-login');
+                    if (titleEl) {
+                      titleEl.textContent = '✅ ВАША ЗАЯВКА ОДОБРЕНА!';
+                      titleEl.style.color = 'var(--accent-emerald)';
+                    }
+                    if (descEl) {
+                      descEl.textContent = `Поздравляем! Ваш аккаунт тренера (@${checkUsername}) успешно подтвержден.`;
+                      descEl.style.color = '#fff';
+                    }
+                    if (actionsEl) actionsEl.style.display = 'block';
+                    if (loginBtn) {
+                      loginBtn.onclick = () => {
+                        pendingBox.style.display = 'none';
+                        el.tabLogin.click();
+                        el.loginUsername.value = checkUsername;
+                        el.loginPassword.focus();
+                      };
+                    }
+                    showToast('🎉 Ваша заявка тренера одобрена!', 'success');
+                  }
+                } catch (_) {}
+              }, 2500);
+            }
           } else if (res.status === 'EXPIRED') {
             clearInterval(state.tgSessionPollInterval);
             state.tgSessionPollInterval = null;
@@ -2245,32 +2329,58 @@
           } catch (_) {}
         }
 
-        // Initialize 1-click session
+        // Initialize 1-click session with chosen role
         resetTgAuthModal();
         if (el.dialogTelegramAuth) {
           el.dialogTelegramAuth.showModal();
         }
 
-        try {
-          const res = await api('/api/auth/telegram/session-init', { method: 'POST' });
-          if (res.sessionId && res.botUrl) {
-            state.tgSessionId = res.sessionId;
-            if (el.btnTgOneclickOpen) {
-              el.btnTgOneclickOpen.href = res.botUrl;
-              el.btnTgOneclickOpen.onclick = (e) => {
-                // Ensure link opens in telegram app/browser
-                window.open(res.botUrl, '_blank');
-              };
-            }
-            if (res.qrSvg && el.tgOneclickQrSvg && el.tgOneclickQrContainer) {
-              el.tgOneclickQrSvg.innerHTML = res.qrSvg;
-              el.tgOneclickQrContainer.style.display = 'block';
-            }
-            startOneClickPolling(res.sessionId);
+        async function initTgSessionForRole(chosenRole) {
+          if (state.tgSessionPollInterval) {
+            clearInterval(state.tgSessionPollInterval);
+            state.tgSessionPollInterval = null;
           }
-        } catch (_) {
-          showToast('Не удалось инициализировать сессию входа. Используйте ручной ввод.', 'error');
+          if (el.tgOneclickStatusText) {
+            el.tgOneclickStatusText.textContent = 'Ожидание перехода в Telegram...';
+          }
+
+          try {
+            const res = await api('/api/auth/telegram/session-init', {
+              method: 'POST',
+              body: JSON.stringify({ requestedRole: chosenRole })
+            });
+            if (res.sessionId && res.botUrl) {
+              state.tgSessionId = res.sessionId;
+              if (el.btnTgOneclickOpen) {
+                el.btnTgOneclickOpen.href = res.botUrl;
+                el.btnTgOneclickOpen.onclick = () => {
+                  window.open(res.botUrl, '_blank');
+                };
+              }
+              startOneClickPolling(res.sessionId);
+            }
+          } catch (_) {
+            showToast('Не удалось инициализировать сессию входа. Используйте ручной ввод.', 'error');
+          }
         }
+
+        // Get currently selected role
+        const currentRole = document.querySelector('input[name="tg-auth-role"]:checked')?.value || 'athlete';
+        initTgSessionForRole(currentRole);
+
+        // Listen for role changes in modal
+        document.querySelectorAll('input[name="tg-auth-role"]').forEach(radio => {
+          radio.onchange = () => {
+            document.querySelectorAll('[data-tg-role]').forEach(card => {
+              if (card.getAttribute('data-tg-role') === radio.value) {
+                card.classList.add('selected');
+              } else {
+                card.classList.remove('selected');
+              }
+            });
+            initTgSessionForRole(radio.value);
+          };
+        });
       };
     }
 
@@ -2420,6 +2530,78 @@
               role
             })
           });
+
+          if (res.pendingApproval) {
+            el.dialogTelegramAuth?.close();
+            resetTgAuthModal();
+
+            let pendingBox = document.getElementById('register-pending-notice');
+            if (!pendingBox) {
+              pendingBox = document.createElement('div');
+              pendingBox.id = 'register-pending-notice';
+              pendingBox.className = 'pending-approval-box';
+              el.formRegister.parentNode.insertBefore(pendingBox, el.formRegister.nextSibling);
+            }
+            el.formRegister.style.display = 'none';
+            el.formLogin.style.display = 'none';
+            pendingBox.style.display = 'block';
+
+            pendingBox.innerHTML = `
+              <div class="pending-approval-title" id="trainer-approval-status-title">⏳ ЗАЯВКА НА РАССМОТРЕНИИ</div>
+              <p class="pending-approval-text" id="trainer-approval-status-desc">
+                Ваша заявка на создание аккаунта тренера принята!
+              </p>
+              <p class="pending-approval-text" id="trainer-approval-subtext" style="font-size: 12px; margin-top: 8px;">
+                В течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.
+              </p>
+              <div class="owners-links-row" style="margin-top: 10px;">
+                <a href="https://t.me/SantiLA213" target="_blank" class="owner-chip">💬 @SantiLA213</a>
+                <a href="https://t.me/Spirit5449" target="_blank" class="owner-chip">💬 @Spirit5449</a>
+              </div>
+              <div id="trainer-approved-actions" style="display: none; margin-top: 14px;">
+                <button type="button" class="app-btn btn-primary" id="btn-approved-login" style="width: 100%;">
+                  👉 Войти в аккаунт тренера
+                </button>
+              </div>
+            `;
+            showToast('Заявка на аккаунт тренера отправлена (до 72 ч)!', 'info');
+
+            const checkUsername = res.username || state.tgPendingUsername;
+            if (checkUsername) {
+              if (state.trainerApprovalPoll) clearInterval(state.trainerApprovalPoll);
+              state.trainerApprovalPoll = setInterval(async () => {
+                try {
+                  const statusRes = await api(`/api/auth/trainer-status?username=${encodeURIComponent(checkUsername)}`);
+                  if (statusRes && statusRes.isApproved) {
+                    clearInterval(state.trainerApprovalPoll);
+                    const titleEl = document.getElementById('trainer-approval-status-title');
+                    const descEl = document.getElementById('trainer-approval-status-desc');
+                    const actionsEl = document.getElementById('trainer-approved-actions');
+                    const loginBtn = document.getElementById('btn-approved-login');
+                    if (titleEl) {
+                      titleEl.textContent = '✅ ВАША ЗАЯВКА ОДОБРЕНА!';
+                      titleEl.style.color = 'var(--accent-emerald)';
+                    }
+                    if (descEl) {
+                      descEl.textContent = `Поздравляем! Ваш аккаунт тренера (@${checkUsername}) успешно подтвержден.`;
+                      descEl.style.color = '#fff';
+                    }
+                    if (actionsEl) actionsEl.style.display = 'block';
+                    if (loginBtn) {
+                      loginBtn.onclick = () => {
+                        pendingBox.style.display = 'none';
+                        el.tabLogin.click();
+                        el.loginUsername.value = checkUsername;
+                        el.loginPassword.focus();
+                      };
+                    }
+                    showToast('🎉 Ваша заявка тренера одобрена!', 'success');
+                  }
+                } catch (_) {}
+              }, 2500);
+            }
+            return;
+          }
 
           state.user = res.user;
           saveAuthToken(res.token);

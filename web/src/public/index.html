@@ -397,6 +397,11 @@
               <h3 class="profile-name" id="profile-full-name">Атлет</h3>
               <span class="profile-sub" id="profile-username">@username</span>
               <span class="profile-sub" id="profile-phone">+7 999 000-00-00</span>
+              <div id="profile-restrictions-badge-row" style="margin-top: 6px; display: none;">
+                <span class="role-card-tag" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); font-size: 11px; padding: 3px 8px; border-radius: 6px; display: inline-block;">
+                  ⚠️ Травмы: <span id="profile-restrictions-display" style="font-weight: normal; color: var(--text-primary);"></span>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -879,10 +884,42 @@
           
           <!-- STEP 0: 1-Click Instant Login (Default) -->
           <div id="tg-step-oneclick">
-            <div class="dialog-title">ВХОД В 1 КЛИК ЧЕРЕЗ TELEGRAM</div>
-            <p class="dialog-subtitle">Нажмите кнопку для быстрого входа через бота <b>@fitnessecosystemBOT</b> без ввода кодов:</p>
-            
-            <div style="margin: 16px 0 12px;">
+            <div class="dialog-title">ВХОД ЧЕРЕЗ TELEGRAM</div>
+            <p class="dialog-subtitle">Выберите вашу роль и войдите через бота <b>@fitnessecosystemBOT</b>:</p>
+
+            <!-- Role choice for Telegram Auth -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <div class="role-selector-cards">
+                <label class="role-card selected" data-tg-role="athlete" style="padding: 10px;">
+                  <input type="radio" name="tg-auth-role" value="athlete" checked>
+                  <div class="role-card-header" style="margin-bottom: 4px;">
+                    <div class="role-card-icon athlete-icon" style="width: 28px; height: 28px;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M2 11v2M22 11v2M12 4v16"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="role-card-title" style="font-size: 13px;">АТЛЕТ</div>
+                  <div class="role-card-desc" style="font-size: 10px;">Дневник, замеры, рейтинг</div>
+                </label>
+
+                <label class="role-card" data-tg-role="trainer" style="padding: 10px;">
+                  <input type="radio" name="tg-auth-role" value="trainer">
+                  <div class="role-card-header" style="margin-bottom: 4px;">
+                    <div class="role-card-icon trainer-icon" style="width: 28px; height: 28px;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm13 0l-3.5 3.5L17 13"/>
+                      </svg>
+                    </div>
+                    <span class="role-card-tag approval-tag" style="font-size: 9px; padding: 2px 4px;">72 ЧАСА</span>
+                  </div>
+                  <div class="role-card-title" style="font-size: 13px;">ТРЕНЕР</div>
+                  <div class="role-card-desc" style="font-size: 10px;">Подопечные, заявка 72ч</div>
+                </label>
+              </div>
+            </div>
+
+            <div style="margin: 12px 0 12px;">
               <a id="btn-tg-oneclick-open" href="#" target="_blank" class="app-btn btn-telegram" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 700; padding: 14px; text-decoration: none; width: 100%; box-shadow: 0 4px 18px rgba(0, 136, 204, 0.35);">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>

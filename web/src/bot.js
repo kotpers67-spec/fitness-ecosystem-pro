@@ -243,32 +243,85 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
       if (!user && username) user = db.findUserByUsername(username);
       if (!user && username) user = db.findUserByUsername(`tg_${username}`);
 
+      const requestedRole = session.requestedRole || 'athlete';
+      const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((username || '').toLowerCase()) ||
+        ['santila213', 'spirit5449'].includes((ctx.from?.username || '').toLowerCase());
+
       if (!user) {
         const usernameKey = username ? `tg_${username}` : `tg_${tgId}`;
         const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
-        const pairingCode = db.generateUniquePairingCode();
+        const pairingCode = requestedRole === 'athlete' ? db.generateUniquePairingCode() : '';
         const clientUuid = crypto.randomUUID();
+        const requireTrainerApproval = (process.env.REQUIRE_TRAINER_APPROVAL === 'true');
+        const isApproved = (requestedRole === 'trainer' && requireTrainerApproval && !isOwnerOrAdmin) ? 0 : 1;
 
         const userId = db.createUser(
           usernameKey,
           passwordHash,
-          'athlete',
+          requestedRole,
           escapeHtml(fullName),
           '',
           pairingCode,
           clientUuid,
-          ''
+          '',
+          isApproved
         );
         db.linkTelegram(userId, tgId, username || '');
-        if (cloudSyncService && typeof cloudSyncService.registerAthletePairing === 'function') {
+        if (requestedRole === 'athlete' && cloudSyncService && typeof cloudSyncService.registerAthletePairing === 'function') {
           cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapeHtml(fullName), '', '').catch(() => {});
         }
         user = db.findUserById(userId);
+
+        // If trainer needs approval, notify admin
+        if (requestedRole === 'trainer' && user.is_approved === 0) {
+          const adminChatIds = new Set();
+          if (process.env.ADMIN_CHAT_ID) adminChatIds.add(String(process.env.ADMIN_CHAT_ID).trim());
+          ['santila213', 'spirit5449'].forEach(adminHandle => {
+            const cId = userTgChatMap?.get(adminHandle) || userTgChatMap?.get(adminHandle.toLowerCase());
+            if (cId) adminChatIds.add(String(cId));
+          });
+
+          for (const adminChatId of adminChatIds) {
+            try {
+              await bot.api.sendMessage(
+                adminChatId,
+                `🔔 <b>НОВАЯ ЗАЯВКА НА АККАУНТ ТРЕНЕРА ЧЕРЕЗ TELEGRAM!</b>\n\n` +
+                `👤 <b>Имя:</b> ${escapeHtml(fullName)}\n` +
+                `🏷 <b>Логин:</b> ${user.username}\n` +
+                `✈ <b>Telegram:</b> @${username || tgId}\n\n` +
+                `Нажмите кнопку ниже или отправьте:\n<code>/approve_${userId}</code>`,
+                {
+                  parse_mode: 'HTML',
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: `✅ Одобрить тренера #${userId}`, callback_data: `approve_${userId}` }]
+                    ]
+                  }
+                }
+              );
+            } catch (_) {}
+          }
+        }
       } else {
         if (!user.telegram_id && tgId) {
           db.linkTelegram(user.id, tgId, username || '');
           user = db.findUserById(user.id);
         }
+      }
+
+      // Check if user is a pending trainer
+      if (user.role === 'trainer' && user.is_approved === 0 && !isOwnerOrAdmin) {
+        session.status = 'PENDING_APPROVAL';
+        session.username = user.username;
+        session.userId = user.id;
+
+        await ctx.reply(
+          `⏳ <b>ЗАЯВКА НА АККАУНТ ТРЕНЕРА НА РАССМОТРЕНИИ</b>\n\n` +
+          `Ваша заявка принята!\n` +
+          `В течение 72 часов администраторы свяжутся с вами или одобрят аккаунт.`,
+          { parse_mode: 'HTML', reply_markup: createOwnersKeyboard() }
+        );
+        return;
       }
 
       // Security check: 2FA Enforcement

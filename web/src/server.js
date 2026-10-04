@@ -769,6 +769,16 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
+        if (session.status === 'PENDING_APPROVAL') {
+          const username = session.username;
+          telegramSessionStore.delete(sessionId);
+          return sendJson(res, 200, {
+            status: 'PENDING_APPROVAL',
+            username,
+            message: '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.'
+          });
+        }
+
         return sendJson(res, 200, {
           status: 'PENDING',
           message: 'Ожидание подтверждения в Telegram...'
@@ -989,6 +999,10 @@ const server = http.createServer(async (req, res) => {
           const pairingCode = role === 'athlete' ? db.generateUniquePairingCode() : '';
           const clientUuid = crypto.randomUUID();
 
+          const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(cleanUsername.toLowerCase());
+          const requireTrainerApproval = (process.env.REQUIRE_TRAINER_APPROVAL === 'true');
+          const isApproved = (role === 'trainer' && requireTrainerApproval && !isOwnerOrAdmin) ? 0 : 1;
+
           const userId = db.createUser(
             usernameKey,
             passwordHash,
@@ -997,7 +1011,8 @@ const server = http.createServer(async (req, res) => {
             escapedPhone,
             pairingCode,
             clientUuid,
-            avatarBase64 || ''
+            avatarBase64 || '',
+            isApproved
           );
 
           if (role === 'athlete') {
@@ -1006,6 +1021,48 @@ const server = http.createServer(async (req, res) => {
 
           db.linkTelegram(userId, '', cleanUsername);
           user = db.findUserById(userId);
+
+          if (role === 'trainer') {
+            if (tgBotInstance) {
+              const adminChatIds = new Set();
+              if (process.env.ADMIN_CHAT_ID) adminChatIds.add(String(process.env.ADMIN_CHAT_ID).trim());
+              ['santila213', 'spirit5449'].forEach(adminHandle => {
+                const cId = userTgChatMap.get(adminHandle) || userTgChatMap.get(adminHandle.toLowerCase());
+                if (cId) adminChatIds.add(String(cId));
+              });
+
+              for (const adminChatId of adminChatIds) {
+                try {
+                  await tgBotInstance.api.sendMessage(
+                    adminChatId,
+                    `🔔 <b>НОВАЯ ЗАЯВКА НА АККАУНТ ТРЕНЕРА ЧЕРЕЗ TELEGRAM!</b>\n\n` +
+                    `👤 <b>Имя:</b> ${escapedFullName}\n` +
+                    `🏷 <b>Логин:</b> ${user.username}\n` +
+                    `📞 <b>Телефон:</b> ${escapedPhone || 'Не указан'}\n` +
+                    `✈ <b>Telegram:</b> @${cleanUsername}\n\n` +
+                    `Нажмите кнопку ниже или отправьте:\n<code>/approve_${userId}</code>`,
+                    {
+                      parse_mode: 'HTML',
+                      reply_markup: {
+                        inline_keyboard: [
+                          [{ text: `✅ Одобрить тренера #${userId}`, callback_data: `approve_${userId}` }]
+                        ]
+                      }
+                    }
+                  );
+                } catch (_) {}
+              }
+            }
+
+            if (user.is_approved === 0) {
+              return sendJson(res, 201, {
+                success: true,
+                pendingApproval: true,
+                username: user.username,
+                message: '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.'
+              });
+            }
+          }
         }
 
         const token = generateToken();
