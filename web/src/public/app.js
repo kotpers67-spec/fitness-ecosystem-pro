@@ -688,7 +688,8 @@
       else if (rank === 2) rankClass = 'rank-2';
       else if (rank === 3) rankClass = 'rank-3';
 
-      const displayName = isMe ? `${escapeHtml(entry.name)} (ВЫ)` : escapeHtml(entry.name);
+      const cleanName = String(entry.name || '').replace(/\s*\((Web|Mobile Athlete|Mobile)\)/gi, '').trim();
+      const displayName = isMe ? `${escapeHtml(cleanName)} (ВЫ)` : escapeHtml(cleanName);
       const tonnage = entry.totalTonnage || entry.tonnage_kg || 0;
       const tonnageStr = tonnage >= 1000 ? `${(tonnage / 1000).toFixed(1)} т` : `${tonnage} кг`;
 
@@ -1262,6 +1263,20 @@
         el.dialogLinkTelegram?.close();
       };
     });
+
+    if (el.btnLinkTgDeeplink) {
+      el.btnLinkTgDeeplink.onclick = async () => {
+        try {
+          const res = await api('/api/user/telegram/link-token', { method: 'POST' });
+          if (res.deepLink) {
+            window.open(res.deepLink, '_blank');
+            showToast('Открываем Telegram бота... Нажмите START для привязки', 'info');
+          } else if (res.token) {
+            showToast(`Токен: ${res.token}. Отправьте в бота: /link ${res.token}`, 'info');
+          }
+        } catch (_) {}
+      };
+    }
 
     if (el.btnLinkTgBack) {
       el.btnLinkTgBack.onclick = () => {
