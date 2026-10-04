@@ -1788,7 +1788,7 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, result);
         } catch (err) {
           console.error('[Server] Manual Cloud Sync error:', err);
-          return sendError(res, 500, `Ошибка синхронизации с Google Drive: ${err.message}`);
+          return sendError(res, 500, `Ошибка синхронизации с облаком: ${err.message}`);
         }
       }
 

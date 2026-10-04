@@ -1,11 +1,14 @@
-const CACHE_NAME = 'fitpro-v1';
+const CACHE_NAME = 'fitpro-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/styles.css',
   '/app.js',
   '/qr.js',
-  '/manifest.json'
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
