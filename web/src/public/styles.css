@@ -1647,5 +1647,19 @@ input:checked + .slider:before {
   margin-bottom: 12px;
 }
 
+.sync-icon {
+  display: inline-block;
+  transition: transform 0.3s ease;
+}
+
+.sync-icon.spinning {
+  animation: sync-spin 0.8s linear infinite;
+}
+
+@keyframes sync-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 
 
