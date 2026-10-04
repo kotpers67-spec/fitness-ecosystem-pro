@@ -14,3 +14,7 @@ local.properties
 *.ap_
 *.aab
 *.log
+node_modules/
+**/node_modules/
+*.sqlite*
+*.idsig

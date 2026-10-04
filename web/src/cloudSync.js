@@ -112,7 +112,7 @@ class CloudSyncService {
   /**
    * Register or update athlete in cloud pairing registry
    */
-  async registerAthletePairing(pin, clientUuid, clientName, phone = '', goal = '') {
+  async registerAthletePairing(pin, clientUuid, clientName, phone = '', goal = '', avatarBase64 = '') {
     const cloud = await this.fetchCloudData(true);
     if (!cloud.pairing) cloud.pairing = {};
 
@@ -131,6 +131,7 @@ class CloudSyncService {
       clientName: clientName || 'Атлет',
       phone: phone || '',
       goal: goal || '',
+      avatarBase64: avatarBase64 || '',
       restrictions: '',
       notes: '',
       timestamp: Date.now(),
@@ -143,6 +144,7 @@ class CloudSyncService {
         clientUuid,
         clientName: clientName || 'Атлет',
         phone: phone || '',
+        avatarBase64: avatarBase64 || '',
         syncTimestamp: Date.now(),
         assignedWorkouts: [],
         anthropometry: []
@@ -150,6 +152,7 @@ class CloudSyncService {
     } else {
       cloud.clients[clientUuid].clientName = clientName || cloud.clients[clientUuid].clientName;
       if (phone) cloud.clients[clientUuid].phone = phone;
+      if (avatarBase64) cloud.clients[clientUuid].avatarBase64 = avatarBase64;
     }
 
     await this.pushCloudData(cloud);
@@ -206,6 +209,7 @@ class CloudSyncService {
 
     const clientUuid = pairingEntry.clientUuid;
     const clientPayload = (cloud.clients && cloud.clients[clientUuid]) ? cloud.clients[clientUuid] : null;
+    const athleteAvatar = pairingEntry.avatarBase64 || clientPayload?.avatarBase64 || '';
 
     await this.pushCloudData(cloud);
 
@@ -215,6 +219,7 @@ class CloudSyncService {
       clientName: pairingEntry.clientName,
       phone: pairingEntry.phone,
       goal: pairingEntry.goal,
+      avatarBase64: athleteAvatar,
       clientPayload
     };
   }
