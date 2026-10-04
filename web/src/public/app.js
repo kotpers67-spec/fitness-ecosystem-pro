@@ -1431,7 +1431,6 @@
           <div class="set-row">
             <span class="set-num">${idx + 1}</span>
             <span class="set-weight-reps">${set.weight_kg} кг × ${set.reps} повт</span>
-            <span class="set-rpe-badge">RPE ${set.rpe || 8}</span>
             <span class="status-pill ${isComp ? 'done' : 'pending'}">${isComp ? 'Сделано' : 'Назначено'}</span>
             <button class="set-delete-btn" data-id="${set.id}" title="Удалить">✕</button>
           </div>
@@ -1571,7 +1570,7 @@
       item.innerHTML = `
         <div>
           <div style="font-weight: 700; font-size: 14px; color: var(--text-primary);">${escapeHtml(s.exercise_name)}</div>
-          <div style="font-size: 11px; color: var(--text-muted);">${s.date || state.trainerDate} · RPE ${s.rpe || 8}</div>
+          <div style="font-size: 11px; color: var(--text-muted);">${s.date || state.trainerDate}</div>
         </div>
         <div style="text-align: right;">
           <div style="font-weight: 800; color: var(--accent-lime); font-size: 14px;">${s.weight_kg} кг × ${s.reps}</div>
@@ -2344,7 +2343,6 @@
       const exerciseName = el.trainerInputExercise.value.trim();
       const weightKg = parseFloat(el.trainerInputWeight.value) || 0;
       const reps = parseInt(el.trainerInputReps.value, 10) || 1;
-      const rpe = parseFloat(el.trainerInputRpe.value) || 8.0;
       const isSelfAllowed = Boolean(el.trainerAllowSelfWorkout?.checked);
 
       try {

@@ -212,14 +212,14 @@ class CloudSyncService {
     pairingEntry.pairedTimestamp = Date.now();
     cloud.pairing[foundKey] = pairingEntry;
 
-    if (cloud.clients && cloud.clients[clientUuid]) {
+    const clientUuid = pairingEntry.clientUuid;
+    if (clientUuid && cloud.clients && cloud.clients[clientUuid]) {
       cloud.clients[clientUuid].coachName = coachName;
       cloud.clients[clientUuid].coachPhone = coachPhone;
       cloud.clients[clientUuid].coachAvatarBase64 = coachAvatarBase64 || '';
     }
 
-    const clientUuid = pairingEntry.clientUuid;
-    const clientPayload = (cloud.clients && cloud.clients[clientUuid]) ? cloud.clients[clientUuid] : null;
+    const clientPayload = (clientUuid && cloud.clients && cloud.clients[clientUuid]) ? cloud.clients[clientUuid] : null;
     const athleteAvatar = pairingEntry.avatarBase64 || clientPayload?.avatarBase64 || '';
 
     await this.pushCloudData(cloud);

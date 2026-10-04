@@ -28,8 +28,6 @@ import androidx.compose.ui.unit.sp
 import com.trainerapp.pro.data.local.entities.ExerciseEntity
 import com.trainerapp.pro.data.local.entities.WorkoutSetEntity
 import com.trainerapp.pro.ui.MainViewModel
-import com.trainerapp.pro.ui.components.OneRepMaxCalculatorDialog
-import com.trainerapp.pro.ui.components.PlateCalculatorDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,13 +44,9 @@ fun WorkoutScreen(
     val selectedOrder by viewModel.selectedExerciseOrder.collectAsState()
 
     var showAddExerciseDialog by remember { mutableStateOf(false) }
-    var showPlateDialog by remember { mutableStateOf(false) }
-    var show1RMDialog by remember { mutableStateOf(false) }
     var showExerciseStatsDialog by remember { mutableStateOf(false) }
     var selectedStatsExercise by remember { mutableStateOf<ExerciseEntity?>(null) }
     var statsSummary by remember { mutableStateOf<MainViewModel.LastExerciseStatsSummary?>(null) }
-    var selectedWeightForCalc by remember { mutableStateOf(0.0) }
-    var selectedRepsForCalc by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
 
     // Distinct exercise orders present in this session (max 8)
@@ -88,22 +82,6 @@ fun WorkoutScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        selectedWeightForCalc = activeExerciseTriple?.third?.lastOrNull()?.weightKg ?: 60.0
-                        showPlateDialog = true
-                    }) {
-                        Icon(Icons.Default.FitnessCenter, contentDescription = "Блины", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = {
-                        val lastSet = activeExerciseTriple?.third?.lastOrNull()
-                        selectedWeightForCalc = lastSet?.weightKg ?: 80.0
-                        selectedRepsForCalc = lastSet?.reps ?: 8
-                        show1RMDialog = true
-                    }) {
-                        Icon(Icons.Default.Calculate, contentDescription = "1ПМ", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
@@ -443,23 +421,6 @@ fun WorkoutScreen(
                     showExerciseStatsDialog = true
                 }
             }
-        )
-    }
-
-    // Plate Calculator
-    if (showPlateDialog) {
-        PlateCalculatorDialog(
-            initialWeight = selectedWeightForCalc,
-            onDismiss = { showPlateDialog = false }
-        )
-    }
-
-    // 1RM Calculator
-    if (show1RMDialog) {
-        OneRepMaxCalculatorDialog(
-            initialWeight = selectedWeightForCalc,
-            initialReps = selectedRepsForCalc,
-            onDismiss = { show1RMDialog = false }
         )
     }
 
