@@ -49,11 +49,21 @@ val NordicEmeraldText = Color(0xFFECFDF5)
 val NordicEmeraldSecondary = Color(0xFF6EE7B7)
 val NordicEmeraldBorder = Color(0x3310B981)
 
+// 6. Dark Theme (AMOLED Black #000000 + Neutral Slate)
+val DarkThemeBackground = Color(0xFF000000)
+val DarkThemeSurface = Color(0xFF121212)
+val DarkThemePrimary = Color(0xFFE4E4E7)
+val DarkThemeOnPrimary = Color(0xFF09090B)
+val DarkThemeText = Color(0xFFFAFAFA)
+val DarkThemeSecondary = Color(0xFFA1A1AA)
+val DarkThemeBorder = Color(0x33A1A1AA)
+
 enum class AppThemePreset(val displayName: String) {
+    DARK_THEME("Темная тема (AMOLED)"),
     CYBER_LIME("Cyber Lime"),
     ELECTRIC_BLUE("Electric Blue"),
     CRIMSON_POWER("Crimson Power"),
-    CLEAN_SWISS("Clean Swiss"),
+    CLEAN_SWISS("Clean Swiss (Светлая)"),
     NORDIC_EMERALD("Nordic Emerald")
 }
 
@@ -71,6 +81,16 @@ fun TrainerProTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = when (themeName) {
+        "Темная тема (AMOLED)", "Dark Theme", "AMOLED Dark" -> darkColorScheme(
+            background = DarkThemeBackground,
+            surface = DarkThemeSurface,
+            primary = DarkThemePrimary,
+            onPrimary = DarkThemeOnPrimary,
+            onBackground = DarkThemeText,
+            onSurface = DarkThemeText,
+            surfaceVariant = Color(0xFF1E1E24),
+            outline = DarkThemeBorder
+        )
         "Electric Blue" -> darkColorScheme(
             background = ElectricBlueBackground,
             surface = ElectricBlueSurface,
@@ -91,7 +111,7 @@ fun TrainerProTheme(
             surfaceVariant = Color(0xFF3F3F46),
             outline = CrimsonPowerBorder
         )
-        "Clean Swiss" -> lightColorScheme(
+        "Clean Swiss", "Clean Swiss (Светлая)" -> lightColorScheme(
             background = CleanSwissBackground,
             surface = CleanSwissSurface,
             primary = CleanSwissPrimary,
