@@ -353,8 +353,14 @@
       state.user = data.user;
       state.pairedCoach = data.pairedCoach || null;
       setupAppForRole(state.user.role);
-    } catch {
-      logout(false);
+    } catch (err) {
+      // Only reset session if server explicitly responded with 401 Unauthorized
+      if (err?.message?.includes('401') || err?.message?.includes('Сессия завершена')) {
+        logout(false);
+      } else {
+        // On offline/transient network errors, keep cached session alive
+        console.warn('[Fitness Pro] Offline or network error during initAuth:', err.message);
+      }
     }
   }
 
@@ -370,7 +376,7 @@
     state.pairedCoach = null;
     state.athleteAvatarBase64 = null;
     state.trainerAvatarBase64 = null;
-    localStorage.removeItem('fit_token');
+    saveAuthToken(null);
     showAuthScreen();
     if (showMsg) {
       showToast('Вы вышли из системы');
@@ -2002,9 +2008,8 @@
 
           if (!res.isNewUser && res.token) {
             // Existing user logged in
-            state.token = res.token;
             state.user = res.user;
-            localStorage.setItem('fit_token', res.token);
+            saveAuthToken(res.token);
             el.dialogTelegramAuth?.close();
             setupAppForRole(res.user.role);
             showToast(`С возвращением, ${res.user.fullName || res.user.username}!`, 'success');
@@ -2044,9 +2049,8 @@
             })
           });
 
-          state.token = res.token;
           state.user = res.user;
-          localStorage.setItem('fit_token', res.token);
+          saveAuthToken(res.token);
           el.dialogTelegramAuth?.close();
           setupAppForRole(res.user.role);
           showToast(`Добро пожаловать в Fitness Pro, ${res.user.fullName}!`, 'success');
@@ -2516,6 +2520,11 @@
     if (el.btnSyncHeader) el.btnSyncHeader.onclick = triggerCloudSync;
     if (el.btnSyncAthlete) el.btnSyncAthlete.onclick = triggerCloudSync;
     if (el.btnSyncTrainer) el.btnSyncTrainer.onclick = triggerCloudSync;
+
+    // Logout Action Handlers
+    if (el.btnLogoutHeader) el.btnLogoutHeader.onclick = () => logout(true);
+    if (el.btnLogoutAthlete) el.btnLogoutAthlete.onclick = () => logout(true);
+    if (el.btnLogoutTrainer) el.btnLogoutTrainer.onclick = () => logout(true);
 
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {
