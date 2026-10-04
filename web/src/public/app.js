@@ -1890,20 +1890,63 @@
             el.formRegister.parentNode.insertBefore(pendingBox, el.formRegister.nextSibling);
           }
           pendingBox.innerHTML = `
-            <div class="pending-approval-title">⏳ ЗАЯВКА НА РАССМОТРЕНИИ</div>
-            <p class="pending-approval-text">
+            <div class="pending-approval-title" id="trainer-approval-status-title">⏳ ЗАЯВКА НА РАССМОТРЕНИИ</div>
+            <p class="pending-approval-text" id="trainer-approval-status-desc">
               Ваша заявка на создание аккаунта тренера принята!
             </p>
-            <p class="pending-approval-text" style="font-size: 12px; margin-top: 8px;">
+            <p class="pending-approval-text" id="trainer-approval-subtext" style="font-size: 12px; margin-top: 8px;">
               В течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.
             </p>
             <div class="owners-links-row" style="margin-top: 10px;">
               <a href="https://t.me/SantiLA213" target="_blank" class="owner-chip">💬 @SantiLA213</a>
               <a href="https://t.me/Spirit5449" target="_blank" class="owner-chip">💬 @Spirit5449</a>
             </div>
+            <div id="trainer-approved-actions" style="display: none; margin-top: 14px;">
+              <button type="button" class="app-btn btn-primary" id="btn-approved-login" style="width: 100%;">
+                👉 Войти в аккаунт тренера
+              </button>
+            </div>
           `;
           pendingBox.style.display = 'block';
           showToast('Заявка на аккаунт тренера отправлена!', 'info');
+
+          // Real-time polling for trainer approval
+          if (state.trainerApprovalPoll) clearInterval(state.trainerApprovalPoll);
+          state.trainerApprovalPoll = setInterval(async () => {
+            try {
+              const res = await api(`/api/auth/trainer-status?username=${encodeURIComponent(username)}`);
+              if (res && res.isApproved) {
+                clearInterval(state.trainerApprovalPoll);
+                const titleEl = document.getElementById('trainer-approval-status-title');
+                const descEl = document.getElementById('trainer-approval-status-desc');
+                const subEl = document.getElementById('trainer-approval-subtext');
+                const actionsEl = document.getElementById('trainer-approved-actions');
+                const loginBtn = document.getElementById('btn-approved-login');
+                if (titleEl) {
+                  titleEl.textContent = '✅ ВАША ЗАЯВКА ОДОБРЕНА!';
+                  titleEl.style.color = 'var(--accent-emerald)';
+                }
+                if (descEl) {
+                  descEl.textContent = `Поздравляем! Ваш аккаунт тренера (@${username}) успешно подтвержден.`;
+                  descEl.style.color = '#fff';
+                }
+                if (subEl) {
+                  subEl.textContent = 'Теперь вы можете войти в систему и начать работу с подопечными.';
+                }
+                if (actionsEl) actionsEl.style.display = 'block';
+                if (loginBtn) {
+                  loginBtn.onclick = () => {
+                    pendingBox.style.display = 'none';
+                    el.tabLogin.click();
+                    el.loginUsername.value = username;
+                    el.loginPassword.focus();
+                  };
+                }
+                showToast('🎉 Ваша заявка тренера одобрена администратором!', 'success');
+              }
+            } catch (_) {}
+          }, 2500);
+
           return;
         }
 

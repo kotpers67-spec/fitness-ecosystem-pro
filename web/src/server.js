@@ -314,6 +314,21 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      // CHECK TRAINER APPROVAL STATUS
+      if (pathname === '/api/auth/trainer-status' && req.method === 'GET') {
+        const qUsername = String(reqUrl.searchParams.get('username') || '').trim();
+        if (!qUsername) return sendError(res, 400, 'Укажите username');
+        const found = db.findUserByUsername(qUsername) || db.findUserByTelegramUsername(qUsername);
+        if (!found || found.role !== 'trainer') {
+          return sendJson(res, 200, { exists: false, isApproved: false });
+        }
+        return sendJson(res, 200, {
+          exists: true,
+          isApproved: Boolean(found.is_approved === 1),
+          fullName: found.full_name
+        });
+      }
+
       // LOGIN
       if (pathname === '/api/login' && req.method === 'POST') {
         const body = await parseJsonBody(req);
