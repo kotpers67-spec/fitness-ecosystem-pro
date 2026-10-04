@@ -1134,6 +1134,22 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/me' && req.method === 'GET') {
         let pairedCoach = null;
         if (user.role === 'athlete') {
+          try {
+            await cloudSyncService.syncAthleteFromCloud(user, db);
+            const refetched = db.findUserById(user.id);
+            if (refetched) {
+              user.full_name = refetched.full_name;
+              user.phone = refetched.phone;
+              user.avatar_base64 = refetched.avatar_base64;
+              user.client_uuid = refetched.client_uuid;
+              user.pairing_code = refetched.pairing_code;
+              user.pairing_code_created_at = refetched.pairing_code_created_at;
+              user.restrictions = refetched.restrictions;
+            }
+          } catch (err) {
+            console.warn('[Server] syncAthleteFromCloud error in /api/me:', err.message);
+          }
+
           const PAIRING_TTL = 5 * 60 * 1000;
           if (!user.pairing_code || (Date.now() - (user.pairing_code_created_at || 0) > PAIRING_TTL)) {
             const newPin = db.generateUniquePairingCode(user.id);

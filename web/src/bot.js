@@ -421,6 +421,13 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
         } catch (err) {
           console.warn('[Bot] Trainer cloud sync notice on login:', err.message);
         }
+      } else if (user.role === 'athlete' && cloudSyncService && typeof cloudSyncService.syncAthleteFromCloud === 'function') {
+        try {
+          await cloudSyncService.syncAthleteFromCloud(user, db);
+          user = db.findUserById(user.id) || user;
+        } catch (err) {
+          console.warn('[Bot] Athlete cloud sync notice on login:', err.message);
+        }
       }
 
       session.status = 'AUTHORIZED';

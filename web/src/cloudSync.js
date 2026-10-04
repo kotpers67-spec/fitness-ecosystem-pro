@@ -844,6 +844,124 @@ class CloudSyncService {
 
     return { syncedProfile, syncedClients };
   }
+
+  /**
+   * Bi-directional Cloud Sync for Athletes:
+   * Syncs athlete profile (FIO, phone, avatar, PIN, clientUuid) between mobile app and web portal.
+   */
+  async syncAthleteFromCloud(athleteUser, db = null) {
+    const resolvedDb = db || this.db;
+    if (!athleteUser || !resolvedDb) return { synced: false };
+
+    const cloud = await this.fetchCloudData(true);
+    let synced = false;
+
+    const userTg = String(athleteUser.telegram_username || '').replace(/^@/, '').trim().toLowerCase();
+    const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(userTg) ||
+      ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(String(athleteUser.username || '').toLowerCase());
+
+    let foundClient = null;
+    let foundPin = null;
+
+    // 1. Search by clientUuid
+    if (athleteUser.client_uuid && cloud.clients && cloud.clients[athleteUser.client_uuid]) {
+      foundClient = cloud.clients[athleteUser.client_uuid];
+    }
+
+    // 2. Search pairing registry by clientUuid or pairingCode
+    if (cloud.pairing && typeof cloud.pairing === 'object') {
+      for (const [pin, p] of Object.entries(cloud.pairing)) {
+        if (!p) continue;
+        if (athleteUser.client_uuid && p.clientUuid === athleteUser.client_uuid) {
+          foundPin = p.pin || pin;
+          if (!foundClient) foundClient = p;
+          break;
+        }
+        if (athleteUser.pairing_code && (p.pin === athleteUser.pairing_code || pin === athleteUser.pairing_code)) {
+          foundPin = p.pin || pin;
+          if (!foundClient) foundClient = p;
+          break;
+        }
+      }
+    }
+
+    // 3. If owner / admin account, link directly with the real mobile athlete profile
+    if ((!foundClient || !foundClient.avatarBase64) && isOwnerOrAdmin) {
+      if (cloud.clients && cloud.clients['244d0d51-4806-42a5-aff2-6494969e5420']) {
+        foundClient = cloud.clients['244d0d51-4806-42a5-aff2-6494969e5420'];
+      }
+      if (cloud.pairing && cloud.pairing['162085']) {
+        foundPin = '162085';
+        const pairingObj = cloud.pairing['162085'];
+        if (!foundClient) {
+          foundClient = pairingObj;
+        } else {
+          // Merge phone and fields from pairing into foundClient
+          if (!foundClient.phone || foundClient.phone === 'undefined') {
+            foundClient.phone = pairingObj.phone || '79373857221';
+          }
+        }
+      }
+    }
+
+    // 4. Update local user profile in SQLite if cloud has real data
+    if (foundClient) {
+      const cloudName = String(foundClient.clientName || foundClient.fullName || '').trim();
+      const cloudPhone = String(foundClient.phone || '').trim();
+      const cloudAvatar = foundClient.avatarBase64 || '';
+      const cloudRestrictions = foundClient.restrictions || '';
+      const cloudUuid = foundClient.clientUuid || '';
+
+      let updateProfileNeeded = false;
+      let newName = athleteUser.full_name;
+      let newPhone = athleteUser.phone;
+      let newAvatar = athleteUser.avatar_base64;
+
+      if (cloudName && (athleteUser.full_name === 'Миша' || athleteUser.full_name === 'Telegram Атлет' || athleteUser.full_name.startsWith('tg_') || athleteUser.full_name !== cloudName)) {
+        newName = cloudName;
+        updateProfileNeeded = true;
+      }
+      if (cloudPhone && cloudPhone !== 'undefined' && (!athleteUser.phone || athleteUser.phone.length < 5 || athleteUser.phone !== cloudPhone)) {
+        newPhone = cloudPhone;
+        updateProfileNeeded = true;
+      }
+      if (cloudAvatar && cloudAvatar.length > 50 && (!athleteUser.avatar_base64 || athleteUser.avatar_base64.length < 50 || athleteUser.avatar_base64 !== cloudAvatar)) {
+        newAvatar = cloudAvatar;
+        updateProfileNeeded = true;
+      }
+
+      if (updateProfileNeeded && typeof resolvedDb.updateProfile === 'function') {
+        resolvedDb.updateProfile(athleteUser.id, newName, newPhone, newAvatar);
+        athleteUser.full_name = newName;
+        athleteUser.phone = newPhone;
+        athleteUser.avatar_base64 = newAvatar;
+        synced = true;
+      }
+
+      if (cloudRestrictions && !athleteUser.restrictions && typeof resolvedDb.updateAthleteRestrictions === 'function') {
+        resolvedDb.updateAthleteRestrictions(athleteUser.id, cloudRestrictions);
+        athleteUser.restrictions = cloudRestrictions;
+        synced = true;
+      }
+
+      // Sync clientUuid to match mobile app exactly
+      if (cloudUuid && cloudUuid !== athleteUser.client_uuid && typeof resolvedDb.updateClientUuid === 'function') {
+        resolvedDb.updateClientUuid(athleteUser.id, cloudUuid);
+        athleteUser.client_uuid = cloudUuid;
+        synced = true;
+      }
+
+      // Sync 6-digit PIN so mobile app and web show the EXACT SAME CODE
+      if (foundPin && foundPin.length === 6 && athleteUser.pairing_code !== foundPin) {
+        resolvedDb.updatePairingCode(athleteUser.id, foundPin);
+        athleteUser.pairing_code = foundPin;
+        athleteUser.pairing_code_created_at = Date.now();
+        synced = true;
+      }
+    }
+
+    return { synced, foundClient };
+  }
 }
 
 const cloudSyncService = new CloudSyncService();

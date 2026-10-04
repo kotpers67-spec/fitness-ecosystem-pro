@@ -89,6 +89,9 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     private val _syncMessage = MutableStateFlow<String?>(null)
     val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
 
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     private val _availableUpdate = MutableStateFlow<com.athleteapp.pro.data.update.AthleteUpdateCheckResult?>(null)
     val availableUpdate: StateFlow<com.athleteapp.pro.data.update.AthleteUpdateCheckResult?> = _availableUpdate.asStateFlow()
 
@@ -739,6 +742,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
 
     fun syncWithCoachGoogleDrive() {
         viewModelScope.launch {
+            _isSyncing.value = true
             _syncMessage.value = "Синхронизация данных..."
             val current = settings.value ?: AthleteAppSettingsEntity()
             val athleteId = if (current.athleteId > 0) current.athleteId else 1L
@@ -749,6 +753,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 _syncMessage.value = "Ошибка: ${result.exceptionOrNull()?.message}"
             }
+            _isSyncing.value = false
         }
     }
 
