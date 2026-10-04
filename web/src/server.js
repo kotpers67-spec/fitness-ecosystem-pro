@@ -619,8 +619,9 @@ const server = http.createServer(async (req, res) => {
         // Code is verified and consumed (single-use guaranteed)
         telegramOtpStore.delete(cleanUsername);
 
-        const usernameKey = `tg_${cleanUsername}`;
-        const user = db.findUserByUsername(usernameKey);
+        let user = db.findUserByUsername(cleanUsername);
+        if (!user) user = db.findUserByUsername(`tg_${cleanUsername}`);
+        if (!user) user = db.findUserByTelegramUsername(cleanUsername);
 
         if (user) {
           const token = generateToken();
@@ -694,7 +695,7 @@ const server = http.createServer(async (req, res) => {
           );
 
           if (role === 'athlete') {
-            cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapedFullName, escapedPhone).catch(() => {});
+            cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapedFullName, escapedPhone, '', avatarBase64 || '').catch(() => {});
           }
 
           user = db.findUserById(userId);
@@ -810,7 +811,9 @@ const server = http.createServer(async (req, res) => {
             updatedUser.pairing_code,
             updatedUser.client_uuid,
             updatedUser.full_name,
-            updatedUser.phone
+            updatedUser.phone,
+            '',
+            updatedUser.avatar_base64 || ''
           ).catch(() => {});
         }
 
@@ -1013,9 +1016,13 @@ const server = http.createServer(async (req, res) => {
                   cloudAthlete.clientName || 'Подопечный',
                   cloudAthlete.phone || '',
                   rawCode,
-                  cloudAthlete.clientUuid
+                  cloudAthlete.clientUuid,
+                  cloudAthlete.avatarBase64 || ''
                 );
                 localUser = db.findUserById(uid);
+              } else if (cloudAthlete.avatarBase64 && !localUser.avatar_base64) {
+                db.updateProfile(localUser.id, localUser.full_name, localUser.phone, cloudAthlete.avatarBase64);
+                localUser = db.findUserById(localUser.id);
               }
               athlete = localUser;
             }
