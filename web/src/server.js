@@ -1951,7 +1951,7 @@ const server = http.createServer(async (req, res) => {
         } else {
           // Fallback: Redirect to GitHub Releases
           const match = fileName.match(/v\d+\.\d+\.\d+/);
-          const tag = match ? match[0] : 'v1.0.10';
+          const tag = match ? match[0] : 'v2.0.0';
           res.writeHead(302, {
             'Location': `https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/${tag}/${fileName}`
           });

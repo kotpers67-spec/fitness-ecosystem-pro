@@ -47,9 +47,9 @@ class AthleteUpdateService(private val context: Context) {
     fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.9"
+            pInfo.versionName ?: "2.0.0"
         } catch (_: Exception) {
-            "1.0.9"
+            "2.0.0"
         }
     }
 
@@ -97,7 +97,7 @@ class AthleteUpdateService(private val context: Context) {
             }
 
             // 2. Fallback static release configuration for kotpers67-spec
-            val fallbackVersion = "1.0.10"
+            val fallbackVersion = "2.0.0"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
                 AthleteUpdateCheckResult(
