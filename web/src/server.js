@@ -1107,19 +1107,19 @@ const server = http.createServer(async (req, res) => {
 
       // VERSION CHECK: GET /api/version — mobile apps auto-update (Public)
       if (pathname === '/api/version' && req.method === 'GET') {
-        const LATEST_VERSION = '2.0.0';
+        const LATEST_VERSION = '2.0.1';
         const BASE_URL = process.env.RENDER_EXTERNAL_URL || 'https://fitness-ecosystem-pro.onrender.com';
         return sendJson(res, 200, {
           latest: LATEST_VERSION,
           athlete: {
             version: LATEST_VERSION,
             url: `${BASE_URL}/releases/athlete-pro-v${LATEST_VERSION}.apk`,
-            changelog: 'Версия 2.0.0: таймер отдыха, редактирование подходов на сайте, синхронизация профиля, Telegram авторизация, 2FA защита'
+            changelog: 'Версия 2.0.1: Pull-to-Refresh обновление как в браузере, таймер отдыха, редактирование подходов на сайте, синхронизация профиля, Telegram авторизация, 2FA защита'
           },
           trainer: {
             version: LATEST_VERSION,
             url: `${BASE_URL}/releases/trainer-pro-v${LATEST_VERSION}.apk`,
-            changelog: 'Версия 2.0.0: мгновенная синхронизация, Telegram авторизация, 2FA защита, управление подходами'
+            changelog: 'Версия 2.0.1: Pull-to-Refresh обновление как в браузере, мгновенная синхронизация, Telegram авторизация, 2FA защита, управление подходами'
           }
         });
       }

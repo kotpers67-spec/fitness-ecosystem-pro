@@ -49,9 +49,9 @@ class UpdateService(private val context: Context) {
     fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "2.0.0"
+            pInfo.versionName ?: "2.0.1"
         } catch (_: Exception) {
-            "2.0.0"
+            "2.0.1"
         }
     }
 
@@ -131,7 +131,7 @@ class UpdateService(private val context: Context) {
             }
 
             // 3. Static fallback
-            val fallbackVersion = "2.0.0"
+            val fallbackVersion = "2.0.1"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
                 UpdateCheckResult(

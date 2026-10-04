@@ -1,6 +1,6 @@
 {
   "name": "fitness-ecosystem-web",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Fitness Ecosystem Pro Web Portal - Athlete & Trainer Dashboards with Zero-Trust Security, Hardened Auth, and Anti-Injection Protection",
   "main": "src/server.js",
   "scripts": {
