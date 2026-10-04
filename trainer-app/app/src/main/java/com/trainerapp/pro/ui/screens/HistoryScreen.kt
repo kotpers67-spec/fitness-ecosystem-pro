@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trainerapp.pro.data.local.dao.SetHistoryItem
 import com.trainerapp.pro.data.local.entities.AnthropometryEntity
 import com.trainerapp.pro.data.sync.SyncState
 import com.trainerapp.pro.ui.MainViewModel
@@ -43,6 +44,9 @@ fun HistoryScreen(
 
     var showAddAnthroDialog by remember { mutableStateOf(false) }
     var exerciseDropdownExpanded by remember { mutableStateOf(false) }
+    var showChartWeight by remember { mutableStateOf(true) }
+    var showChartSets by remember { mutableStateOf(true) }
+    var showChartReps by remember { mutableStateOf(true) }
 
     val selectedExercise = exercises.find { it.id == selectedChartExerciseId }
         ?: exercises.firstOrNull()
@@ -196,11 +200,48 @@ fun HistoryScreen(
                         Spacer(Modifier.height(14.dp))
 
                         val completedSets = exerciseHistory.filter { it.isCompleted }
-                        if (completedSets.size >= 2) {
-                            val weights = completedSets.map { it.weightKg }
-                            SimpleLineChart(
-                                dataPoints = weights,
-                                lineColor = MaterialTheme.colorScheme.primary,
+                        if (completedSets.isNotEmpty()) {
+                            // Interactive Metric Toggles
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = showChartWeight,
+                                    onClick = { showChartWeight = !showChartWeight },
+                                    label = { Text("Вес (кг)", fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                        selectedLabelColor = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                                FilterChip(
+                                    selected = showChartSets,
+                                    onClick = { showChartSets = !showChartSets },
+                                    label = { Text("Подходы", fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFF38BDF8).copy(alpha = 0.25f),
+                                        selectedLabelColor = Color(0xFF38BDF8)
+                                    )
+                                )
+                                FilterChip(
+                                    selected = showChartReps,
+                                    onClick = { showChartReps = !showChartReps },
+                                    label = { Text("Повторы", fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFFF43F5E).copy(alpha = 0.25f),
+                                        selectedLabelColor = Color(0xFFF43F5E)
+                                    )
+                                )
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+
+                            TrainerExerciseLineChart(
+                                history = completedSets,
+                                showWeight = showChartWeight,
+                                showSets = showChartSets,
+                                showReps = showChartReps,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(130.dp)
@@ -291,6 +332,127 @@ fun HistoryScreen(
                 TextButton(onClick = { showAddAnthroDialog = false }) { Text("Отмена") }
             }
         )
+    }
+}
+
+@Composable
+fun TrainerExerciseLineChart(
+    history: List<SetHistoryItem>,
+    showWeight: Boolean = true,
+    showSets: Boolean = true,
+    showReps: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val weightColor = MaterialTheme.colorScheme.primary
+    val setsColor = Color(0xFF38BDF8) // Cyan
+    val repsColor = Color(0xFFF43F5E) // Rose
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+
+    data class TrainerDayMetric(
+        val date: String,
+        val maxWeight: Double,
+        val setsCount: Int,
+        val avgReps: Double
+    )
+
+    val setsByDate = remember(history) { history.groupBy { it.date } }
+    val dayPoints = remember(setsByDate) {
+        setsByDate.map { (date, sets) ->
+            val maxW = sets.maxOfOrNull { it.weightKg } ?: 0.0
+            val count = sets.size
+            val avgR = if (count > 0) sets.map { it.reps }.average() else 0.0
+            TrainerDayMetric(date, maxW, count, avgR)
+        }
+    }
+
+    Canvas(modifier = modifier) {
+        if (dayPoints.isEmpty()) return@Canvas
+
+        val w = size.width
+        val h = size.height
+
+        for (i in 0..3) {
+            val y = h * (i / 3f)
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, y),
+                end = Offset(w, y),
+                strokeWidth = 1f
+            )
+        }
+
+        val weights = dayPoints.map { it.maxWeight }
+        val setsList = dayPoints.map { it.setsCount.toDouble() }
+        val repsList = dayPoints.map { it.avgReps }
+
+        val minW = (weights.minOrNull() ?: 0.0) * 0.8
+        val maxW = (weights.maxOrNull() ?: 100.0) * 1.15
+        val rangeW = (maxW - minW).coerceAtLeast(1.0)
+
+        val maxSets = (setsList.maxOrNull() ?: 5.0) * 1.2
+        val rangeSets = maxSets.coerceAtLeast(1.0)
+
+        val maxReps = (repsList.maxOrNull() ?: 15.0) * 1.2
+        val rangeReps = maxReps.coerceAtLeast(1.0)
+
+        if (dayPoints.size == 1) {
+            val item = dayPoints.first()
+            val y = h / 2f
+            if (showWeight) {
+                drawCircle(color = weightColor, radius = 5.dp.toPx(), center = Offset(w / 2, y))
+            }
+            return@Canvas
+        }
+
+        val stepX = w / (dayPoints.size - 1)
+
+        // 1. Draw Sets Line (Cyan)
+        if (showSets) {
+            val setsPath = Path()
+            dayPoints.forEachIndexed { index, item ->
+                val x = index * stepX
+                val y = h - ((item.setsCount / rangeSets) * (h * 0.75f) + h * 0.12f).toFloat()
+                if (index == 0) setsPath.moveTo(x, y) else setsPath.lineTo(x, y)
+                drawCircle(color = setsColor, radius = 4.dp.toPx(), center = Offset(x, y))
+            }
+            drawPath(
+                path = setsPath,
+                color = setsColor,
+                style = Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+        }
+
+        // 2. Draw Reps Line (Rose)
+        if (showReps) {
+            val repsPath = Path()
+            dayPoints.forEachIndexed { index, item ->
+                val x = index * stepX
+                val y = h - ((item.avgReps / rangeReps) * (h * 0.75f) + h * 0.12f).toFloat()
+                if (index == 0) repsPath.moveTo(x, y) else repsPath.lineTo(x, y)
+                drawCircle(color = repsColor, radius = 4.dp.toPx(), center = Offset(x, y))
+            }
+            drawPath(
+                path = repsPath,
+                color = repsColor,
+                style = Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+        }
+
+        // 3. Draw Weight Line (Primary)
+        if (showWeight) {
+            val weightPath = Path()
+            dayPoints.forEachIndexed { index, item ->
+                val x = index * stepX
+                val y = h - (((item.maxWeight - minW) / rangeW) * (h * 0.75f) + h * 0.12f).toFloat()
+                if (index == 0) weightPath.moveTo(x, y) else weightPath.lineTo(x, y)
+                drawCircle(color = weightColor, radius = 5.dp.toPx(), center = Offset(x, y))
+            }
+            drawPath(
+                path = weightPath,
+                color = weightColor,
+                style = Stroke(width = 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+        }
     }
 }
 

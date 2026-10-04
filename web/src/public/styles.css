@@ -1619,6 +1619,31 @@ input:checked + .slider:before {
   align-items: center;
   gap: 6px;
 }
+.legend-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.legend-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-subtle);
+}
+.legend-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+}
+.legend-btn.inactive {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
 .legend-line {
   width: 14px;
   height: 3px;

@@ -117,7 +117,7 @@ class CloudSyncService {
   /**
    * Register or update athlete in cloud pairing registry
    */
-  async registerAthletePairing(pin, clientUuid, clientName, phone = '', goal = '', avatarBase64 = '') {
+  async registerAthletePairing(pin, clientUuid, clientName, phone = '', goal = '', avatarBase64 = '', restrictions = '') {
     const cloud = await this.fetchCloudData(true);
     if (!cloud.pairing) cloud.pairing = {};
 
@@ -137,7 +137,7 @@ class CloudSyncService {
       phone: phone || '',
       goal: goal || '',
       avatarBase64: avatarBase64 || '',
-      restrictions: '',
+      restrictions: restrictions || '',
       notes: '',
       timestamp: Date.now(),
       status: 'PENDING'
@@ -150,6 +150,7 @@ class CloudSyncService {
         clientName: clientName || 'Атлет',
         phone: phone || '',
         avatarBase64: avatarBase64 || '',
+        restrictions: restrictions || '',
         syncTimestamp: Date.now(),
         assignedWorkouts: [],
         anthropometry: []
@@ -158,6 +159,7 @@ class CloudSyncService {
       cloud.clients[clientUuid].clientName = clientName || cloud.clients[clientUuid].clientName;
       if (phone) cloud.clients[clientUuid].phone = phone;
       if (avatarBase64) cloud.clients[clientUuid].avatarBase64 = avatarBase64;
+      if (restrictions !== undefined && restrictions !== null) cloud.clients[clientUuid].restrictions = restrictions;
     }
 
     await this.pushCloudData(cloud);

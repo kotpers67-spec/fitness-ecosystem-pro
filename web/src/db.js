@@ -257,18 +257,19 @@ class AppDatabase {
     return generateSecurePin();
   }
 
-  updateProfile(userId, fullName, phone, avatarBase64 = null) {
-    if (avatarBase64 !== null && avatarBase64 !== undefined) {
-      const stmt = this.db.prepare(`
-        UPDATE users SET full_name = ?, phone = ?, avatar_base64 = ? WHERE id = ?
-      `);
-      return stmt.run(fullName, phone, avatarBase64, userId);
-    } else {
-      const stmt = this.db.prepare(`
-        UPDATE users SET full_name = ?, phone = ? WHERE id = ?
-      `);
-      return stmt.run(fullName, phone, userId);
-    }
+  updateProfile(userId, fullName, phone, avatarBase64 = null, restrictions = null, clientUuid = null) {
+    const existing = this.findUserById(userId);
+    if (!existing) return null;
+    const finalAvatar = (avatarBase64 !== null && avatarBase64 !== undefined) ? avatarBase64 : existing.avatar_base64;
+    const finalRestrictions = (restrictions !== null && restrictions !== undefined) ? restrictions : (existing.restrictions || '');
+    const finalClientUuid = (clientUuid && String(clientUuid).trim()) ? String(clientUuid).trim() : existing.client_uuid;
+
+    const stmt = this.db.prepare(`
+      UPDATE users 
+      SET full_name = ?, phone = ?, avatar_base64 = ?, restrictions = ?, client_uuid = ? 
+      WHERE id = ?
+    `);
+    return stmt.run(fullName, phone, finalAvatar, finalRestrictions, finalClientUuid, userId);
   }
 
   updateCoachInfo(athleteId, coachName, coachPhone) {

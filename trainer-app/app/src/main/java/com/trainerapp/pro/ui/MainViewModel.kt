@@ -42,6 +42,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val selectedExerciseOrder: StateFlow<Int> = _selectedExerciseOrder.asStateFlow()
 
     val clients: StateFlow<List<ClientEntity>> = dao.getAllClients()
+        .map { rawList ->
+            val seenUuids = mutableSetOf<String>()
+            val seenPhones = mutableSetOf<String>()
+            val seenNames = mutableSetOf<String>()
+            val deduped = mutableListOf<ClientEntity>()
+
+            for (c in rawList) {
+                val cleanPhone = c.phone.filter { it.isDigit() }
+                val normName = c.fullName.trim().lowercase()
+
+                if (c.clientUuid.isNotBlank() && seenUuids.contains(c.clientUuid)) continue
+                if (cleanPhone.length >= 7 && seenPhones.contains(cleanPhone.takeLast(10))) continue
+                if (normName.isNotBlank() && normName != "подопечный" && normName != "атлет" && seenNames.contains(normName)) continue
+
+                if (c.clientUuid.isNotBlank()) seenUuids.add(c.clientUuid)
+                if (cleanPhone.length >= 7) seenPhones.add(cleanPhone.takeLast(10))
+                if (normName.isNotBlank()) seenNames.add(normName)
+                deduped.add(c)
+            }
+            deduped
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val exercises: StateFlow<List<ExerciseEntity>> = dao.getAllExercises()

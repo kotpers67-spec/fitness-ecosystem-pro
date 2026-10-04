@@ -234,10 +234,13 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                 } catch (_: Exception) {}
             }
 
+            val clientUuidToUse = user.clientUuid.ifBlank { current.clientUuid.ifBlank { "ath_${user.id}" } }
             dao.saveProfile(
                 current.copy(
+                    clientUuid = clientUuidToUse,
                     fullName = user.fullName.ifBlank { current.fullName },
                     phone = user.phone.ifBlank { current.phone },
+                    restrictions = user.restrictions.ifBlank { current.restrictions },
                     pairingPin = pin,
                     avatarBase64 = b64,
                     avatarPath = savedPath,
@@ -590,6 +593,19 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
             )
             dao.saveProfile(updated)
             _syncMessage.value = "Профиль успешно сохранен"
+            // Push profile to web server if auth token is present
+            val token = authPrefs.getString("auth_token", "") ?: ""
+            if (token.isNotBlank()) {
+                remoteAuthManager.backendBaseUrl = backendBaseUrl
+                remoteAuthManager.updateProfile(
+                    authToken = token,
+                    fullName = fullName,
+                    phone = phone,
+                    avatarBase64 = updated.avatarBase64,
+                    restrictions = restrictions,
+                    clientUuid = updated.clientUuid
+                )
+            }
             // Quietly update cloud pairing / profile data
             autoSync()
         }
@@ -628,6 +644,18 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                 val current = profile.value ?: AthleteProfileEntity()
                 dao.saveProfile(current.copy(avatarPath = savedPath, photoUri = savedPath, avatarBase64 = base64Str))
                 _syncMessage.value = "Фото профиля обновлено"
+                val token = authPrefs.getString("auth_token", "") ?: ""
+                if (token.isNotBlank()) {
+                    remoteAuthManager.backendBaseUrl = backendBaseUrl
+                    remoteAuthManager.updateProfile(
+                        authToken = token,
+                        fullName = current.fullName,
+                        phone = current.phone,
+                        avatarBase64 = base64Str,
+                        restrictions = current.restrictions,
+                        clientUuid = current.clientUuid
+                    )
+                }
                 autoSync()
             } catch (e: Exception) {
                 _syncMessage.value = "Ошибка сохранения фото: ${e.message}"
@@ -682,6 +710,26 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                 val initialPin = String.format("%06d", (100000..999999).random())
                 dao.saveProfile(prof.copy(pairingPin = initialPin))
             }
+            // Pull latest remote profile from web server if auth token is active
+            val token = authPrefs.getString("auth_token", "") ?: ""
+            if (token.isNotBlank()) {
+                remoteAuthManager.backendBaseUrl = backendBaseUrl
+                val remoteProfile = remoteAuthManager.fetchCurrentProfile(token)
+                if (remoteProfile != null) {
+                    val freshProf = dao.getProfile().firstOrNull() ?: prof
+                    val updatedProf = freshProf.copy(
+                        clientUuid = remoteProfile.clientUuid.ifBlank { freshProf.clientUuid },
+                        fullName = remoteProfile.fullName.ifBlank { freshProf.fullName },
+                        phone = remoteProfile.phone.ifBlank { freshProf.phone },
+                        restrictions = remoteProfile.restrictions.ifBlank { freshProf.restrictions },
+                        avatarBase64 = if (remoteProfile.avatarBase64.isNotBlank()) remoteProfile.avatarBase64 else freshProf.avatarBase64
+                    )
+                    if (updatedProf != freshProf) {
+                        dao.saveProfile(updatedProf)
+                    }
+                }
+            }
+
             val result = googleDriveSync.syncWithCoach(athleteId)
             if (result.isSuccess) {
                 loadSessionForDate(_selectedDate.value)

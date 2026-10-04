@@ -280,10 +280,16 @@ class GoogleDriveSyncManager {
 
             val (clientData, updatedRootObj) = validationResult.getOrThrow()
 
-            // 1. Проверяем локальную базу: есть ли уже клиент с таким UUID или PIN
+            // 1. Проверяем локальную базу: есть ли уже клиент с таким UUID, PIN, телефоном или ФИО
             var client = dao.getClientByUuid(clientData.clientUuid)
             if (client == null && cleanPin.isNotEmpty()) {
                 client = dao.getClientByPairingCode(cleanPin)
+            }
+            if (client == null && clientData.phone.isNotBlank()) {
+                client = dao.getClientByPhone(clientData.phone)
+            }
+            if (client == null && clientData.fullName.isNotBlank() && !clientData.fullName.startsWith("Подопечный ") && clientData.fullName != "Атлет") {
+                client = dao.getClientByFullName(clientData.fullName)
             }
 
             if (client != null) {

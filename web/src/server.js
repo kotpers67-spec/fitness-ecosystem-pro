@@ -1128,15 +1128,17 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { user: normalizedUser, pairedCoach });
       }
 
-      // UPDATE PROFILE (Name, Phone, Photo/Avatar)
+      // UPDATE PROFILE (Name, Phone, Photo/Avatar, Restrictions, ClientUUID)
       if ((pathname === '/api/user/profile' || pathname === '/api/profile') && (req.method === 'PUT' || req.method === 'POST')) {
         const body = await parseJsonBody(req);
-        const { fullName, phone, avatarBase64 } = body;
+        const { fullName, phone, avatarBase64, restrictions, clientUuid } = body;
         if (avatarBase64 && avatarBase64.length > 30000) {
           return sendError(res, 400, 'Аватар слишком большой (максимум 30 КБ)');
         }
         const cleanName = String(fullName || user.full_name).trim();
         const cleanPhone = phone !== undefined ? String(phone).trim() : user.phone;
+        const cleanRestrictions = restrictions !== undefined ? String(restrictions).trim() : (user.restrictions || '');
+        const cleanClientUuid = (clientUuid && String(clientUuid).trim()) ? String(clientUuid).trim() : user.client_uuid;
 
         if (cleanName.length < 2) {
           return sendError(res, 400, 'Имя должно содержать минимум 2 символа');
@@ -1147,19 +1149,25 @@ const server = http.createServer(async (req, res) => {
 
         const escapedName = escapeHtml(cleanName);
         const escapedPhone = escapeHtml(cleanPhone);
+        const escapedRestrictions = escapeHtml(cleanRestrictions);
 
-        db.updateProfile(user.id, escapedName, escapedPhone, avatarBase64 !== undefined ? avatarBase64 : null);
+        db.updateProfile(user.id, escapedName, escapedPhone, avatarBase64 !== undefined ? avatarBase64 : null, escapedRestrictions, cleanClientUuid);
         const updatedUser = db.findUserById(user.id);
 
-        if (updatedUser.role === 'athlete' && updatedUser.pairing_code) {
-          cloudSyncService.registerAthletePairing(
-            updatedUser.pairing_code,
-            updatedUser.client_uuid,
-            updatedUser.full_name,
-            updatedUser.phone,
-            '',
-            updatedUser.avatar_base64 || ''
-          ).catch(() => {});
+        if (updatedUser.role === 'athlete') {
+          if (updatedUser.pairing_code) {
+            cloudSyncService.registerAthletePairing(
+              updatedUser.pairing_code,
+              updatedUser.client_uuid,
+              updatedUser.full_name,
+              updatedUser.phone,
+              '',
+              updatedUser.avatar_base64 || '',
+              updatedUser.restrictions || ''
+            ).catch(() => {});
+          } else if (updatedUser.client_uuid) {
+            cloudSyncService.updateAthleteRestrictions(updatedUser.client_uuid, updatedUser.restrictions || '').catch(() => {});
+          }
         }
 
         return sendJson(res, 200, {
@@ -1172,6 +1180,8 @@ const server = http.createServer(async (req, res) => {
             phone: updatedUser.phone,
             avatarBase64: updatedUser.avatar_base64,
             pairingCode: updatedUser.pairing_code,
+            restrictions: updatedUser.restrictions || '',
+            clientUuid: updatedUser.client_uuid || '',
             isPrivate: Boolean(updatedUser.is_private)
           }
         });
@@ -1440,6 +1450,12 @@ const server = http.createServer(async (req, res) => {
                 return sendError(res, 400, cloudAthlete.message || 'Ошибка кода привязки');
               }
               let localUser = db.findUserByClientUuid(cloudAthlete.clientUuid);
+              if (!localUser && cloudAthlete.phone) {
+                localUser = db.findUserByPhone(cloudAthlete.phone);
+              }
+              if (!localUser && cloudAthlete.clientName && cloudAthlete.clientName !== 'Подопечный' && cloudAthlete.clientName !== 'Атлет') {
+                localUser = db.findUserByFullName(cloudAthlete.clientName);
+              }
               if (!localUser) {
                 const uniqueUsername = 'ath_' + crypto.randomBytes(6).toString('hex');
                 const uid = db.createUser(
@@ -1453,8 +1469,16 @@ const server = http.createServer(async (req, res) => {
                   cloudAthlete.avatarBase64 || ''
                 );
                 localUser = db.findUserById(uid);
-              } else if (cloudAthlete.avatarBase64 && !localUser.avatar_base64) {
-                db.updateProfile(localUser.id, localUser.full_name, localUser.phone, cloudAthlete.avatarBase64);
+              } else {
+                // Update existing user with clientUuid and avatar/restrictions to unify web and mobile accounts!
+                db.updateProfile(
+                  localUser.id,
+                  localUser.full_name || cloudAthlete.clientName,
+                  localUser.phone || cloudAthlete.phone,
+                  cloudAthlete.avatarBase64 || localUser.avatar_base64,
+                  cloudAthlete.restrictions || localUser.restrictions,
+                  cloudAthlete.clientUuid
+                );
                 localUser = db.findUserById(localUser.id);
               }
               athlete = localUser;
@@ -1499,7 +1523,24 @@ const server = http.createServer(async (req, res) => {
       // TRAINER: GET CLIENTS
       if (pathname === '/api/trainer/clients' && req.method === 'GET') {
         if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
-        const clients = db.getTrainerClients(user.id);
+        const rawClients = db.getTrainerClients(user.id);
+        const seenIds = new Set();
+        const seenUuids = new Set();
+        const seenPhones = new Set();
+        const clients = [];
+
+        for (const c of rawClients) {
+          if (seenIds.has(c.id)) continue;
+          if (c.client_uuid && seenUuids.has(c.client_uuid)) continue;
+          const cleanPhone = (c.phone || '').replace(/\D/g, '');
+          if (cleanPhone && cleanPhone.length >= 7 && seenPhones.has(cleanPhone.slice(-10))) continue;
+
+          seenIds.add(c.id);
+          if (c.client_uuid) seenUuids.add(c.client_uuid);
+          if (cleanPhone && cleanPhone.length >= 7) seenPhones.add(cleanPhone.slice(-10));
+          clients.push(c);
+        }
+
         return sendJson(res, 200, { clients });
       }
 

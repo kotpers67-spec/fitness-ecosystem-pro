@@ -27,6 +27,12 @@ interface TrainerDao {
     @Query("SELECT * FROM clients WHERE pairingCode = :code LIMIT 1")
     suspend fun getClientByPairingCode(code: String): ClientEntity?
 
+    @Query("SELECT * FROM clients WHERE phone = :phone OR phone LIKE '%' || :phone LIMIT 1")
+    suspend fun getClientByPhone(phone: String): ClientEntity?
+
+    @Query("SELECT * FROM clients WHERE LOWER(fullName) = LOWER(:fullName) LIMIT 1")
+    suspend fun getClientByFullName(fullName: String): ClientEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertClient(client: ClientEntity): Long
 

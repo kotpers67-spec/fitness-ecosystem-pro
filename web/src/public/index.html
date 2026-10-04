@@ -330,11 +330,17 @@
             </div>
           </div>
 
-          <!-- Chart Legend (3 шкалы) -->
-          <div class="chart-legend-row">
-            <div class="legend-item"><span class="legend-line line-weight"></span> Рабочий вес (кг)</div>
-            <div class="legend-item"><span class="legend-line line-sets"></span> Подходы (кол-во)</div>
-            <div class="legend-item"><span class="legend-line line-reps"></span> Повторения</div>
+          <!-- Chart Legend (3 шкалы, переключаемые нажатием) -->
+          <div class="chart-legend-row" id="athlete-chart-legend">
+            <button type="button" class="legend-item legend-btn active" id="btn-toggle-metric-weight" title="Нажмите, чтобы скрыть/показать вес">
+              <span class="legend-line line-weight"></span> Рабочий вес (кг)
+            </button>
+            <button type="button" class="legend-item legend-btn active" id="btn-toggle-metric-sets" title="Нажмите, чтобы скрыть/показать подходы">
+              <span class="legend-line line-sets"></span> Подходы (кол-во)
+            </button>
+            <button type="button" class="legend-item legend-btn active" id="btn-toggle-metric-reps" title="Нажмите, чтобы скрыть/показать повторения">
+              <span class="legend-line line-reps"></span> Повторения
+            </button>
           </div>
         </div>
 
@@ -407,6 +413,10 @@
             <div class="form-group" style="margin-bottom: 12px;">
               <label class="field-label">Номер телефона</label>
               <input type="tel" id="athlete-edit-phone" class="app-input" placeholder="+7 999 000-00-00">
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="field-label">Ограничения и травмы</label>
+              <textarea id="athlete-edit-restrictions" class="app-input" rows="2" placeholder="Например: Без осевых нагрузок, травма правого плеча..."></textarea>
             </div>
             <button id="btn-save-athlete-profile" class="app-btn btn-primary">Сохранить изменения</button>
           </div>
@@ -747,11 +757,17 @@
             </div>
           </div>
 
-          <!-- Chart Legend (3 шкалы) -->
-          <div class="chart-legend-row">
-            <div class="legend-item"><span class="legend-line line-weight"></span> Рабочий вес (кг)</div>
-            <div class="legend-item"><span class="legend-line line-sets"></span> Подходы (кол-во)</div>
-            <div class="legend-item"><span class="legend-line line-reps"></span> Повторения</div>
+          <!-- Chart Legend (3 шкалы, переключаемые нажатием) -->
+          <div class="chart-legend-row" id="trainer-chart-legend">
+            <button type="button" class="legend-item legend-btn active" id="btn-trainer-toggle-metric-weight" title="Нажмите, чтобы скрыть/показать вес">
+              <span class="legend-line line-weight"></span> Рабочий вес (кг)
+            </button>
+            <button type="button" class="legend-item legend-btn active" id="btn-trainer-toggle-metric-sets" title="Нажмите, чтобы скрыть/показать подходы">
+              <span class="legend-line line-sets"></span> Подходы (кол-во)
+            </button>
+            <button type="button" class="legend-item legend-btn active" id="btn-trainer-toggle-metric-reps" title="Нажмите, чтобы скрыть/показать повторения">
+              <span class="legend-line line-reps"></span> Повторения
+            </button>
           </div>
         </div>
 
@@ -878,11 +894,6 @@
             <div class="tg-status-box" style="margin-bottom: 14px; padding: 10px 14px; background: rgba(0, 136, 204, 0.08); border: 1px dashed rgba(0, 136, 204, 0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
               <span class="tg-pulse-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #0088cc; box-shadow: 0 0 8px #0088cc;"></span>
               <span id="tg-oneclick-status-text" style="font-size: 13px; color: var(--text-primary);">Ожидание перехода в Telegram...</span>
-            </div>
-
-            <div id="tg-oneclick-qr-container" style="text-align: center; margin-bottom: 14px; display: none;">
-              <div id="tg-oneclick-qr-svg" style="display: inline-block; padding: 6px; background: #ffffff; border-radius: 10px; line-height: 0;"></div>
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Или отсканируйте QR-код камерой</div>
             </div>
 
             <div class="auth-divider" style="margin: 12px 0 8px;">

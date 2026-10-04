@@ -19,6 +19,8 @@ data class AthleteRemoteUserInfo(
     val telegramUsername: String = "",
     val twoFactorEnabled: Boolean = false,
     val avatarBase64: String = "",
+    val clientUuid: String = "",
+    val restrictions: String = "",
     val token: String = ""
 )
 
@@ -105,6 +107,9 @@ class AthleteRemoteAuthManager(
                         twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
                         avatarBase64 = if (userObj.has("avatarBase64") && !userObj.get("avatarBase64").isJsonNull) userObj.get("avatarBase64").asString
                             else if (userObj.has("avatar_base64") && !userObj.get("avatar_base64").isJsonNull) userObj.get("avatar_base64").asString else "",
+                        clientUuid = if (userObj.has("clientUuid") && !userObj.get("clientUuid").isJsonNull) userObj.get("clientUuid").asString
+                            else if (userObj.has("client_uuid") && !userObj.get("client_uuid").isJsonNull) userObj.get("client_uuid").asString else "",
+                        restrictions = if (userObj.has("restrictions") && !userObj.get("restrictions").isJsonNull) userObj.get("restrictions").asString else "",
                         token = token
                     )
                 } else {
@@ -345,6 +350,9 @@ class AthleteRemoteAuthManager(
                         twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
                         avatarBase64 = if (userObj.has("avatarBase64") && !userObj.get("avatarBase64").isJsonNull) userObj.get("avatarBase64").asString
                             else if (userObj.has("avatar_base64") && !userObj.get("avatar_base64").isJsonNull) userObj.get("avatar_base64").asString else "",
+                        clientUuid = if (userObj.has("clientUuid") && !userObj.get("clientUuid").isJsonNull) userObj.get("clientUuid").asString
+                            else if (userObj.has("client_uuid") && !userObj.get("client_uuid").isJsonNull) userObj.get("client_uuid").asString else "",
+                        restrictions = if (userObj.has("restrictions") && !userObj.get("restrictions").isJsonNull) userObj.get("restrictions").asString else "",
                         token = token
                     )
                 } else {
@@ -421,6 +429,9 @@ class AthleteRemoteAuthManager(
                             twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
                             avatarBase64 = if (userObj.has("avatarBase64") && !userObj.get("avatarBase64").isJsonNull) userObj.get("avatarBase64").asString
                                 else if (userObj.has("avatar_base64") && !userObj.get("avatar_base64").isJsonNull) userObj.get("avatar_base64").asString else "",
+                            clientUuid = if (userObj.has("clientUuid") && !userObj.get("clientUuid").isJsonNull) userObj.get("clientUuid").asString
+                                else if (userObj.has("client_uuid") && !userObj.get("client_uuid").isJsonNull) userObj.get("client_uuid").asString else "",
+                            restrictions = if (userObj.has("restrictions") && !userObj.get("restrictions").isJsonNull) userObj.get("restrictions").asString else "",
                             token = token
                         )
                     } else {
@@ -504,5 +515,84 @@ class AthleteRemoteAuthManager(
         } catch (e: Exception) {
             return@withContext Pair(false, e.message ?: "Сетевая ошибка")
         }
+    }
+
+    /**
+     * Update remote profile (Name, Phone, AvatarBase64, Restrictions, ClientUUID)
+     */
+    suspend fun updateProfile(
+        authToken: String,
+        fullName: String,
+        phone: String,
+        avatarBase64: String?,
+        restrictions: String?,
+        clientUuid: String?
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (authToken.isBlank()) return@withContext false
+        try {
+            val url = URL("$backendBaseUrl/api/user/profile")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Authorization", "Bearer $authToken")
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            val payload = JsonObject().apply {
+                addProperty("fullName", fullName)
+                addProperty("phone", phone)
+                if (avatarBase64 != null) addProperty("avatarBase64", avatarBase64)
+                if (restrictions != null) addProperty("restrictions", restrictions)
+                if (clientUuid != null) addProperty("clientUuid", clientUuid)
+            }
+            conn.outputStream.use { it.write(gson.toJson(payload).toByteArray(Charsets.UTF_8)) }
+            conn.responseCode == 200
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Fetch current profile from /api/me
+     */
+    suspend fun fetchCurrentProfile(authToken: String): AthleteRemoteUserInfo? = withContext(Dispatchers.IO) {
+        if (authToken.isBlank()) return@withContext null
+        try {
+            val url = URL("$backendBaseUrl/api/me")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("Authorization", "Bearer $authToken")
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            if (conn.responseCode == 200) {
+                val text = conn.inputStream.bufferedReader().readText()
+                val json = runCatching { JsonParser.parseString(text).asJsonObject }.getOrNull()
+                val userObj = json?.getAsJsonObject("user")
+                if (userObj != null) {
+                    return@withContext AthleteRemoteUserInfo(
+                        id = if (userObj.has("id")) userObj.get("id").asLong else 0L,
+                        username = if (userObj.has("username")) userObj.get("username").asString else "",
+                        role = if (userObj.has("role")) userObj.get("role").asString else "athlete",
+                        fullName = if (userObj.has("fullName") && !userObj.get("fullName").isJsonNull) userObj.get("fullName").asString
+                            else if (userObj.has("full_name") && !userObj.get("full_name").isJsonNull) userObj.get("full_name").asString else "",
+                        phone = if (userObj.has("phone") && !userObj.get("phone").isJsonNull) userObj.get("phone").asString else "",
+                        pairingCode = if (userObj.has("pairingCode") && !userObj.get("pairingCode").isJsonNull) userObj.get("pairingCode").asString
+                            else if (userObj.has("pairing_code") && !userObj.get("pairing_code").isJsonNull) userObj.get("pairing_code").asString else "",
+                        telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString
+                            else if (userObj.has("telegram_username") && !userObj.get("telegram_username").isJsonNull) userObj.get("telegram_username").asString else "",
+                        twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
+                        avatarBase64 = if (userObj.has("avatarBase64") && !userObj.get("avatarBase64").isJsonNull) userObj.get("avatarBase64").asString
+                            else if (userObj.has("avatar_base64") && !userObj.get("avatar_base64").isJsonNull) userObj.get("avatar_base64").asString else "",
+                        clientUuid = if (userObj.has("clientUuid") && !userObj.get("clientUuid").isJsonNull) userObj.get("clientUuid").asString
+                            else if (userObj.has("client_uuid") && !userObj.get("client_uuid").isJsonNull) userObj.get("client_uuid").asString else "",
+                        restrictions = if (userObj.has("restrictions") && !userObj.get("restrictions").isJsonNull) userObj.get("restrictions").asString else "",
+                        token = authToken
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+        null
     }
 }

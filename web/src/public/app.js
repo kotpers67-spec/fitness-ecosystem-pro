@@ -52,6 +52,11 @@
     linkTgTimerInterval: null,
     athleteSelectedExercise: null,
     trainerSelectedExercise: null,
+    chartMetrics: {
+      weight: true,
+      sets: true,
+      reps: true
+    },
     deferredInstallPrompt: null,
     restTimerSeconds: 0,
     restTimerTotal: 90,
@@ -149,6 +154,7 @@
     athleteAvatarInput: document.getElementById('athlete-avatar-input'),
     athleteEditName: document.getElementById('athlete-edit-name'),
     athleteEditPhone: document.getElementById('athlete-edit-phone'),
+    athleteEditRestrictions: document.getElementById('athlete-edit-restrictions'),
     btnSaveAthleteProfile: document.getElementById('btn-save-athlete-profile'),
     athletePairingPin: document.getElementById('athlete-pairing-pin'),
     athleteQrContainer: document.getElementById('athlete-qr-container'),
@@ -253,6 +259,14 @@
     trainerScaleTotalSets: document.getElementById('trainer-scale-total-sets'),
     trainerScaleAvgReps: document.getElementById('trainer-scale-avg-reps'),
     btnTrainerAddWeight: document.getElementById('btn-trainer-add-weight'),
+
+    // Interactive Metric Toggles for Charts
+    btnToggleMetricWeight: document.getElementById('btn-toggle-metric-weight'),
+    btnToggleMetricSets: document.getElementById('btn-toggle-metric-sets'),
+    btnToggleMetricReps: document.getElementById('btn-toggle-metric-reps'),
+    btnTrainerToggleMetricWeight: document.getElementById('btn-trainer-toggle-metric-weight'),
+    btnTrainerToggleMetricSets: document.getElementById('btn-trainer-toggle-metric-sets'),
+    btnTrainerToggleMetricReps: document.getElementById('btn-trainer-toggle-metric-reps'),
 
     // PWA & Mobile App Download
     pwaInstallBanner: document.getElementById('pwa-install-banner'),
@@ -992,27 +1006,33 @@
       });
     }
 
-    // 1. Draw Sets Series (Cyan #38bdf8)
-    drawSeries(pointsSets, '#38bdf8', 2);
-    // 2. Draw Reps Series (Rose #f43f5e)
-    drawSeries(pointsReps, '#f43f5e', 2);
-    // 3. Draw Weight Series (Neon Lime #c8ff00)
-    drawSeries(pointsWeight, '#c8ff00', 3);
-
-    // Draw Date and Weight text on dots
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 9px system-ui, sans-serif';
-    pointsWeight.forEach(pt => {
-      ctx.fillStyle = '#c8ff00';
-      ctx.fillText(`${pt.val} кг`, pt.x, Math.max(14, pt.y - 8));
-    });
+    // 1. Draw Sets Series (Cyan #38bdf8) if active
+    if (state.chartMetrics.sets) {
+      drawSeries(pointsSets, '#38bdf8', 2);
+    }
+    // 2. Draw Reps Series (Rose #f43f5e) if active
+    if (state.chartMetrics.reps) {
+      drawSeries(pointsReps, '#f43f5e', 2);
+    }
+    // 3. Draw Weight Series (Neon Lime #c8ff00) if active
+    if (state.chartMetrics.weight) {
+      drawSeries(pointsWeight, '#c8ff00', 3);
+      // Draw Date and Weight text on dots
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 9px system-ui, sans-serif';
+      pointsWeight.forEach(pt => {
+        ctx.fillStyle = '#c8ff00';
+        ctx.fillText(`${pt.val} кг`, pt.x, Math.max(14, pt.y - 8));
+      });
+    }
 
     // Draw Date Axis Labels
     ctx.textAlign = 'center';
     ctx.fillStyle = '#a1a1aa';
     ctx.font = '10px system-ui, sans-serif';
-    pointsWeight.forEach((pt, idx) => {
-      if (idx === 0 || idx === pointsWeight.length - 1 || idx % Math.ceil(pointsWeight.length / 5) === 0) {
+    const referencePoints = pointsWeight.length > 0 ? pointsWeight : pointsSets;
+    referencePoints.forEach((pt, idx) => {
+      if (idx === 0 || idx === referencePoints.length - 1 || idx % Math.ceil(referencePoints.length / 5) === 0) {
         const shortDate = pt.date ? pt.date.slice(5) : '';
         ctx.fillText(shortDate, pt.x, height - 12);
       }
@@ -1241,6 +1261,7 @@
 
     if (el.athleteEditName) el.athleteEditName.value = state.user.fullName || state.user.full_name || '';
     if (el.athleteEditPhone) el.athleteEditPhone.value = state.user.phone || '';
+    if (el.athleteEditRestrictions) el.athleteEditRestrictions.value = state.user.restrictions || '';
 
     const avatarB64 = state.user.avatar_base64 || state.user.avatarBase64;
     if (avatarB64 && el.athleteAvatarPreview) {
@@ -2472,12 +2493,15 @@
       el.btnSaveAthleteProfile.onclick = async () => {
         const fullName = el.athleteEditName.value.trim();
         const phone = el.athleteEditPhone.value.trim();
+        const restrictions = el.athleteEditRestrictions ? el.athleteEditRestrictions.value.trim() : '';
         try {
           const res = await api('/api/user/profile', {
             method: 'POST',
             body: JSON.stringify({
               fullName,
               phone,
+              restrictions,
+              clientUuid: state.user.client_uuid || state.user.clientUuid || '',
               avatarBase64: state.athleteAvatarBase64 || state.user.avatar_base64 || ''
             })
           });
@@ -2694,6 +2718,39 @@
         loadTrainerExerciseTimeline(state.trainerSelectedExercise);
       };
     }
+
+    // --- Interactive Metric Toggle Handlers (Weight, Sets, Reps) ---
+    function setupMetricToggle(btn, metricKey, isTrainer = false) {
+      if (!btn) return;
+      btn.onclick = () => {
+        state.chartMetrics[metricKey] = !state.chartMetrics[metricKey];
+        btn.classList.toggle('active', state.chartMetrics[metricKey]);
+        btn.classList.toggle('inactive', !state.chartMetrics[metricKey]);
+
+        // Sync corresponding button in other view
+        const partnerBtn = isTrainer 
+          ? document.getElementById(`btn-toggle-metric-${metricKey}`)
+          : document.getElementById(`btn-trainer-toggle-metric-${metricKey}`);
+        if (partnerBtn) {
+          partnerBtn.classList.toggle('active', state.chartMetrics[metricKey]);
+          partnerBtn.classList.toggle('inactive', !state.chartMetrics[metricKey]);
+        }
+
+        // Re-render current active chart
+        if (state.user?.role === 'trainer' && state.trainerSelectedExercise) {
+          loadTrainerExerciseTimeline(state.trainerSelectedExercise);
+        } else if (state.athleteSelectedExercise) {
+          loadAthleteExerciseTimeline(state.athleteSelectedExercise);
+        }
+      };
+    }
+
+    setupMetricToggle(el.btnToggleMetricWeight, 'weight', false);
+    setupMetricToggle(el.btnToggleMetricSets, 'sets', false);
+    setupMetricToggle(el.btnToggleMetricReps, 'reps', false);
+    setupMetricToggle(el.btnTrainerToggleMetricWeight, 'weight', true);
+    setupMetricToggle(el.btnTrainerToggleMetricSets, 'sets', true);
+    setupMetricToggle(el.btnTrainerToggleMetricReps, 'reps', true);
 
     // --- Body Weight Dialog (Athlete & Trainer) ---
     function openWeightDialog() {

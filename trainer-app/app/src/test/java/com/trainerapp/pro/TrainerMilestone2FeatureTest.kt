@@ -31,6 +31,8 @@ class TrainerMilestone2FeatureTest {
         override suspend fun getClientById(id: Long): ClientEntity? = clients.find { it.id == id }
         override suspend fun getClientByUuid(uuid: String): ClientEntity? = clients.find { it.clientUuid == uuid }
         override suspend fun getClientByPairingCode(code: String): ClientEntity? = clients.find { it.pairingCode == code }
+        override suspend fun getClientByPhone(phone: String): ClientEntity? = clients.find { it.phone == phone || (it.phone.isNotBlank() && it.phone.endsWith(phone)) }
+        override suspend fun getClientByFullName(fullName: String): ClientEntity? = clients.find { it.fullName.equals(fullName, ignoreCase = true) }
         override suspend fun insertClient(client: ClientEntity): Long {
             val newId = (clients.maxOfOrNull { it.id } ?: 0) + 1
             clients.add(client.copy(id = newId))
