@@ -3,7 +3,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
-const { server, db, telegramSessionStore, userTgChatMap } = require('../src/server');
+const { server, db, telegramOtpStore, telegramSessionStore, userTgChatMap } = require('../src/server');
 const { handleLinkToken, send2FAOtp, createOwnersKeyboard, setupBotHandlers, OWNER_LINKS } = require('../src/bot');
 
 let baseUrl;
@@ -449,4 +449,94 @@ describe('PIN 5-Min TTL & Telegram 2FA Authentication Test Suite', () => {
     assert.equal(pollConsumed.statusCode, 200);
     assert.equal(pollConsumed.body.status, 'EXPIRED');
   });
+
+  it('15. Enforces 2FA security during 1-Click Telegram Login if 2FA is enabled', async () => {
+    // 1. Register a user
+    const userWith2Fa = await request('POST', '/api/register', {}, {
+      username: 'ath_2fa_1click_' + Date.now(),
+      password: 'password123',
+      role: 'athlete',
+      fullName: 'Защищённый Атлет'
+    });
+    assert.equal(userWith2Fa.statusCode, 201);
+    const userId = userWith2Fa.body.user.id;
+    const token = userWith2Fa.body.token;
+
+    // Link Telegram to this user FIRST (prerequisite for 2FA)
+    const linkTokenRes = await request('POST', '/api/user/telegram/link-token', {
+      Authorization: `Bearer ${token}`
+    });
+    const linkToken = linkTokenRes.body.token;
+    const tgId = 882000000 + Math.floor(Math.random() * 99999);
+    const mockCtx = {
+      from: { id: tgId, username: 'protected_user_tg' },
+      chat: { id: tgId },
+      match: linkToken,
+      reply: async () => {}
+    };
+    await handleLinkToken(mockCtx, linkToken, db, userTgChatMap);
+
+    // Now enable 2FA on this user
+    const enable2FaRes = await request('POST', '/api/user/2fa', {
+      Authorization: `Bearer ${token}`
+    }, { enabled: true });
+    assert.equal(enable2FaRes.statusCode, 200);
+    assert.equal(enable2FaRes.body.twoFactorEnabled, true);
+
+    // 2. Initialize 1-click session
+    const initRes = await request('POST', '/api/auth/telegram/session-init');
+    assert.equal(initRes.statusCode, 200);
+    const sessionId = initRes.body.sessionId;
+
+    // 3. Simulate bot receiving /start auth_<sessionId> for the 2FA user
+    let botReplyText = '';
+    const commands = new Map();
+    const mockBot = {
+      command: (cmd, handler) => { commands.set(cmd, handler); },
+      hears: () => {},
+      on: () => {},
+      catch: () => {}
+    };
+    setupBotHandlers(mockBot, { db, telegramOtpStore, telegramSessionStore, userTgChatMap, cloudSyncService: null });
+
+    const mockStartCtx = {
+      from: {
+        id: tgId,
+        username: 'protected_user_tg',
+        first_name: 'Защищённый',
+        last_name: 'Атлет'
+      },
+      chat: { id: tgId },
+      match: sessionId,
+      reply: async (msg) => { botReplyText = msg; }
+    };
+
+    await commands.get('start')(mockStartCtx);
+
+    // Bot MUST notify that 2FA is required and provide the 6-digit code
+    assert.ok(botReplyText.includes('включена 2FA аутентификация'));
+    assert.ok(botReplyText.includes('Вход в 1 клик заблокирован'));
+
+    // Extract OTP code from bot reply
+    const otpMatch = botReplyText.match(/<code>(\d{6})<\/code>/);
+    assert.ok(otpMatch, 'Bot response must contain 6-digit OTP code');
+    const otpCode = otpMatch[1];
+
+    // 4. Poll status -> MUST return REQUIRES_2FA, NOT AUTHORIZED!
+    const pollStatus = await request('GET', `/api/auth/telegram/session-status?sessionId=${sessionId}`);
+    assert.equal(pollStatus.statusCode, 200);
+    assert.equal(pollStatus.body.status, 'REQUIRES_2FA');
+    assert.equal(pollStatus.body.userId, userId);
+    assert.ok(pollStatus.body.expiresInSeconds > 0);
+
+    // 5. Complete login via 2FA verification endpoint
+    const verify2FaRes = await request('POST', '/api/login/2fa', {}, {
+      userId,
+      code: otpCode
+    });
+    assert.equal(verify2FaRes.statusCode, 200);
+    assert.ok(verify2FaRes.body.token);
+    assert.equal(verify2FaRes.body.user.id, userId);
+  });
 });
+

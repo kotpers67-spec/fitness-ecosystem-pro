@@ -1993,6 +1993,14 @@
             el.dialogTelegramAuth?.close();
             setupAppForRole(res.user.role);
             showToast(`Вход выполнен в 1 клик: ${res.user.fullName || res.user.username}!`, 'success');
+          } else if (res.status === 'REQUIRES_2FA' && res.userId) {
+            clearInterval(state.tgSessionPollInterval);
+            state.tgSessionPollInterval = null;
+            resetTgAuthModal();
+            el.dialogTelegramAuth?.close();
+            state.pending2FAUserId = res.userId;
+            open2FALoginModal(res.expiresInSeconds || 300);
+            showToast(res.message || 'Включена 2FA: введите 6-значный код из Telegram', 'info');
           } else if (res.status === 'EXPIRED') {
             clearInterval(state.tgSessionPollInterval);
             state.tgSessionPollInterval = null;

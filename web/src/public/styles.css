@@ -1691,5 +1691,26 @@ input:checked + .slider:before {
   to { transform: rotate(360deg); }
 }
 
+/* Telegram 1-Click QR Code container and SVG sizing */
+#tg-oneclick-qr-container {
+  text-align: center;
+  margin-bottom: 14px;
+}
 
+#tg-oneclick-qr-svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  margin: 0 auto;
+}
 
+#tg-oneclick-qr-svg svg {
+  width: 160px;
+  height: 160px;
+  display: block;
+  border-radius: 6px;
+}

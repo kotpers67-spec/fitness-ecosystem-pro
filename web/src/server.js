@@ -690,6 +690,18 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
+        if (session.status === 'REQUIRES_2FA') {
+          const userId = session.userId;
+          const expiresInSeconds = Math.max(1, Math.round((session.expiresAt - Date.now()) / 1000));
+          telegramSessionStore.delete(sessionId);
+          return sendJson(res, 200, {
+            status: 'REQUIRES_2FA',
+            userId,
+            expiresInSeconds,
+            message: 'Включена 2FA: введите 6-значный код из Telegram бота'
+          });
+        }
+
         return sendJson(res, 200, {
           status: 'PENDING',
           message: 'Ожидание подтверждения в Telegram...'
