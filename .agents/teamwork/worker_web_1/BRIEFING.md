@@ -1,59 +1,52 @@
-# BRIEFING — 2026-10-03T22:30:00Z
+# BRIEFING — 2026-10-04T07:45:00Z
 
 ## Mission
-Implement Milestone 2 Web Portal: backend extensions in db.js and server.js, complete Swiss-Style Dark SPA with client-side SVG QR code generator in web/src/public/, and startup scripts.
+Implement Telegram Bot deep linking & 2FA OTP delivery, 5-minute dynamic PIN with strict single-use validation, owner contact links in Web UI, and verify with tests.
 
 ## 🔒 My Identity
-- Archetype: worker_web
+- Archetype: worker_web_1
 - Roles: implementer, qa, specialist
 - Working directory: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1
-- Original parent: f19f8947-a22d-4cff-98b7-961f56b45b31
-- Milestone: Milestone 2 (Web Portal & Backend Extensions)
+- Original parent: ed4968ec-5065-4930-8ef9-8fc2d62977f0
+- Milestone: Web & Telegram Bot Hardening & Testing
 
 ## 🔒 Key Constraints
-- Exclusive file ownership: web/src/db.js, web/src/server.js, web/src/public/index.html, web/src/public/styles.css, web/src/public/app.js, web/src/public/qr.js, web/start.bat, web/start.ps1
-- Do NOT touch trainer-app/**, athlete-app/**, web/tests/**
-- Mandatory Integrity Mandate: No cheats, no dummy/facade implementations, genuine SQLite data, real Swiss Style SPA.
-- AGENTS.md rules: Projects on F:\, Swiss Clean UI (#0d0d0d, border-white/10, Bento Grid, min-w-0 on flex/grid children, truncate/break-words, tabular-nums).
-- Zero external npm / CDN dependencies for frontend SPA.
+- DO NOT CHEAT: zero-mocks, no hardcoded test results, genuine logic only.
+- EXCLUSIVE WRITE OWNERSHIP: `F:\Projects\fitness-ecosystem-pro\web\` and `.agents/teamwork/worker_web_1/` ONLY.
+- DO NOT touch athlete-app or trainer-app directories.
+- Strict 5-min PIN (300s expiry), single-use consumption, HTTP 400 on expired or consumed codes.
+- Telegram bot grammY integration: deep linking (`/start link_<token>`, `/link <token>`), 2FA OTP delivery, owner contact buttons (SantiLA213 & Spirit5449).
+- Owner contact links on Login screen, Athlete profile, Trainer settings in Web UI.
+- All tests must pass 100% with `node --test tests/security.test.js tests/pin_2fa.test.js`.
 
 ## Current Parent
-- Conversation ID: f19f8947-a22d-4cff-98b7-961f56b45b31
-- Updated: 2026-10-03T22:30:00Z
+- Conversation ID: ed4968ec-5065-4930-8ef9-8fc2d62977f0
+- Updated: 2026-10-04T07:42:39Z
 
 ## Task Summary
-- **What to build**: Backend extensions in web/src/db.js and server.js, complete Swiss-Style Dark SPA in web/src/public/, pure client-side SVG QR code generator (qr.js), startup scripts web/start.bat and web/start.ps1, full verification.
-- **Success criteria**: All endpoints functional, UI fully responsive and zero-mock, server responds 200 OK, startup scripts work.
-- **Interface contracts**: F:\Projects\fitness-ecosystem-pro\PROJECT.md and explorer handoff reports
-- **Code layout**: web/src/db.js, web/src/server.js, web/src/public/*
+- **What to build**: Telegram Bot deep linking and OTP dispatch via grammY, strict 5-min single-use PIN validation with HTTP 400 error handling, countdown UI update, owner contact links across Web UI & bot, test coverage.
+- **Success criteria**: 100% pass on `node --test tests/security.test.js tests/pin_2fa.test.js`, zero mocks, working bot flow.
+- **Interface contracts**: PROJECT.md, ORIGINAL_REQUEST.md.
+- **Code layout**: F:\Projects\fitness-ecosystem-pro\web\
 
 ## Key Decisions Made
-- Implemented pure client-side SVG QR code generator using Reed-Solomon polynomial math and vector path output (zero npm / zero CDN dependencies).
-- Built Swiss Clean UI with Bento Grid (#0d0d0d, hairline borders `rgba(255, 255, 255, 0.08)`, tabular numbers, Anti-Overlap Guard with `min-w-0` and `truncate`).
-- Added robust path traversal protection with `decodeURIComponent`, null byte stripping, and traversal blocking, properly returning 404 for missing static assets to prevent MIME mismatches.
-- Exposed public `/api/leaderboard` for genuine competition metrics from SQLite.
+- [TBD]
 
 ## Artifact Index
-- F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1\handoff.md — Final handoff report
-- F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1\progress.md — Progress tracker
+- DISPATCH.md — assignment record
+- BRIEFING.md — persistent situational awareness
+- progress.md — liveness heartbeat
+- handoff.md — final handoff report
 
 ## Change Tracker
-- **Files modified**:
-  - `web/src/db.js`: added toggleWorkoutSet, deleteWorkoutSet, updateUserRole, unpairTrainerClient, getWorkoutSetById
-  - `web/src/server.js`: added toggle set, delete set, user role switching, unpair endpoints, public leaderboard, authLimiter export, path traversal defense
-  - `web/src/public/qr.js`: pure client-side vector SVG QR code generator
-  - `web/src/public/styles.css`: Swiss Clean UI dark theme stylesheet with Anti-Overlap Guard
-  - `web/src/public/index.html`: semantic SPA markup with athlete, trainer, and leaderboard views
-  - `web/src/public/app.js`: full SPA client logic with real backend integration
-  - `web/start.bat`: Windows batch startup launcher
-  - `web/start.ps1`: PowerShell startup launcher
-- **Build status**: Pass (100% verified)
+- **Files modified**: None yet
+- **Build status**: Untested
 - **Pending issues**: None
 
 ## Quality Status
-- **Build/test result**: 26 passed, 0 failed in security test suite; 100% HTTP 200 OK verification on port 3000
-- **Lint status**: 0 syntax/runtime errors
-- **Tests added/modified**: Verified all new endpoints via native node assertions
+- **Build/test result**: Pending
+- **Lint status**: Clean
+- **Tests added/modified**: Pending
 
 ## Loaded Skills
-- None
+- None loaded yet

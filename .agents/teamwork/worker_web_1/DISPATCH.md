@@ -1,78 +1,41 @@
-# Task Assignment: Web Worker (Milestone 2)
+## 2026-10-04T07:42:39Z
+You are Worker 1 (Web & Telegram Bot Specialist) for the fitness ecosystem project.
+Working Directory: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1\
+Project Root: F:\Projects\fitness-ecosystem-pro\
 
-**Working Directory**: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1
-**Original Request**: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\ORIGINAL_REQUEST.md
-**Project Plan**: F:\Projects\fitness-ecosystem-pro\PROJECT.md
-**Web Explorer Report**: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\explorer_survey_web_1\handoff.md
-**Security Explorer Report**: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\explorer_survey_security_1\handoff.md
+MANDATORY FIRST STEPS:
+1. Initialize your workspace: create BRIEFING.md and progress.md in your working directory.
+2. Read F:\Projects\fitness-ecosystem-pro\.agents\teamwork\ORIGINAL_REQUEST.md (specifically Follow-up — 2026-10-04T07:30:38Z).
+3. Read F:\Projects\fitness-ecosystem-pro\PROJECT.md.
+4. Read explorer findings:
+   - F:\Projects\fitness-ecosystem-pro\.agents\teamwork\survey_explorer_1\analysis.md
+   - F:\Projects\fitness-ecosystem-pro\.agents\teamwork\survey_explorer_2\analysis.md
 
-## Exclusive File Ownership
-You exclusively own and may edit:
-- `web/src/db.js`
-- `web/src/server.js`
-- `web/src/public/index.html`
-- `web/src/public/styles.css`
-- `web/src/public/app.js`
-- `web/src/public/qr.js`
-- `web/start.bat`
-- `web/start.ps1`
-
-Do NOT touch `trainer-app/**`, `athlete-app/**`, or `web/tests/**`.
-
-## Mandatory Integrity Warning
+MANDATORY INTEGRITY WARNING:
 DO NOT CHEAT. All implementations must be genuine. DO NOT hardcode test results, create dummy/facade implementations, or circumvent the intended task. A teamwork_preview_auditor will independently verify your work. Integrity violations WILL be detected and your work WILL be rejected.
 
-## Objective & Implementation Steps
-Read `F:\Projects\fitness-ecosystem-pro\.agents\teamwork\explorer_survey_web_1\handoff.md` and implement the complete Web Portal:
-1. **Backend Additions in `web/src/db.js`**:
-   - `toggleWorkoutSet(setId, isCompleted)`: UPDATE workout_sets SET is_completed = ? WHERE id = ?
-   - `deleteWorkoutSet(setId)`: DELETE FROM workout_sets WHERE id = ?
-   - `updateUserRole(userId, newRole)`: UPDATE users SET role = ? WHERE id = ?
-   - Ensure parameterized queries throughout.
-2. **Backend Additions in `web/src/server.js`**:
-   - `POST /api/workout/set/toggle`: accepts `{ setId, isCompleted }`
-   - `DELETE /api/workout/set`: accepts `{ setId }`
-   - `POST /api/user/role`: accepts `{ role: 'athlete' | 'trainer' }`, updates role, regenerates 6-digit PIN if transitioning to athlete
-   - `POST /api/trainer/unpair`: accepts `{ athleteId }`, removes row from `trainer_clients`
-   - `POST /api/athlete/unpair`: removes pairing for requesting athlete
-   - Export `authLimiter` in `module.exports = { server, db, authLimiter };`
-   - Path traversal hardening: use `decodeURIComponent(parsedUrl.pathname)` before path normalization
-3. **Frontend SPA in `web/src/public/`**:
-   - Swiss-Style Dark Theme (`#0d0d0d`, Bento Grid `border-white/10`, Swiss typographic hierarchy, Anti-Overlap Guard with `min-w-0`, `truncate`, responsive desktop/mobile).
-   - Zero external npm / CDN dependencies.
-   - `qr.js`: pure client-side SVG QR code generator (renders clean vector QR into athlete's pairing card).
-   - Athlete View:
-     - Clear SVG QR code display and large 6-digit PIN (tabular numbers, e.g. "739102").
-     - Buttons: "Скопировать PIN", "Скопировать ссылку для тренера" (`https://fitnessapp.pro/pair?code=...`), "Перегенерировать PIN".
-     - Connected Trainer info with "Позвонить" and "Отвязать".
-     - Workout Logger: date picker, exercise chips, previous workout stats, weight, reps, RPE, and set logging.
-     - Sets List: set rows with completion checkbox (`is_completed`), weight x reps, RPE tag, delete button.
-     - Privacy Toggle for public leaderboard.
-     - Role Switcher button.
-   - Trainer View:
-     - Instant 6-digit PIN pairing input (auto-cleans any non-digits, no dash needed!).
-     - Clients Bento Grid: client cards with workouts count, total tonnage, exercise history viewer, and unpair option.
-   - Leaderboard View (Zero-Mocks):
-     - Displays real ranked athletes from SQLite.
-     - Clean empty state when no public workouts exist.
-4. **Startup Scripts**:
-   - `web/start.bat` and `web/start.ps1` using the detected Node runtime.
+EXCLUSIVE WRITE OWNERSHIP:
+You own F:\Projects\fitness-ecosystem-pro\web\ and all its files exclusively.
+DO NOT touch athlete-app or trainer-app directories.
 
-## Verification
-You MUST test the web server:
-- Launch server and verify HTTP 200 responses on `/`, `/api/leaderboard`, and static assets.
-- Verify Zero-Mocks: database has 0 fake users.
-- Verify node test execution if applicable.
+TASK:
+1. Telegram Bot (grammY in web/src/server.js or web/src/bot.js):
+   - Support deep linking `/start link_<token>` and command `/link <token>`:
+     Parse token, look up corresponding user, bind real numeric `ctx.from.id` (as telegram_id) and `ctx.from.username` into SQLite via `db.linkTelegram(userId, telegramId, telegramUsername)`.
+   - In bot greetings and command handlers (`/start`, `/contacts`, `/help`):
+     Include prominent inline contact buttons or links to project owners:
+     https://t.me/SantiLA213 and https://t.me/Spirit5449
+   - In 2FA OTP flow:
+     When `POST /api/login` generates a 5-minute OTP for a user with `two_factor_enabled === 1`, if the bot instance is active and user has a `telegram_id`, deliver the 6-digit OTP code to the user's Telegram via `bot.api.sendMessage`.
+2. Dynamic 5-min PIN and strict single-use validation (web/src/server.js & web/src/db.js):
+   - Verify that athlete PIN is 6 digits, expires in strictly 300 seconds (5 min).
+   - If trainer submits an expired code (>5 min) or an already used / consumed code, return strict HTTP 400 error.
+   - Verify countdown timer (05:00) and automatic regeneration in web/src/public/app.js.
+3. Owner contact links in Web UI (web/src/public/index.html):
+   - Ensure links to https://t.me/SantiLA213 and https://t.me/Spirit5449 exist on Login screen, Athlete profile, and Trainer settings.
+4. Testing:
+   - Update `web/package.json` test script: `"test": "node --test tests/security.test.js tests/pin_2fa.test.js"`.
+   - Run tests: `cd F:\Projects\fitness-ecosystem-pro\web && npm test` (or `node --test tests/security.test.js tests/pin_2fa.test.js`).
+   - Ensure 100% PASS with 0 failures.
 
-Document all created files, changes, and test results in `F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1\handoff.md` and send a message when done.
-
-
-## 2026-10-03T19:20:41Z
-Received dispatch from parent (f19f8947-a22d-4cff-98b7-961f56b45b31):
-You are the Web Worker for Milestone 2.
-Working Directory: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1
-Original Request: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\ORIGINAL_REQUEST.md
-Project Plan: F:\Projects\fitness-ecosystem-pro\PROJECT.md
-Dispatch Instructions: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1\DISPATCH.md
-Web Explorer Report: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\explorer_survey_web_1\handoff.md
-Security Explorer Report: F:\Projects\fitness-ecosystem-pro\.agents\teamwork\explorer_survey_security_1\handoff.md
+When finished, write a comprehensive handoff report to F:\Projects\fitness-ecosystem-pro\.agents\teamwork\worker_web_1\handoff.md documenting all modified files, test outputs, and verification results. Then send a completion message to parent.

@@ -1,5 +1,8 @@
 package com.trainerapp.pro.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +31,7 @@ import com.trainerapp.pro.ui.MainViewModel
 
 @Composable
 fun TrainerAuthScreen(viewModel: MainViewModel) {
+    val context = LocalContext.current
     var isLoginMode by remember { mutableStateOf(true) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -35,6 +39,21 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
     var phone by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    var show2FaDialog by remember { mutableStateOf(false) }
+    var otpInput by remember { mutableStateOf("") }
+    var otpError by remember { mutableStateOf<String?>(null) }
+    var otpTimerSeconds by remember { mutableIntStateOf(300) }
+
+    LaunchedEffect(show2FaDialog) {
+        if (show2FaDialog) {
+            otpTimerSeconds = 300
+            while (otpTimerSeconds > 0) {
+                kotlinx.coroutines.delay(1000L)
+                otpTimerSeconds--
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -200,9 +219,18 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                                 if (username.isBlank() || password.isBlank()) {
                                     errorMessage = "Введите логин и пароль"
                                 } else {
-                                    val success = viewModel.login(username, password)
-                                    if (!success) {
+                                    val validCreds = viewModel.checkCredentials(username, password)
+                                    if (!validCreds) {
                                         errorMessage = "Неверный логин или пароль"
+                                    } else {
+                                        if (viewModel.is2FaEnabled) {
+                                            show2FaDialog = true
+                                            otpInput = ""
+                                            otpError = null
+                                            otpTimerSeconds = 300
+                                        } else {
+                                            viewModel.completeLogin()
+                                        }
                                     }
                                 }
                             } else {
@@ -238,6 +266,127 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Контакты владельцев проекта
+            Text(
+                text = "Связь с владельцами проекта:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/SantiLA213"))
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                ) {
+                    Text("@SantiLA213", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Spirit5449"))
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    Text("@Spirit5449", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
         }
+    }
+
+    if (show2FaDialog) {
+        val mm = otpTimerSeconds / 60
+        val ss = otpTimerSeconds % 60
+        val timeStr = String.format(java.util.Locale.US, "%02d:%02d", mm, ss)
+
+        AlertDialog(
+            onDismissRequest = { show2FaDialog = false },
+            title = { Text("Двухфакторная аутентификация (2FA)", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Введите 6-значный код подтверждения из Telegram бота:")
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "⏱ Действует: $timeStr",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontSize = 12.sp
+                        )
+                    }
+                    OutlinedTextField(
+                        value = otpInput,
+                        onValueChange = {
+                            if (it.length <= 6 && it.all { c -> c.isDigit() }) {
+                                otpInput = it
+                                otpError = null
+                            }
+                        },
+                        label = { Text("Код 2FA (6 цифр)") },
+                        placeholder = { Text("123456") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (otpError != null) {
+                        Text(
+                            text = otpError ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (otpTimerSeconds <= 0) {
+                            otpError = "Срок действия кода истёк (5 минут)"
+                        } else if (otpInput.length != 6) {
+                            otpError = "Введите ровно 6 цифр"
+                        } else {
+                            val ok = viewModel.verify2FaOtp(otpInput)
+                            if (ok) {
+                                show2FaDialog = false
+                            } else {
+                                otpError = "Неверный код подтверждения"
+                            }
+                        }
+                    }
+                ) {
+                    Text("Подтвердить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { show2FaDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }

@@ -386,7 +386,7 @@ fun AthleteSettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            // Карточка с PIN-кодом (слитно, без дефиса)
+                            // Карточка с PIN-кодом (слитно, без дефиса) и таймером 05:00
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surface,
@@ -416,6 +416,77 @@ fun AthleteSettingsScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.secondary
                                     )
+
+                                    val secondsLeft by viewModel.pinSecondsRemaining.collectAsState()
+                                    val isExpiringSoon = secondsLeft < 60
+                                    val timerFormatted = String.format(Locale.US, "%02d:%02d", secondsLeft / 60, secondsLeft % 60)
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Timer,
+                                            contentDescription = null,
+                                            tint = if (isExpiringSoon) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Код действителен: $timerFormatted",
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                            color = if (isExpiringSoon) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+
+                                    LinearProgressIndicator(
+                                        progress = { secondsLeft / 300f },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        color = if (isExpiringSoon) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+
+                            // Кнопки копирования и отправки ссылки тренеру
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                        val clip = android.content.ClipData.newPlainText("Pairing Link", "https://fitnessapp.pro/pair?code=$cleanPin")
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, "Ссылка для тренера скопирована!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Скопировать", fontSize = 11.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val sendIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, "Мой код подключения в Fitness Pro: $cleanPin\nСсылка для подключения: https://fitnessapp.pro/pair?code=$cleanPin")
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Отправить тренеру"))
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Отправить", fontSize = 11.sp)
                                 }
                             }
 
@@ -434,7 +505,7 @@ fun AthleteSettingsScreen(
                                     QrCodeView(
                                         content = cleanPin,
                                         modifier = Modifier
-                                            .size(220.dp)
+                                            .size(200.dp)
                                             .padding(12.dp)
                                     )
                                 }
@@ -451,6 +522,158 @@ fun AthleteSettingsScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // 2b. Telegram & 2FA Security Card
+            item {
+                val is2FaActive by viewModel.is2FaEnabledFlow.collectAsState()
+                val tgUsername by viewModel.telegramUsernameFlow.collectAsState()
+                val clientUuid = profile?.clientUuid ?: ""
+                var showTgDialog by remember { mutableStateOf(false) }
+                var tempTgInput by remember { mutableStateOf(tgUsername) }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "TELEGRAM & БЕЗОПАСНОСТЬ 2FA",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (tgUsername.isNotBlank()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+                            ) {
+                                Text(
+                                    text = if (tgUsername.isNotBlank()) "@$tgUsername" else "НЕ ПРИВЯЗАН",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (tgUsername.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "Привяжите Telegram-бота для получения 6-значных кодов 2FA при входе и уведомлений.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Button(
+                            onClick = {
+                                tempTgInput = tgUsername
+                                showTgDialog = true
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (tgUsername.isNotBlank()) "Изменить привязку Telegram" else "Привязать Telegram", fontWeight = FontWeight.Bold)
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Двухфакторная аутентификация (2FA)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Запрашивать 6-значный OTP код из Telegram при входе в аккаунт",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = is2FaActive,
+                                onCheckedChange = { checked ->
+                                    if (checked && tgUsername.isBlank()) {
+                                        Toast.makeText(context, "Сначала привяжите Telegram для получения кодов!", Toast.LENGTH_LONG).show()
+                                        tempTgInput = ""
+                                        showTgDialog = true
+                                    } else {
+                                        viewModel.update2FaEnabled(checked)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                if (showTgDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showTgDialog = false },
+                        title = { Text("Привязка Telegram", fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("Нажмите кнопку ниже, чтобы запустить бота, или укажите ваш @username вручную:")
+                                OutlinedButton(
+                                    onClick = {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/FitnessEcosystemBot?start=link_$clientUuid"))
+                                        context.startActivity(intent)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Открыть бота @FitnessEcosystemBot")
+                                }
+                                OutlinedTextField(
+                                    value = tempTgInput,
+                                    onValueChange = { tempTgInput = it },
+                                    label = { Text("Telegram @username") },
+                                    placeholder = { Text("@username") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    if (tempTgInput.isNotBlank()) {
+                                        viewModel.updateTelegramUsername(tempTgInput)
+                                        Toast.makeText(context, "Telegram привязан: @${tempTgInput.removePrefix("@")}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    showTgDialog = false
+                                }
+                            ) {
+                                Text("Сохранить")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showTgDialog = false }) {
+                                Text("Отмена")
+                            }
+                        }
+                    )
                 }
             }
 

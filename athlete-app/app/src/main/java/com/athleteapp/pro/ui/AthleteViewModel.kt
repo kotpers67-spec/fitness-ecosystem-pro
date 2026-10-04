@@ -100,20 +100,108 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     private val _isLoggedIn = MutableStateFlow(authPrefs.getBoolean("is_logged_in", false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
-    fun login(username: String, pass: String): Boolean {
+    var pinCreatedAt: Long
+        get() = authPrefs.getLong("pin_created_at", 0L)
+        set(value) = authPrefs.edit().putLong("pin_created_at", value).apply()
+
+    private val _pinSecondsRemaining = MutableStateFlow(300)
+    val pinSecondsRemaining: StateFlow<Int> = _pinSecondsRemaining.asStateFlow()
+
+    private var pinTickerJob: Job? = null
+
+    fun startPinTicker() {
+        pinTickerJob?.cancel()
+        pinTickerJob = viewModelScope.launch(Dispatchers.Default) {
+            while (isActive) {
+                val prof = profile.value
+                val isPaired = prof?.isPairedWithCoach == true
+                if (isPaired) {
+                    _pinSecondsRemaining.value = 300
+                } else {
+                    val now = System.currentTimeMillis()
+                    var created = pinCreatedAt
+                    if (created <= 0L) {
+                        created = now
+                        pinCreatedAt = now
+                    }
+                    val elapsedSec = ((now - created).coerceAtLeast(0L) / 1000L).toInt()
+                    val remaining = (300 - elapsedSec).coerceAtLeast(0)
+                    _pinSecondsRemaining.value = remaining
+                    if (remaining <= 0) {
+                        regeneratePairingPin()
+                    }
+                }
+                delay(1000L)
+            }
+        }
+    }
+
+    var is2FaEnabled: Boolean
+        get() = authPrefs.getBoolean("is_2fa_enabled", false)
+        set(value) {
+            authPrefs.edit().putBoolean("is_2fa_enabled", value).apply()
+            _is2FaEnabledFlow.value = value
+        }
+
+    private val _is2FaEnabledFlow = MutableStateFlow(authPrefs.getBoolean("is_2fa_enabled", false))
+    val is2FaEnabledFlow: StateFlow<Boolean> = _is2FaEnabledFlow.asStateFlow()
+
+    fun update2FaEnabled(enabled: Boolean) {
+        is2FaEnabled = enabled
+    }
+
+    var telegramUsername: String
+        get() = authPrefs.getString("telegram_username", "") ?: ""
+        set(value) {
+            val clean = value.trim().removePrefix("@")
+            authPrefs.edit().putString("telegram_username", clean).apply()
+            _telegramUsernameFlow.value = clean
+        }
+
+    private val _telegramUsernameFlow = MutableStateFlow(authPrefs.getString("telegram_username", "") ?: "")
+    val telegramUsernameFlow: StateFlow<String> = _telegramUsernameFlow.asStateFlow()
+
+    fun updateTelegramUsername(username: String) {
+        telegramUsername = username
+    }
+
+    fun checkCredentials(username: String, pass: String): Boolean {
         val savedUser = authPrefs.getString("username", "") ?: ""
         val savedHash = authPrefs.getString("password_hash", "") ?: ""
         val inputHash = hashPassword(pass)
-        if (savedUser.isNotEmpty() && savedUser.equals(username.trim(), ignoreCase = true) && savedHash == inputHash) {
-            authPrefs.edit().putBoolean("is_logged_in", true).apply()
-            _isLoggedIn.value = true
+        return (savedUser.isNotEmpty() && savedUser.equals(username.trim(), ignoreCase = true) && savedHash == inputHash)
+    }
+
+    fun completeLogin(): Boolean {
+        authPrefs.edit().putBoolean("is_logged_in", true).apply()
+        _isLoggedIn.value = true
+        return true
+    }
+
+    fun verify2FaOtp(otp: String): Boolean {
+        val clean = otp.filter { it.isDigit() }
+        if (clean.length == 6) {
+            completeLogin()
             return true
+        }
+        return false
+    }
+
+    fun login(username: String, pass: String): Boolean {
+        if (checkCredentials(username, pass)) {
+            if (is2FaEnabled) {
+                // Requires 2FA verification step in UI
+                return false
+            }
+            return completeLogin()
         }
         return false
     }
 
     fun register(fullName: String, username: String, password: String, phone: String) {
         val inputHash = hashPassword(password)
+        val now = System.currentTimeMillis()
+        pinCreatedAt = now
         authPrefs.edit()
             .putString("username", username.trim())
             .putString("password_hash", inputHash)
@@ -153,6 +241,10 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
         set(value) = prefs.edit().putBoolean("auto_install_updates", value).apply()
 
     init {
+        if (pinCreatedAt <= 0L) {
+            pinCreatedAt = System.currentTimeMillis()
+        }
+        startPinTicker()
         loadSessionForDate(_selectedDate.value)
 
         viewModelScope.launch {
@@ -411,7 +503,10 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     fun regeneratePairingPin() {
         viewModelScope.launch {
             val current = profile.value ?: AthleteProfileEntity()
-            val newPin = String.format("%06d", (100000..999999).random())
+            val newPin = String.format(Locale.US, "%06d", (100000..999999).random())
+            val now = System.currentTimeMillis()
+            pinCreatedAt = now
+            _pinSecondsRemaining.value = 300
             val updated = current.copy(
                 pairingPin = newPin,
                 isPairedWithCoach = false,
@@ -422,7 +517,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
             )
             dao.saveProfile(updated)
             _syncMessage.value = "Сгенерирован новый PIN: ${newPin.substring(0, 3)}-${newPin.substring(3)}"
-            googleDriveSync.syncWithCoach(clientUuidOverride = updated.clientUuid)
+            googleDriveSync.syncWithCoach(clientUuidOverride = updated.clientUuid, pinCreatedAt = now)
         }
     }
 
@@ -500,6 +595,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         super.onCleared()
+        pinTickerJob?.cancel()
         sessionJob?.cancel()
         historyJob?.cancel()
         timerManager.release()

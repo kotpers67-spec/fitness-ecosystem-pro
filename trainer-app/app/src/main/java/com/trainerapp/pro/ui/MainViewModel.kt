@@ -113,14 +113,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoggedIn = MutableStateFlow(authPrefs.getBoolean("is_logged_in", false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
-    fun login(username: String, pass: String): Boolean {
+    var is2FaEnabled: Boolean
+        get() = authPrefs.getBoolean("is_2fa_enabled", false)
+        set(value) {
+            authPrefs.edit().putBoolean("is_2fa_enabled", value).apply()
+            _is2FaEnabledFlow.value = value
+        }
+
+    private val _is2FaEnabledFlow = MutableStateFlow(authPrefs.getBoolean("is_2fa_enabled", false))
+    val is2FaEnabledFlow: StateFlow<Boolean> = _is2FaEnabledFlow.asStateFlow()
+
+    fun update2FaEnabled(enabled: Boolean) {
+        is2FaEnabled = enabled
+    }
+
+    var telegramUsername: String
+        get() = authPrefs.getString("telegram_username", "") ?: ""
+        set(value) {
+            val clean = value.trim().removePrefix("@")
+            authPrefs.edit().putString("telegram_username", clean).apply()
+            _telegramUsernameFlow.value = clean
+        }
+
+    private val _telegramUsernameFlow = MutableStateFlow(authPrefs.getString("telegram_username", "") ?: "")
+    val telegramUsernameFlow: StateFlow<String> = _telegramUsernameFlow.asStateFlow()
+
+    fun updateTelegramUsername(username: String) {
+        telegramUsername = username
+    }
+
+    fun checkCredentials(username: String, pass: String): Boolean {
         val savedUser = authPrefs.getString("username", "") ?: ""
         val savedHash = authPrefs.getString("password_hash", "") ?: ""
         val inputHash = hashPassword(pass)
-        if (savedUser.isNotEmpty() && savedUser.equals(username.trim(), ignoreCase = true) && savedHash == inputHash) {
-            authPrefs.edit().putBoolean("is_logged_in", true).apply()
-            _isLoggedIn.value = true
+        return (savedUser.isNotEmpty() && savedUser.equals(username.trim(), ignoreCase = true) && savedHash == inputHash)
+    }
+
+    fun completeLogin(): Boolean {
+        authPrefs.edit().putBoolean("is_logged_in", true).apply()
+        _isLoggedIn.value = true
+        return true
+    }
+
+    fun verify2FaOtp(otp: String): Boolean {
+        val clean = otp.filter { it.isDigit() }
+        if (clean.length == 6) {
+            completeLogin()
             return true
+        }
+        return false
+    }
+
+    fun login(username: String, pass: String): Boolean {
+        if (checkCredentials(username, pass)) {
+            if (is2FaEnabled) {
+                return false
+            }
+            return completeLogin()
         }
         return false
     }

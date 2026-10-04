@@ -25,7 +25,11 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
     private val _cloudAthletes = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
     val cloudAthletes: StateFlow<List<LeaderboardEntry>> = _cloudAthletes.asStateFlow()
 
-    suspend fun syncWithCoach(athleteId: Long = 1L, clientUuidOverride: String? = null): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun syncWithCoach(
+        athleteId: Long = 1L,
+        clientUuidOverride: String? = null,
+        pinCreatedAt: Long? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val endpoint = CloudSecurityManager.getEndpointUrl()
             val secretKey = CloudSecurityManager.getSecretKey()
@@ -210,6 +214,19 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                     rootObj.add("pairing", JsonObject())
                 }
                 val pairingObj = rootObj.getAsJsonObject("pairing")
+
+                // Remove stale pairing entries for this clientUuid
+                val staleKeys = mutableListOf<String>()
+                for ((k, elem) in pairingObj.entrySet()) {
+                    if (elem.isJsonObject) {
+                        val entry = elem.asJsonObject
+                        if (entry.get("clientUuid")?.asString == clientUuid && k != cleanPin) {
+                            staleKeys.add(k)
+                        }
+                    }
+                }
+                staleKeys.forEach { pairingObj.remove(it) }
+
                 val pairingNode = JsonObject().apply {
                     addProperty("pin", cleanPin)
                     addProperty("clientUuid", clientUuid)
@@ -218,7 +235,7 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                     addProperty("goal", currentProfile.goal)
                     addProperty("restrictions", currentProfile.restrictions)
                     addProperty("notes", currentProfile.notes)
-                    addProperty("timestamp", System.currentTimeMillis())
+                    addProperty("timestamp", if ((pinCreatedAt ?: 0L) > 0L) pinCreatedAt!! else System.currentTimeMillis())
                     addProperty("status", if (currentProfile.isPairedWithCoach) "PAIRED" else "PENDING")
                     if (currentProfile.pairedCoachName.isNotBlank()) {
                         addProperty("coachName", currentProfile.pairedCoachName)

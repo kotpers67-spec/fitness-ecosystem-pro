@@ -2,7 +2,8 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
-const { server, db } = require('../src/server');
+const { server, db, userTgChatMap } = require('../src/server');
+const { handleLinkToken, send2FAOtp, createOwnersKeyboard, OWNER_LINKS } = require('../src/bot');
 
 let baseUrl;
 let athleteToken = null;
@@ -11,6 +12,7 @@ let athletePin = null;
 
 let trainerToken = null;
 let trainerId = null;
+let linkedAthleteTgId = 980000000 + Math.floor(Math.random() * 999999);
 
 function request(method, endpoint, headers = {}, body = null) {
   return new Promise((resolve, reject) => {
@@ -48,11 +50,14 @@ function request(method, endpoint, headers = {}, body = null) {
   });
 }
 
+let localServer;
+
 describe('PIN 5-Min TTL & Telegram 2FA Authentication Test Suite', () => {
   before(async () => {
     await new Promise(resolve => {
-      server.listen(0, () => {
-        baseUrl = `http://127.0.0.1:${server.address().port}`;
+      localServer = http.createServer(server.listeners('request')[0]);
+      localServer.listen(0, () => {
+        baseUrl = `http://127.0.0.1:${localServer.address().port}`;
         resolve();
       });
     });
@@ -82,8 +87,7 @@ describe('PIN 5-Min TTL & Telegram 2FA Authentication Test Suite', () => {
   });
 
   after(() => {
-    server.close();
-    db.close();
+    if (localServer) localServer.close();
   });
 
   it('1. Pairing PIN has valid 5-min creation timestamp', async () => {
@@ -129,13 +133,14 @@ describe('PIN 5-Min TTL & Telegram 2FA Authentication Test Suite', () => {
     assert.equal(pairRes.statusCode, 200);
     assert.equal(pairRes.body.success, true);
 
-    // Code is now consumed, second attempt must fail with 404/400
+    // Code is now consumed, second attempt must fail with strict HTTP 400
     const secondPair = await request('POST', '/api/trainer/pair', {
       Authorization: `Bearer ${trainerToken}`
     }, {
       code: athletePin
     });
-    assert.notEqual(secondPair.statusCode, 200);
+    assert.equal(secondPair.statusCode, 400);
+    assert.ok(secondPair.body.error.includes('не найден') || secondPair.body.error.includes('использован'));
   });
 
   it('5. Links Telegram account via OTP verification', async () => {
@@ -188,5 +193,200 @@ describe('PIN 5-Min TTL & Telegram 2FA Authentication Test Suite', () => {
     assert.equal(verifyRes.statusCode, 200);
     assert.ok(verifyRes.body.token);
     assert.equal(verifyRes.body.user.id, athleteId);
+  });
+
+  it('7. Generates 5-minute deep link token for Telegram bot linking (POST /api/user/telegram/link-token)', async () => {
+    const tokenRes = await request('POST', '/api/user/telegram/link-token', {
+      Authorization: `Bearer ${athleteToken}`
+    });
+    assert.equal(tokenRes.statusCode, 200);
+    assert.ok(tokenRes.body.token);
+    assert.equal(tokenRes.body.expiresInSeconds, 300);
+
+    const stored = db.findLinkToken(tokenRes.body.token);
+    assert.ok(stored);
+    assert.equal(stored.user_id, athleteId);
+  });
+
+  let boundAthleteTgId = null;
+
+  it('8. Telegram Bot deep link (/start link_<token>) binds numeric telegram_id and username', async () => {
+    // Generate fresh link token
+    const tokenRes = await request('POST', '/api/user/telegram/link-token', {
+      Authorization: `Bearer ${athleteToken}`
+    });
+    assert.equal(tokenRes.statusCode, 200);
+    const token = tokenRes.body.token;
+
+    // Simulate grammY context for /start link_<token> with fresh unique TG ID
+    boundAthleteTgId = 980000000 + Math.floor(Math.random() * 999999);
+    let repliedMsg = '';
+    let replyOptions = null;
+    const mockCtx = {
+      from: {
+        id: boundAthleteTgId,
+        username: 'ProAthleteBotUser',
+        first_name: 'Иван',
+        last_name: 'Иванов'
+      },
+      chat: { id: boundAthleteTgId },
+      match: `link_${token}`,
+      reply: async (msg, opts) => {
+        repliedMsg = msg;
+        replyOptions = opts;
+      }
+    };
+
+    const linkResult = await handleLinkToken(mockCtx, token, db, userTgChatMap);
+    assert.equal(linkResult.success, true);
+    assert.equal(linkResult.userId, athleteId);
+    assert.equal(linkResult.telegramId, String(boundAthleteTgId));
+    assert.equal(linkResult.telegramUsername, 'proathletebotuser');
+
+    // Verify persisted in SQLite
+    const updatedUser = db.findUserById(athleteId);
+    assert.equal(updatedUser.telegram_id, String(boundAthleteTgId));
+    assert.equal(updatedUser.telegram_username, 'proathletebotuser');
+
+    // Verify token consumed
+    assert.equal(db.findLinkToken(token), null);
+
+    // Verify bot replied with confirmation and owner buttons
+    assert.ok(repliedMsg.includes('Telegram успешно привязан'));
+    assert.ok(replyOptions?.reply_markup);
+  });
+
+  it('9. Command /link <token> binds account and single-use token cannot be reused', async () => {
+    // Generate fresh link token for trainer
+    const tokenRes = await request('POST', '/api/user/telegram/link-token', {
+      Authorization: `Bearer ${trainerToken}`
+    });
+    assert.equal(tokenRes.statusCode, 200);
+    const token = tokenRes.body.token;
+
+    const testTrainerTgId = 880000000 + Math.floor(Math.random() * 999999);
+    let repliedMsg = '';
+    const mockCtx = {
+      from: {
+        id: testTrainerTgId,
+        username: 'ProTrainerUser',
+        first_name: 'Виктор'
+      },
+      chat: { id: testTrainerTgId },
+      match: token,
+      reply: async (msg) => {
+        repliedMsg = msg;
+      }
+    };
+
+    // First use: must succeed
+    const firstAttempt = await handleLinkToken(mockCtx, token, db, userTgChatMap);
+    assert.equal(firstAttempt.success, true);
+    assert.equal(firstAttempt.userId, trainerId);
+
+    const updatedTrainer = db.findUserById(trainerId);
+    assert.equal(updatedTrainer.telegram_id, String(testTrainerTgId));
+
+    // Second use with same token: must fail (single-use consumed)
+    const secondAttempt = await handleLinkToken(mockCtx, token, db, userTgChatMap);
+    assert.equal(secondAttempt.success, false);
+    assert.equal(secondAttempt.reason, 'expired_or_invalid');
+    assert.ok(repliedMsg.includes('недействительна') || repliedMsg.includes('истёк'));
+  });
+
+  it('10. Rejects expired deep link token (>5 min)', async () => {
+    const tokenRes = await request('POST', '/api/user/telegram/link-token', {
+      Authorization: `Bearer ${athleteToken}`
+    });
+    assert.equal(tokenRes.statusCode, 200);
+    const token = tokenRes.body.token;
+
+    // Manually expire token in DB to 6 minutes ago
+    db.db.prepare('UPDATE telegram_link_tokens SET expires_at = ? WHERE token = ?').run(Date.now() - 6 * 60 * 1000, token);
+
+    let repliedMsg = '';
+    const mockCtx = {
+      from: { id: 111222333, username: 'LateUser' },
+      chat: { id: 111222333 },
+      match: token,
+      reply: async (msg) => { repliedMsg = msg; }
+    };
+
+    const attempt = await handleLinkToken(mockCtx, token, db, userTgChatMap);
+    assert.equal(attempt.success, false);
+    assert.equal(attempt.reason, 'expired_or_invalid');
+    assert.ok(repliedMsg.includes('истёк') || repliedMsg.includes('недействительна'));
+  });
+
+  it('11. Delivers 2FA OTP to Telegram chat with owner support buttons', async () => {
+    let sentToChat = null;
+    let sentMessage = '';
+    let sentOptions = null;
+
+    const mockBot = {
+      api: {
+        sendMessage: async (chatId, text, opts) => {
+          sentToChat = chatId;
+          sentMessage = text;
+          sentOptions = opts;
+          return { message_id: 12345 };
+        }
+      }
+    };
+
+    const otpCode = '742918';
+    const delivered = await send2FAOtp(mockBot, String(boundAthleteTgId || '987654321'), otpCode);
+    assert.equal(delivered, true);
+    assert.equal(sentToChat, String(boundAthleteTgId || '987654321'));
+    assert.ok(sentMessage.includes('742918'));
+    assert.ok(sentMessage.includes('5 минут'));
+    assert.ok(sentOptions?.reply_markup);
+  });
+
+  it('12. Telegram Bot provides verified owner contact links (@SantiLA213 and @Spirit5449)', () => {
+    assert.equal(OWNER_LINKS.santi, 'https://t.me/SantiLA213');
+    assert.equal(OWNER_LINKS.spirit, 'https://t.me/Spirit5449');
+
+    const keyboard = createOwnersKeyboard();
+    assert.ok(keyboard);
+    // Serialize keyboard inline rows
+    const rows = keyboard.inline_keyboard;
+    assert.ok(Array.isArray(rows));
+    const allButtons = rows.flat();
+    const hasSanti = allButtons.some(b => b.url === 'https://t.me/SantiLA213' && b.text.includes('@SantiLA213'));
+    const hasSpirit = allButtons.some(b => b.url === 'https://t.me/Spirit5449' && b.text.includes('@Spirit5449'));
+    assert.ok(hasSanti, 'Inline keyboard must contain @SantiLA213');
+    assert.ok(hasSpirit, 'Inline keyboard must contain @Spirit5449');
+  });
+
+  it('13. Strictly prevents binding same Telegram ID to multiple accounts', async () => {
+    // Register a new distinct athlete
+    const newAthRes = await request('POST', '/api/register', {}, {
+      username: 'ath_conflict_' + Date.now(),
+      password: 'password123',
+      role: 'athlete',
+      fullName: 'Конфликтный Атлет'
+    });
+    assert.equal(newAthRes.statusCode, 201);
+    const newTokenRes = await request('POST', '/api/user/telegram/link-token', {
+      Authorization: `Bearer ${newAthRes.body.token}`
+    });
+    assert.equal(newTokenRes.statusCode, 200);
+
+    let conflictMsg = '';
+    const mockCtx = {
+      from: {
+        id: boundAthleteTgId, // Bound to athleteId in test 8
+        username: 'OtherUser'
+      },
+      chat: { id: boundAthleteTgId },
+      match: newTokenRes.body.token,
+      reply: async (msg) => { conflictMsg = msg; }
+    };
+
+    const conflictAttempt = await handleLinkToken(mockCtx, newTokenRes.body.token, db, userTgChatMap);
+    assert.equal(conflictAttempt.success, false);
+    assert.equal(conflictAttempt.reason, 'already_linked_to_other');
+    assert.ok(conflictMsg.includes('уже привязан к аккаунту'));
   });
 });

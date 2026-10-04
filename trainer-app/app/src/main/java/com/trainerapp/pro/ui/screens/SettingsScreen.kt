@@ -248,6 +248,156 @@ fun SettingsScreen(
                 }
             }
 
+            // 0b. TELEGRAM & 2FA БЕЗОПАСНОСТЬ
+            item {
+                val is2FaActive by viewModel.is2FaEnabledFlow.collectAsState()
+                val tgUsername by viewModel.telegramUsernameFlow.collectAsState()
+                var showTgDialog by remember { mutableStateOf(false) }
+                var tempTgInput by remember { mutableStateOf(tgUsername) }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "TELEGRAM & БЕЗОПАСНОСТЬ 2FA",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (tgUsername.isNotBlank()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+                            ) {
+                                Text(
+                                    text = if (tgUsername.isNotBlank()) "@$tgUsername" else "НЕ ПРИВЯЗАН",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (tgUsername.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "Привяжите Telegram аккаунт для получения 6-значных кодов подтверждения 2FA при входе.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Button(
+                            onClick = {
+                                tempTgInput = tgUsername
+                                showTgDialog = true
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (tgUsername.isNotBlank()) "Изменить Telegram" else "Привязать Telegram", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Двухфакторная аутентификация (2FA)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Запрашивать 6-значный OTP код из Telegram при входе",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = is2FaActive,
+                                onCheckedChange = { checked ->
+                                    if (checked && tgUsername.isBlank()) {
+                                        Toast.makeText(context, "Сначала привяжите Telegram для получения кодов!", Toast.LENGTH_LONG).show()
+                                        tempTgInput = ""
+                                        showTgDialog = true
+                                    } else {
+                                        viewModel.update2FaEnabled(checked)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                if (showTgDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showTgDialog = false },
+                        title = { Text("Привязка Telegram тренера", fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Нажмите кнопку ниже, чтобы открыть Telegram бота, или введите ваш @username:")
+                                OutlinedButton(
+                                    onClick = {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/FitnessEcosystemBot"))
+                                        context.startActivity(intent)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Открыть бота @FitnessEcosystemBot")
+                                }
+                                OutlinedTextField(
+                                    value = tempTgInput,
+                                    onValueChange = { tempTgInput = it },
+                                    label = { Text("Telegram @username") },
+                                    placeholder = { Text("@username") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    if (tempTgInput.isNotBlank()) {
+                                        viewModel.updateTelegramUsername(tempTgInput)
+                                        Toast.makeText(context, "Telegram привязан: @${tempTgInput.removePrefix("@")}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    showTgDialog = false
+                                }
+                            ) {
+                                Text("Сохранить")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showTgDialog = false }) {
+                                Text("Отмена")
+                            }
+                        }
+                    )
+                }
+            }
+
             // 1. ЯЗЫК ИНТЕРФЕЙСА (RU / EN)
             item {
                 Card(

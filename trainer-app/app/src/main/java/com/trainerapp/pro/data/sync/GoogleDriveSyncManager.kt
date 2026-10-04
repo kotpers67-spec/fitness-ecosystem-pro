@@ -252,49 +252,36 @@ class GoogleDriveSyncManager {
             if (currentCloudJson.isNotBlank() && currentCloudJson != "{}") {
                 try {
                     rootObj = JsonParser.parseString(currentCloudJson).asJsonObject
-                    if (rootObj.has("pairing")) {
-                        val pairingObj = rootObj.getAsJsonObject("pairing")
-
-                        // Ищем запись по точному cleanPin или по числовому совпадению ключа
-                        for ((key, element) in pairingObj.entrySet()) {
-                            val digitsInKey = key.filter { it.isDigit() }
-                            val entryObj = element.asJsonObject
-                            val entryPin = entryObj.get("pin")?.asString?.filter { it.isDigit() } ?: digitsInKey
-
-                            if (digitsInKey == cleanPin || entryPin == cleanPin) {
-                                foundPairingKey = key
-                                if (athleteUuid.isNullOrBlank()) {
-                                    athleteUuid = entryObj.get("clientUuid")?.asString
-                                }
-                                if (athleteName.isNullOrBlank()) {
-                                    athleteName = entryObj.get("clientName")?.asString ?: entryObj.get("name")?.asString
-                                }
-                                if (athletePhone.isNullOrBlank()) {
-                                    athletePhone = entryObj.get("phone")?.asString
-                                }
-                                if (athleteGoal.isNullOrBlank()) {
-                                    athleteGoal = entryObj.get("goal")?.asString
-                                }
-                                if (athleteNotes.isNullOrBlank()) {
-                                    athleteNotes = entryObj.get("notes")?.asString
-                                }
-                                break
-                            }
-                        }
-                    }
                 } catch (e: Exception) {
-                    // Ошибка чтения облака
+                    return@withContext Result.failure(IllegalStateException("Ошибка разбора данных облака: ${e.message}"))
                 }
             }
 
-            val finalUuid = athleteUuid ?: UUID.randomUUID().toString()
-            val finalName = athleteName?.takeIf { it.isNotBlank() } ?: "Подопечный ${cleanPin.take(3)}-${cleanPin.takeLast(3)}"
-            val finalPhone = athletePhone ?: ""
-            val finalGoal = athleteGoal ?: ""
-            val finalNotes = athleteNotes ?: ""
+            val validationResult = validateAndProcessPairingData(
+                rootObj = rootObj,
+                cleanPin = cleanPin,
+                coachName = coachName,
+                coachPhone = coachPhone,
+                coachAvatarBase64 = coachAvatarBase64,
+                now = System.currentTimeMillis()
+            )
+
+            if (validationResult.isFailure) {
+                val exception = validationResult.exceptionOrNull()
+                // If code expired, write back rootObj with the expired entry removed
+                if (exception is IllegalStateException && exception.message?.contains("истёк") == true) {
+                    try {
+                        val encPost = CloudSecurityManager.encryptPayload(gson.toJson(rootObj))
+                        httpPost(requestUrl, encPost)
+                    } catch (_: Exception) {}
+                }
+                return@withContext Result.failure(exception ?: Exception("Ошибка привязки подопечного"))
+            }
+
+            val (clientData, updatedRootObj) = validationResult.getOrThrow()
 
             // 1. Проверяем локальную базу: есть ли уже клиент с таким UUID или PIN
-            var client = dao.getClientByUuid(finalUuid)
+            var client = dao.getClientByUuid(clientData.clientUuid)
             if (client == null && cleanPin.isNotEmpty()) {
                 client = dao.getClientByPairingCode(cleanPin)
             }
@@ -302,11 +289,11 @@ class GoogleDriveSyncManager {
             if (client != null) {
                 // Обновляем данные существующего клиента
                 val updated = client.copy(
-                    fullName = if (client.fullName.isBlank() || client.fullName.startsWith("Подопечный ")) finalName else client.fullName,
-                    phone = if (client.phone.isBlank()) finalPhone else client.phone,
-                    goal = if (client.goal.isBlank()) finalGoal else client.goal,
-                    notes = if (client.notes.isBlank()) finalNotes else client.notes,
-                    clientUuid = finalUuid,
+                    fullName = if (client.fullName.isBlank() || client.fullName.startsWith("Подопечный ")) clientData.fullName else client.fullName,
+                    phone = if (client.phone.isBlank()) clientData.phone else client.phone,
+                    goal = if (client.goal.isBlank()) clientData.goal else client.goal,
+                    notes = if (client.notes.isBlank()) clientData.notes else client.notes,
+                    clientUuid = clientData.clientUuid,
                     pairingCode = cleanPin,
                     membershipStatus = "Активен"
                 )
@@ -314,50 +301,16 @@ class GoogleDriveSyncManager {
                 client = updated
             } else {
                 // Вставляем нового подопечного
-                val newClient = ClientEntity(
-                    fullName = finalName,
-                    phone = finalPhone,
-                    goal = finalGoal,
-                    notes = finalNotes,
-                    membershipStatus = "Активен",
-                    clientUuid = finalUuid,
-                    pairingCode = cleanPin
-                )
-                val newId = dao.insertClient(newClient)
+                val newId = dao.insertClient(clientData)
                 client = dao.getClientById(newId)
                     ?: return@withContext Result.failure(Exception("Ошибка сохранения клиента в локальной базе"))
             }
 
             // 2. Обновляем статус в облачном реестре спаривания на PAIRED
-            try {
-                if (!rootObj.has("pairing")) {
-                    rootObj.add("pairing", JsonObject())
-                }
-                val pairingObj = rootObj.getAsJsonObject("pairing")
-                val targetKey = foundPairingKey ?: cleanPin
-
-                val pairingEntry = if (pairingObj.has(targetKey)) {
-                    pairingObj.getAsJsonObject(targetKey)
-                } else {
-                    JsonObject().also { pairingObj.add(targetKey, it) }
-                }
-
-                pairingEntry.addProperty("pin", cleanPin)
-                pairingEntry.addProperty("clientUuid", finalUuid)
-                pairingEntry.addProperty("clientName", client.fullName)
-                pairingEntry.addProperty("coachName", coachName)
-                pairingEntry.addProperty("coachPhone", coachPhone)
-                if (!coachAvatarBase64.isNullOrBlank()) {
-                    pairingEntry.addProperty("coachAvatarBase64", coachAvatarBase64)
-                }
-                pairingEntry.addProperty("status", "PAIRED")
-                pairingEntry.addProperty("pairedAt", System.currentTimeMillis().toString())
-
-                rootObj.addProperty("updatedAt", System.currentTimeMillis().toString())
-                val encPost = CloudSecurityManager.encryptPayload(gson.toJson(rootObj))
-                httpPost(requestUrl, encPost)
-            } catch (_: Exception) {
-                // Ошибка обновления облачного статуса спаривания не должна ломать локальную привязку
+            val encPost = CloudSecurityManager.encryptPayload(gson.toJson(updatedRootObj))
+            val postSuccess = httpPost(requestUrl, encPost)
+            if (!postSuccess) {
+                return@withContext Result.failure(IllegalStateException("Ошибка записи статуса привязки в облако"))
             }
 
             // 3. Выполняем начальную синхронизацию с облаком
@@ -368,6 +321,96 @@ class GoogleDriveSyncManager {
             Result.success(client)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    companion object {
+        /**
+         * Валидация кода сопряжения в облачном реестре:
+         * - Ошибка IllegalArgumentException("Код не найден"), если код отсутствует
+         * - Ошибка IllegalStateException("Срок действия кода истёк (действует 5 минут)"), если возраст > 5 мин (удаляет из rootObj)
+         * - Ошибка IllegalStateException("Этот код уже был использован"), если статус PAIRED или USED
+         * - Успех: переводит статус в PAIRED и возвращает проверенного ClientEntity
+         */
+        fun validateAndProcessPairingData(
+            rootObj: JsonObject,
+            cleanPin: String,
+            coachName: String = "Алексей Романов",
+            coachPhone: String = "+7 (999) 123-45-67",
+            coachAvatarBase64: String? = null,
+            now: Long = System.currentTimeMillis()
+        ): Result<Pair<ClientEntity, JsonObject>> {
+            var foundPairingKey: String? = null
+            var foundPairingEntry: JsonObject? = null
+
+            if (rootObj.has("pairing")) {
+                val pairingObj = rootObj.getAsJsonObject("pairing")
+                for ((key, element) in pairingObj.entrySet()) {
+                    if (!element.isJsonObject) continue
+                    val digitsInKey = key.filter { it.isDigit() }
+                    val entryObj = element.asJsonObject
+                    val entryPin = entryObj.get("pin")?.asString?.filter { it.isDigit() } ?: digitsInKey
+
+                    if (digitsInKey == cleanPin || entryPin == cleanPin) {
+                        foundPairingKey = key
+                        foundPairingEntry = entryObj
+                        break
+                    }
+                }
+            }
+
+            if (foundPairingKey == null || foundPairingEntry == null) {
+                return Result.failure(IllegalArgumentException("Код не найден"))
+            }
+
+            val timestamp = foundPairingEntry.get("timestamp")?.asLong ?: 0L
+            val ttlMs = 5 * 60 * 1000L
+
+            if (timestamp > 0L && (now - timestamp > ttlMs)) {
+                if (rootObj.has("pairing")) {
+                    rootObj.getAsJsonObject("pairing").remove(foundPairingKey)
+                    rootObj.addProperty("updatedAt", now.toString())
+                }
+                return Result.failure(IllegalStateException("Срок действия кода истёк (действует 5 минут)"))
+            }
+
+            val currentStatus = foundPairingEntry.get("status")?.asString ?: "PENDING"
+            if (currentStatus.equals("PAIRED", ignoreCase = true) || currentStatus.equals("USED", ignoreCase = true)) {
+                return Result.failure(IllegalStateException("Этот код уже был использован"))
+            }
+
+            val athleteUuid = foundPairingEntry.get("clientUuid")?.asString?.takeIf { it.isNotBlank() }
+                ?: return Result.failure(IllegalStateException("Некорректные данные профиля подопечного в облаке"))
+            val athleteName = foundPairingEntry.get("clientName")?.asString?.takeIf { it.isNotBlank() }
+                ?: foundPairingEntry.get("name")?.asString?.takeIf { it.isNotBlank() }
+                ?: "Подопечный"
+            val athletePhone = foundPairingEntry.get("phone")?.asString ?: ""
+            val athleteGoal = foundPairingEntry.get("goal")?.asString ?: ""
+            val athleteNotes = foundPairingEntry.get("notes")?.asString ?: ""
+
+            foundPairingEntry.addProperty("pin", cleanPin)
+            foundPairingEntry.addProperty("clientUuid", athleteUuid)
+            foundPairingEntry.addProperty("clientName", athleteName)
+            foundPairingEntry.addProperty("coachName", coachName)
+            foundPairingEntry.addProperty("coachPhone", coachPhone)
+            if (!coachAvatarBase64.isNullOrBlank()) {
+                foundPairingEntry.addProperty("coachAvatarBase64", coachAvatarBase64)
+            }
+            foundPairingEntry.addProperty("status", "PAIRED")
+            foundPairingEntry.addProperty("pairedAt", now.toString())
+
+            rootObj.addProperty("updatedAt", now.toString())
+
+            val client = ClientEntity(
+                fullName = athleteName,
+                phone = athletePhone,
+                goal = athleteGoal,
+                notes = athleteNotes,
+                membershipStatus = "Активен",
+                clientUuid = athleteUuid,
+                pairingCode = cleanPin
+            )
+            return Result.success(Pair(client, rootObj))
         }
     }
 
