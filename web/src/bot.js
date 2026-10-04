@@ -487,8 +487,8 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
 
     const text = ctx.message.text.trim();
 
-    // Trainer approval command (/approve_<id>)
-    if (text.startsWith('/approve_')) {
+    // Trainer approval command (/approve_<id> or /approve <username/id>)
+    if (text.startsWith('/approve')) {
       const callerUsername = (ctx.from?.username || '').replace(/^@/, '');
       const callerTgId = String(ctx.from?.id || '');
       const adminChatId = String(process.env.ADMIN_CHAT_ID || '').trim();
@@ -501,13 +501,13 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
         return;
       }
 
-      const targetId = parseInt(text.replace('/approve_', ''), 10);
-      if (targetId) {
-        db.approveTrainer(targetId);
-        const approvedUser = db.findUserById(targetId);
+      const rawTarget = text.replace(/^\/approve_?/, '').trim();
+      if (rawTarget) {
+        db.approveTrainer(rawTarget);
+        const approvedUser = db.findUserById(parseInt(rawTarget, 10)) || db.findUserByUsername(rawTarget);
         await ctx.reply(
           `✅ <b>АККАУНТ ТРЕНЕРА ПОДТВЕРЖДЕН!</b>\n\n` +
-          `Тренер #${targetId} (<b>${approvedUser?.full_name || 'Тренер'}</b>) теперь имеет полный доступ к созданию планов и ведению подопечных на сайте.`,
+          `Тренер <b>${approvedUser?.full_name || 'Тренер'}</b> (@${approvedUser?.username || rawTarget}) теперь имеет полный доступ к созданию планов и ведению подопечных на сайте.`,
           { parse_mode: 'HTML' }
         );
         return;

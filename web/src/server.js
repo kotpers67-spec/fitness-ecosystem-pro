@@ -232,7 +232,9 @@ const server = http.createServer(async (req, res) => {
         const escapedFullName = escapeHtml(cleanFullName);
         const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
 
-        const requireTrainerApproval = (process.env.NODE_ENV === 'test')
+        const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(cleanUsername.toLowerCase()) ||
+          ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((cleanTelegram || '').replace(/^@/, '').toLowerCase());
+        const requireTrainerApproval = (process.env.NODE_ENV === 'test' || isOwnerOrAdmin)
           ? (process.env.REQUIRE_TRAINER_APPROVAL === 'true')
           : (process.env.REQUIRE_TRAINER_APPROVAL !== 'false');
         const isApproved = (role === 'trainer' && requireTrainerApproval) ? 0 : 1;
@@ -322,6 +324,12 @@ const server = http.createServer(async (req, res) => {
         if (!found || found.role !== 'trainer') {
           return sendJson(res, 200, { exists: false, isApproved: false });
         }
+        const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(found.username.toLowerCase()) ||
+          ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((found.telegram_username || '').replace(/^@/, '').toLowerCase());
+        if (isOwnerOrAdmin && found.is_approved === 0) {
+          db.approveTrainer(found.id);
+          found.is_approved = 1;
+        }
         return sendJson(res, 200, {
           exists: true,
           isApproved: Boolean(found.is_approved === 1),
@@ -345,7 +353,14 @@ const server = http.createServer(async (req, res) => {
         const user = db.findUserByUsername(cleanUsername);
 
         if (user && user.role === 'trainer' && user.is_approved === 0) {
-          return sendError(res, 403, '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.');
+          const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(user.username.toLowerCase()) ||
+            ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.telegram_username || '').replace(/^@/, '').toLowerCase());
+          if (isOwnerOrAdmin) {
+            db.approveTrainer(user.id);
+            user.is_approved = 1;
+          } else {
+            return sendError(res, 403, '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.');
+          }
         }
 
         if (!user || !verifyPassword(password, user.password_hash)) {

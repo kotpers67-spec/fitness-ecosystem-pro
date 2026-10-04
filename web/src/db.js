@@ -156,9 +156,15 @@ class AppDatabase {
     return userId;
   }
 
-  approveTrainer(userId) {
-    const stmt = this.db.prepare(`UPDATE users SET is_approved = 1 WHERE id = ? AND role = 'trainer'`);
-    return stmt.run(userId);
+  approveTrainer(identifier) {
+    const raw = String(identifier || '').replace(/^@/, '').trim();
+    const id = parseInt(raw, 10);
+    const cleanLower = raw.toLowerCase();
+    const stmt = this.db.prepare(`
+      UPDATE users SET is_approved = 1 
+      WHERE (id = ? OR LOWER(username) = ? OR LOWER(telegram_username) = ?) AND role = 'trainer'
+    `);
+    return stmt.run(id || 0, cleanLower, cleanLower);
   }
 
   updateAthleteRestrictions(athleteId, restrictions) {
