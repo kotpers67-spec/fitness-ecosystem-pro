@@ -128,7 +128,6 @@
     athleteInputExercise: document.getElementById('athlete-input-exercise'),
     athleteInputWeight: document.getElementById('athlete-input-weight'),
     athleteInputReps: document.getElementById('athlete-input-reps'),
-    athleteInputRpe: document.getElementById('athlete-input-rpe'),
     athleteWorkoutMatrix: document.getElementById('athlete-workout-matrix'),
 
     // Athlete History
@@ -184,7 +183,6 @@
     trainerInputExercise: document.getElementById('trainer-input-exercise'),
     trainerInputWeight: document.getElementById('trainer-input-weight'),
     trainerInputReps: document.getElementById('trainer-input-reps'),
-    trainerInputRpe: document.getElementById('trainer-input-rpe'),
     trainerWorkoutMatrix: document.getElementById('trainer-workout-matrix'),
 
     // Trainer History
@@ -1158,7 +1156,7 @@
       item.innerHTML = `
         <div>
           <div style="font-weight: 700; font-size: 14px; color: var(--text-primary);">${escapeHtml(s.exercise_name)}</div>
-          <div style="font-size: 11px; color: var(--text-muted);">${s.date || state.currentDate} · RPE ${s.rpe || 8}</div>
+          <div style="font-size: 11px; color: var(--text-muted);">${s.date || state.currentDate}</div>
         </div>
         <div style="text-align: right;">
           <div style="font-weight: 800; color: var(--accent-lime); font-size: 14px;">${s.weight_kg} кг × ${s.reps}</div>
@@ -2435,7 +2433,6 @@
       const exerciseName = el.athleteInputExercise.value.trim();
       const weightKg = parseFloat(el.athleteInputWeight.value) || 0;
       const reps = parseInt(el.athleteInputReps.value, 10) || 1;
-      const rpe = parseFloat(el.athleteInputRpe.value) || 8.0;
 
       try {
         await api('/api/workout/set', {
@@ -2444,8 +2441,7 @@
             date: state.currentDate,
             exerciseName,
             weightKg,
-            reps,
-            rpe
+            reps
           })
         });
         showToast('Подход добавлен', 'success');

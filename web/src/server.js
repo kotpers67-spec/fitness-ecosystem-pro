@@ -1298,6 +1298,63 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      // TELEGRAM LINKING: Link via 6-digit Code from Bot (Keys menu in bot)
+      if (pathname === '/api/user/telegram/link-by-bot-code' && req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const cleanCode = String(body.code || '').trim();
+        if (cleanCode.length !== 6 || !/^\d{6}$/.test(cleanCode)) {
+          return sendError(res, 400, 'Код должен содержать ровно 6 цифр');
+        }
+
+        const now = Date.now();
+        let matchedTgId = null;
+        let matchedUsername = null;
+
+        if (telegramOtpStore) {
+          for (const [key, record] of telegramOtpStore.entries()) {
+            if (record && record.code === cleanCode && record.expiresAt > now) {
+              matchedTgId = record.tgId || record.telegramId || (key.startsWith('id_') ? key.replace('id_', '') : null);
+              matchedUsername = record.username || (key.startsWith('id_') ? null : key);
+              break;
+            }
+          }
+        }
+
+        if (!matchedTgId && !matchedUsername) {
+          const userWithPin = db.findUserByPairingCode ? db.findUserByPairingCode(cleanCode) : null;
+          if (userWithPin && (userWithPin.telegram_id || userWithPin.telegram_username)) {
+            matchedTgId = userWithPin.telegram_id;
+            matchedUsername = userWithPin.telegram_username;
+          }
+        }
+
+        if (!matchedTgId && !matchedUsername) {
+          return sendError(res, 400, 'Код не найден или срок действия (5 минут) истёк');
+        }
+
+        db.linkTelegram(user.id, matchedTgId || '', matchedUsername || '');
+        const updated = db.findUserById(user.id);
+
+        if (tgBotInstance && matchedTgId) {
+          try {
+            await tgBotInstance.api.sendMessage(
+              matchedTgId,
+              `✅ <b>Telegram успешно привязан!</b>\n\n` +
+              `👤 Профиль: <b>${user.full_name || user.username}</b> (${user.role === 'trainer' ? 'Тренер' : 'Атлет'})\n` +
+              `Привязка выполнена по коду из приложения.`,
+              { parse_mode: 'HTML' }
+            );
+          } catch (_) {}
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          message: `Telegram успешно привязан${matchedUsername ? ': @' + matchedUsername : ''}`,
+          telegramUsername: updated?.telegram_username || matchedUsername || '',
+          telegramId: updated?.telegram_id || matchedTgId || ''
+        });
+      }
+
       // TELEGRAM: Unlink
       if (pathname === '/api/user/telegram/unlink' && req.method === 'POST') {
         db.unlinkTelegram(user.id);

@@ -570,7 +570,8 @@ class TrainerRemoteAuthManager(
                             role = if (userObj.has("role")) userObj.get("role").asString else "trainer",
                             fullName = if (userObj.has("fullName") && !userObj.get("fullName").isJsonNull) userObj.get("fullName").asString else "",
                             phone = if (userObj.has("phone") && !userObj.get("phone").isJsonNull) userObj.get("phone").asString else "",
-                            telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else "",
+                            telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString
+                                else if (userObj.has("telegram_username") && !userObj.get("telegram_username").isJsonNull) userObj.get("telegram_username").asString else "",
                             isApproved = true,
                             twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
                             avatarBase64 = if (userObj.has("avatarBase64") && !userObj.get("avatarBase64").isJsonNull) userObj.get("avatarBase64").asString
@@ -596,6 +597,67 @@ class TrainerRemoteAuthManager(
             }
         } catch (e: Exception) {
             return@withContext TrainerTelegramSessionStatusResult.Error(e.message ?: "Сетевая ошибка")
+        }
+    }
+
+    /**
+     * Generate 5-minute deep link for 1-Click Telegram Linking
+     */
+    suspend fun getTelegramLinkDeepLink(authToken: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$backendBaseUrl/api/user/telegram/link-token")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Authorization", "Bearer $authToken")
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            conn.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+            if (conn.responseCode == 200) {
+                val text = conn.inputStream.bufferedReader().readText()
+                val json = JsonParser.parseString(text).asJsonObject
+                if (json.has("deepLink") && !json.get("deepLink").isJsonNull) {
+                    return@withContext json.get("deepLink").asString
+                }
+            }
+        } catch (_: Exception) {}
+        null
+    }
+
+    /**
+     * Link Telegram via 6-digit code obtained from the bot
+     */
+    suspend fun linkTelegramByBotCode(authToken: String, code: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        val clean = cleanOtp(code)
+        if (clean.length != 6) {
+            return@withContext Pair(false, "Код должен содержать ровно 6 цифр")
+        }
+        try {
+            val url = URL("$backendBaseUrl/api/user/telegram/link-by-bot-code")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Authorization", "Bearer $authToken")
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            val payload = JsonObject().apply { addProperty("code", clean) }
+            conn.outputStream.use { it.write(gson.toJson(payload).toByteArray(Charsets.UTF_8)) }
+            val respCode = conn.responseCode
+            val text = if (respCode in 200..299) conn.inputStream.bufferedReader().readText() else conn.errorStream?.bufferedReader()?.readText() ?: ""
+            val json = runCatching { JsonParser.parseString(text).asJsonObject }.getOrNull()
+            if (respCode == 200 && json != null && json.has("success") && json.get("success").asBoolean) {
+                val uname = if (json.has("telegramUsername") && !json.get("telegramUsername").isJsonNull) json.get("telegramUsername").asString else ""
+                return@withContext Pair(true, uname)
+            } else {
+                val err = json?.get("error")?.asString ?: "Не удалось привязать Telegram"
+                return@withContext Pair(false, err)
+            }
+        } catch (e: Exception) {
+            return@withContext Pair(false, e.message ?: "Сетевая ошибка")
         }
     }
 }

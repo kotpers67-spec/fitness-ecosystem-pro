@@ -19,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -405,32 +408,107 @@ fun SettingsScreen(
                     }
                 }
 
+                var tgBotCodeInput by remember { mutableStateOf("") }
+                var isLinkingTg by remember { mutableStateOf(false) }
+
                 if (showTgDialog) {
                     AlertDialog(
-                        onDismissRequest = { showTgDialog = false },
+                        onDismissRequest = { if (!isLinkingTg) showTgDialog = false },
                         title = { Text("Привязка Telegram тренера", fontWeight = FontWeight.Bold) },
                         text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("Нажмите кнопку ниже, чтобы открыть Telegram бота, или введите ваш @username:")
-                                OutlinedButton(
+                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Text(
+                                    text = "Выберите удобный способ привязки аккаунта:",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                // Вариант 1: В 1 клик через бота
+                                Button(
                                     onClick = {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/FitnessEcosystemBot"))
-                                        context.startActivity(intent)
+                                        scope.launch {
+                                            isLinkingTg = true
+                                            try {
+                                                val deepLink = viewModel.getTelegramLinkDeepLink()
+                                                val targetUrl = deepLink ?: "https://t.me/fitnessecosystemBOT?start=login"
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                                                context.startActivity(intent)
+                                                Toast.makeText(context, "Нажмите START в боте для завершения привязки", Toast.LENGTH_LONG).show()
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Ошибка открытия Telegram: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            } finally {
+                                                isLinkingTg = false
+                                            }
+                                        }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp)
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2AABEE))
                                 ) {
-                                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("Открыть бота @FitnessEcosystemBot")
+                                    Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("✈ Привязать в 1 клик в боте", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
+
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                                // Вариант 2: По 6-значному коду из бота
+                                Text(
+                                    text = "Или введите 6-значный код из бота (кнопка «🔑 Код входа»):",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = tgBotCodeInput,
+                                        onValueChange = {
+                                            if (it.length <= 6 && it.all { c -> c.isDigit() }) tgBotCodeInput = it
+                                        },
+                                        placeholder = { Text("6 цифр") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+
+                                    Button(
+                                        enabled = tgBotCodeInput.length == 6 && !isLinkingTg,
+                                        onClick = {
+                                            scope.launch {
+                                                isLinkingTg = true
+                                                val (ok, res) = viewModel.linkTelegramByBotCode(tgBotCodeInput)
+                                                isLinkingTg = false
+                                                if (ok) {
+                                                    Toast.makeText(context, "Telegram успешно привязан${if (res.isNotBlank()) ": @$res" else ""}!", Toast.LENGTH_LONG).show()
+                                                    showTgDialog = false
+                                                    tgBotCodeInput = ""
+                                                } else {
+                                                    Toast.makeText(context, res, Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text("Привязать")
+                                    }
+                                }
+
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                                // Вариант 3: Ручной ввод @username
                                 OutlinedTextField(
                                     value = tempTgInput,
                                     onValueChange = { tempTgInput = it },
-                                    label = { Text("Telegram @username") },
+                                    label = { Text("Или укажите @username вручную") },
                                     placeholder = { Text("@username") },
                                     singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
                                 )
                             }
                         },
@@ -439,17 +517,17 @@ fun SettingsScreen(
                                 onClick = {
                                     if (tempTgInput.isNotBlank()) {
                                         viewModel.updateTelegramUsername(tempTgInput)
-                                        Toast.makeText(context, "Telegram привязан: @${tempTgInput.removePrefix("@")}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Telegram сохранён: @${tempTgInput.removePrefix("@")}", Toast.LENGTH_SHORT).show()
                                     }
                                     showTgDialog = false
                                 }
                             ) {
-                                Text("Сохранить")
+                                Text("Сохранить @username")
                             }
                         },
                         dismissButton = {
                             TextButton(onClick = { showTgDialog = false }) {
-                                Text("Отмена")
+                                Text("Закрыть")
                             }
                         }
                     )

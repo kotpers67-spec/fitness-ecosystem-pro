@@ -192,9 +192,10 @@ function getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncServi
 
   // Sync to telegramOtpStore across all aliases
   if (telegramOtpStore) {
-    if (username) telegramOtpStore.set(username, { code, expiresAt, attempts: 0 });
-    if (tgId) telegramOtpStore.set(`id_${tgId}`, { code, expiresAt, attempts: 0 });
-    if (user && user.username) telegramOtpStore.set(user.username, { code, expiresAt, attempts: 0 });
+    const entryData = { code, expiresAt, tgId, username, attempts: 0 };
+    if (username) telegramOtpStore.set(username, entryData);
+    if (tgId) telegramOtpStore.set(`id_${tgId}`, entryData);
+    if (user && user.username) telegramOtpStore.set(user.username, entryData);
   }
 
   return { code, expiresAt, user };
@@ -323,7 +324,11 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
         clientUuid: user.client_uuid || '',
         coachName: user.coach_name || '',
         coachPhone: user.coach_phone || '',
-        isPrivate: Boolean(user.is_private)
+        isPrivate: Boolean(user.is_private),
+        telegram_id: String(user.telegram_id || tgId || ''),
+        telegramId: String(user.telegram_id || tgId || ''),
+        telegram_username: String(user.telegram_username || username || ''),
+        telegramUsername: String(user.telegram_username || username || '')
       };
 
       const roleTitle = user.role === 'trainer' ? 'Тренер' : 'Атлет';

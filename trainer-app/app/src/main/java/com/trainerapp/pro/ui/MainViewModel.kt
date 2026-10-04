@@ -142,6 +142,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         telegramUsername = username
     }
 
+    suspend fun getTelegramLinkDeepLink(): String? {
+        val token = authPrefs.getString("auth_token", "") ?: ""
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        return remoteAuthManager.getTelegramLinkDeepLink(token)
+    }
+
+    suspend fun linkTelegramByBotCode(code: String): Pair<Boolean, String> {
+        val token = authPrefs.getString("auth_token", "") ?: ""
+        if (token.isBlank()) return Pair(false, "Требуется авторизация")
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        val (ok, res) = remoteAuthManager.linkTelegramByBotCode(token, code)
+        if (ok && res.isNotBlank()) {
+            updateTelegramUsername(res)
+        }
+        return Pair(ok, res)
+    }
+
     val remoteAuthManager = com.trainerapp.pro.data.auth.TrainerRemoteAuthManager()
 
     companion object {
@@ -250,6 +267,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (user.telegramUsername.isNotBlank()) {
             editor.putString("telegram_username", user.telegramUsername)
+            _telegramUsernameFlow.value = user.telegramUsername
         }
         editor.apply()
         isApproved = true
