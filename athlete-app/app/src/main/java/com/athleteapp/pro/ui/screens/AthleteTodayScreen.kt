@@ -410,39 +410,6 @@ fun AthleteSetRow(
                 )
             )
 
-            // RPE Tag Button
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .then(
-                        if (isSelfAllowed) {
-                            Modifier.clickable {
-                                val currentRpe = set.rpe ?: 8.0
-                                val nextRpe = when (currentRpe) {
-                                    7.0 -> 8.0
-                                    8.0 -> 8.5
-                                    8.5 -> 9.0
-                                    9.0 -> 9.5
-                                    9.5 -> 10.0
-                                    else -> 7.0
-                                }
-                                onUpdateRpe(nextRpe)
-                            }
-                        } else Modifier
-                    ),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                Text(
-                    text = "RPE ${(set.rpe ?: 8.0)}",
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isSelfAllowed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-            }
-
             // Checkbox / Complete Button (Minimum 48.dp touch target)
             FilledIconToggleButton(
                 checked = set.isCompleted,
