@@ -101,7 +101,6 @@ describe('Fitness Ecosystem Pro - Security Test Suite', () => {
     if (db && typeof db.close === 'function') {
       db.close();
     }
-    setTimeout(() => process.exit(0), 100);
   });
 
   beforeEach(() => {
@@ -254,6 +253,54 @@ describe('Fitness Ecosystem Pro - Security Test Suite', () => {
 
       const afterRes = await request('GET', '/api/me', { Authorization: `Bearer ${tempToken}` });
       assert.equal(afterRes.statusCode, 401);
+    });
+
+    it('rehydrates valid signed HMAC session token after database cold boot evacuation', async () => {
+      const rebootUser = 'reboot_' + Date.now();
+      const regRes = await request('POST', '/api/register', {}, {
+        username: rebootUser,
+        password: 'password123',
+        role: 'athlete',
+        fullName: 'Ребут Атлет'
+      });
+      const token = regRes.body.token;
+      assert.ok(token && token.startsWith('fit_'), 'Token must be HMAC signed');
+
+      // Simulate container reboot / db table wipe: clear auth_tokens table
+      db.db.exec('DELETE FROM auth_tokens');
+
+      // Verify getUserByToken rehydrates session
+      const meRes = await request('GET', '/api/me', { Authorization: `Bearer ${token}` });
+      assert.equal(meRes.statusCode, 200);
+      assert.equal(meRes.body.user.username, rebootUser);
+      assert.equal(meRes.body.user.fullName, 'Ребут Атлет');
+      assert.ok(meRes.body.user.pairingCode);
+
+      // Verify token rehydrated in db table
+      const row = db.db.prepare('SELECT * FROM auth_tokens WHERE token = ?').get(token);
+      assert.ok(row, 'Token must be rehydrated in auth_tokens table');
+    });
+
+    it('verifies authentication via 6-digit PIN alone without requiring username', async () => {
+      const pinUser = 'pin_direct_' + Date.now();
+      const regRes = await request('POST', '/api/register', {}, {
+        username: pinUser,
+        password: 'password123',
+        role: 'athlete',
+        fullName: 'Пин Атлет'
+      });
+      const pin = regRes.body.user.pairingCode;
+      assert.ok(pin && pin.length === 6);
+
+      // Verify directly by code alone
+      const verifyRes = await request('POST', '/api/auth/telegram/verify-otp', {}, {
+        code: pin
+      });
+      assert.equal(verifyRes.statusCode, 200);
+      assert.equal(verifyRes.body.success, true);
+      assert.equal(verifyRes.body.user.username, pinUser);
+      assert.ok(verifyRes.body.token && verifyRes.body.token.startsWith('fit_'));
+      assert.equal(verifyRes.body.user.fullName, 'Пин Атлет');
     });
   });
 

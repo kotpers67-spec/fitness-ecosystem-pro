@@ -410,7 +410,7 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
         return;
       }
 
-      const token = generateToken();
+      const token = generateToken(user.id, user.role);
       db.createAuthToken(token, user.id);
 
       // If user is a trainer, sync trainer profile and clients from cloud immediately

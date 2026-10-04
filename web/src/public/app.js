@@ -189,6 +189,7 @@
     trainerAllowSelfWorkout: document.getElementById('trainer-allow-self-workout'),
     formTrainerAddSet: document.getElementById('form-trainer-add-set'),
     trainerInputExercise: document.getElementById('trainer-input-exercise'),
+    trainerExerciseSearchResults: document.getElementById('trainer-exercise-search-results'),
     trainerInputWeight: document.getElementById('trainer-input-weight'),
     trainerInputReps: document.getElementById('trainer-input-reps'),
     trainerWorkoutMatrix: document.getElementById('trainer-workout-matrix'),
@@ -681,6 +682,21 @@
     el.restTimerDigits.textContent = `${m}:${s}`;
   }
 
+  function getEarliestSessionTimestamp(sets) {
+    let earliestMs = null;
+    sets.forEach(s => {
+      if (s.created_at) {
+        let dStr = s.created_at;
+        if (!dStr.includes('T')) dStr = dStr.replace(' ', 'T') + 'Z';
+        const t = new Date(dStr).getTime();
+        if (!isNaN(t) && (earliestMs === null || t < earliestMs)) {
+          earliestMs = t;
+        }
+      }
+    });
+    return earliestMs;
+  }
+
   function renderAthleteWorkoutMatrix() {
     el.athleteWorkoutMatrix.innerHTML = '';
     if (state.athleteSets.length === 0) {
@@ -693,6 +709,9 @@
       return;
     }
 
+    const earliestMs = getEarliestSessionTimestamp(state.athleteSets);
+    const isAfterOneHour = earliestMs ? (Date.now() - earliestMs >= 60 * 60 * 1000) : false;
+
     // Group sets by exercise name
     const grouped = {};
     state.athleteSets.forEach(s => {
@@ -701,9 +720,25 @@
       grouped[name].push(s);
     });
 
-    for (const [exName, sets] of Object.entries(grouped)) {
+    const groups = Object.entries(grouped).map(([exName, sets]) => {
+      const isCompleted = sets.length > 0 && sets.every(s => Boolean(s.is_completed));
+      const earliestId = Math.min(...sets.map(s => s.id || 0));
+      return { exName, sets, isCompleted, earliestId };
+    });
+
+    // Incomplete exercises go to TOP, completed go to BOTTOM
+    groups.sort((a, b) => {
+      if (a.isCompleted !== b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
+      return a.earliestId - b.earliestId;
+    });
+
+    for (const group of groups) {
+      const { exName, sets, isCompleted } = group;
+      const shouldCollapse = isCompleted && isAfterOneHour;
       const card = document.createElement('div');
-      card.className = 'exercise-group-card';
+      card.className = `exercise-group-card ${isCompleted ? 'completed-card' : ''} ${shouldCollapse ? 'collapsed' : ''}`;
 
       let setsHtml = '';
       sets.forEach((set, idx) => {
@@ -727,11 +762,29 @@
 
       card.innerHTML = `
         <div class="exercise-group-title">
-          <span>${escapeHtml(exName)}</span>
-          <span style="font-size: 11px; color: var(--text-muted);">${sets.length} подходов</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>${escapeHtml(exName)}</span>
+            ${isCompleted ? '<span class="status-pill done" style="font-size:10px; padding:2px 6px;">✓ Завершено</span>' : ''}
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted);">${sets.length} подходов</span>
+            <button type="button" class="collapse-toggle-btn" title="Свернуть/Развернуть">
+              ${shouldCollapse ? '▶ Развернуть' : '▼ Свернуть'}
+            </button>
+          </div>
         </div>
         <div class="sets-table">${setsHtml}</div>
       `;
+
+      const toggleBtn = card.querySelector('.collapse-toggle-btn');
+      if (toggleBtn) {
+        toggleBtn.onclick = (e) => {
+          e.stopPropagation();
+          card.classList.toggle('collapsed');
+          const isNowCollapsed = card.classList.contains('collapsed');
+          toggleBtn.textContent = isNowCollapsed ? '▶ Развернуть' : '▼ Свернуть';
+        };
+      }
 
       // Set input change handler (weight / reps auto-save)
       card.querySelectorAll('.input-set-weight, .input-set-reps').forEach(inp => {
@@ -1586,6 +1639,9 @@
       return;
     }
 
+    const earliestMs = getEarliestSessionTimestamp(state.trainerSets);
+    const isAfterOneHour = earliestMs ? (Date.now() - earliestMs >= 60 * 60 * 1000) : false;
+
     const grouped = {};
     state.trainerSets.forEach(s => {
       const name = s.exercise_name || 'Упражнение';
@@ -1593,9 +1649,25 @@
       grouped[name].push(s);
     });
 
-    for (const [exName, sets] of Object.entries(grouped)) {
+    const groups = Object.entries(grouped).map(([exName, sets]) => {
+      const isCompleted = sets.length > 0 && sets.every(s => Boolean(s.is_completed));
+      const earliestId = Math.min(...sets.map(s => s.id || 0));
+      return { exName, sets, isCompleted, earliestId };
+    });
+
+    // Incomplete exercises go to TOP, completed go to BOTTOM
+    groups.sort((a, b) => {
+      if (a.isCompleted !== b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
+      return a.earliestId - b.earliestId;
+    });
+
+    for (const group of groups) {
+      const { exName, sets, isCompleted } = group;
+      const shouldCollapse = isCompleted && isAfterOneHour;
       const card = document.createElement('div');
-      card.className = 'exercise-group-card';
+      card.className = `exercise-group-card ${isCompleted ? 'completed-card' : ''} ${shouldCollapse ? 'collapsed' : ''}`;
 
       let setsHtml = '';
       sets.forEach((set, idx) => {
@@ -1617,11 +1689,29 @@
 
       card.innerHTML = `
         <div class="exercise-group-title">
-          <span>${escapeHtml(exName)}</span>
-          <span style="font-size: 11px; color: var(--text-muted);">${sets.length} подходов</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>${escapeHtml(exName)}</span>
+            ${isCompleted ? '<span class="status-pill done" style="font-size:10px; padding:2px 6px;">✓ Завершено</span>' : ''}
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted);">${sets.length} подходов</span>
+            <button type="button" class="collapse-toggle-btn" title="Свернуть/Развернуть">
+              ${shouldCollapse ? '▶ Развернуть' : '▼ Свернуть'}
+            </button>
+          </div>
         </div>
         <div class="sets-table">${setsHtml}</div>
       `;
+
+      const toggleBtn = card.querySelector('.collapse-toggle-btn');
+      if (toggleBtn) {
+        toggleBtn.onclick = (e) => {
+          e.stopPropagation();
+          card.classList.toggle('collapsed');
+          const isNowCollapsed = card.classList.contains('collapsed');
+          toggleBtn.textContent = isNowCollapsed ? '▶ Развернуть' : '▼ Свернуть';
+        };
+      }
 
       // Trainer set input change handler (auto-save)
       card.querySelectorAll('.input-trainer-set-weight, .input-trainer-set-reps').forEach(inp => {
@@ -2737,9 +2827,96 @@
         });
         showToast('Упражнение назначено подопечному', 'success');
         loadTrainerWorkoutSets();
+        if (el.trainerExerciseSearchResults) el.trainerExerciseSearchResults.style.display = 'none';
         el.trainerInputReps.focus();
       } catch {}
     };
+
+    // Trainer Searchable Exercise Catalog
+    const EXERCISE_CATALOG = [
+      { name: 'Жим штанги лёжа', category: 'Грудь' },
+      { name: 'Жим гантелей на наклонной скамье', category: 'Грудь' },
+      { name: 'Жим гантелей лёжа', category: 'Грудь' },
+      { name: 'Отжимания на брусьях', category: 'Грудь / Трицепс' },
+      { name: 'Разведение гантелей лёжа', category: 'Грудь' },
+      { name: 'Сведение рук в кроссовере', category: 'Грудь' },
+      { name: 'Приседания со штангой', category: 'Ноги' },
+      { name: 'Жим ногами в тренажёре', category: 'Ноги' },
+      { name: 'Выпады с гантелями', category: 'Ноги' },
+      { name: 'Румынская тяга со штангой', category: 'Ноги / Спина' },
+      { name: 'Сгибания ног в тренажёре', category: 'Ноги' },
+      { name: 'Разгибания ног в тренажёре', category: 'Ноги' },
+      { name: 'Подъёмы на носки стоя', category: 'Икры' },
+      { name: 'Становая тяга', category: 'Спина' },
+      { name: 'Подтягивания широким хватом', category: 'Спина' },
+      { name: 'Тяга верхнего блока к груди', category: 'Спина' },
+      { name: 'Тяга штанги в наклоне', category: 'Спина' },
+      { name: 'Тяга горизонтального блока', category: 'Спина' },
+      { name: 'Тяга гантели в наклоне', category: 'Спина' },
+      { name: 'Гиперэкстензия', category: 'Спина' },
+      { name: 'Армейский жим стоя', category: 'Плечи' },
+      { name: 'Жим гантелей сидя', category: 'Плечи' },
+      { name: 'Махи гантелями через стороны', category: 'Плечи' },
+      { name: 'Махи в наклоне на заднюю дельту', category: 'Плечи' },
+      { name: 'Подъём штанги на бицепс', category: 'Руки' },
+      { name: 'Молотковые сгибания с гантелями', category: 'Руки' },
+      { name: 'Французский жим со штангой', category: 'Трицепс' },
+      { name: 'Разгибания рук на блоке', category: 'Трицепс' },
+      { name: 'Скручивания на пресс', category: 'Пресс' },
+      { name: 'Подъём ног в висе', category: 'Пресс' },
+      { name: 'Планка', category: 'Пресс' },
+      { name: 'Кардио: Беговая дорожка', category: 'Кардио' },
+      { name: 'Кардио: Велотренажёр', category: 'Кардио' }
+    ];
+
+    if (el.trainerInputExercise && el.trainerExerciseSearchResults) {
+      function renderTrainerSearchResults(query = '') {
+        const q = query.trim().toLowerCase();
+        const matches = EXERCISE_CATALOG.filter(item =>
+          !q || item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+        );
+
+        if (matches.length === 0) {
+          el.trainerExerciseSearchResults.innerHTML = `
+            <div style="padding: 10px 14px; font-size: 12px; color: var(--text-muted);">
+              Своё упражнение: <strong>${escapeHtml(query)}</strong>
+            </div>
+          `;
+          el.trainerExerciseSearchResults.style.display = 'block';
+          return;
+        }
+
+        el.trainerExerciseSearchResults.innerHTML = matches.map(item => `
+          <div class="exercise-search-item" data-name="${escapeHtml(item.name)}">
+            <span class="exercise-search-name">${escapeHtml(item.name)}</span>
+            <span class="exercise-search-category">${escapeHtml(item.category)}</span>
+          </div>
+        `).join('');
+        el.trainerExerciseSearchResults.style.display = 'block';
+
+        el.trainerExerciseSearchResults.querySelectorAll('.exercise-search-item').forEach(item => {
+          item.onclick = () => {
+            el.trainerInputExercise.value = item.dataset.name;
+            el.trainerExerciseSearchResults.style.display = 'none';
+            if (el.trainerInputWeight) el.trainerInputWeight.focus();
+          };
+        });
+      }
+
+      el.trainerInputExercise.addEventListener('focus', () => {
+        renderTrainerSearchResults(el.trainerInputExercise.value);
+      });
+
+      el.trainerInputExercise.addEventListener('input', (e) => {
+        renderTrainerSearchResults(e.target.value);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!el.trainerInputExercise.contains(e.target) && !el.trainerExerciseSearchResults.contains(e.target)) {
+          el.trainerExerciseSearchResults.style.display = 'none';
+        }
+      });
+    }
 
     // Trainer Athlete Restrictions Form
     const formRestrictions = document.getElementById('form-trainer-restrictions');

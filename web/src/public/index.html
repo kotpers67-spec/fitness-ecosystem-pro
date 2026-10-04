@@ -666,8 +666,9 @@
           </div>
 
           <form id="form-trainer-add-set">
-            <div class="form-group" style="margin-bottom: 10px;">
-              <input type="text" id="trainer-input-exercise" class="app-input" placeholder="Название упражнения" required>
+            <div class="form-group" style="margin-bottom: 10px; position: relative;">
+              <input type="text" id="trainer-input-exercise" class="app-input" placeholder="🔍 Название или поиск упражнения..." autocomplete="off" required>
+              <div id="trainer-exercise-search-results" class="exercise-search-dropdown" style="display: none;"></div>
             </div>
             <div class="double-input-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
               <div>

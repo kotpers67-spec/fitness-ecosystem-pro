@@ -56,8 +56,43 @@ function verifyPassword(password, storedHash) {
   return crypto.timingSafeEqual(targetBuffer, derivedBuffer);
 }
 
-// 4. Cryptographic Secure Token & PIN Generation
-function generateToken() {
+// 4. Cryptographic Secure Token & PIN Generation with Stateless HMAC Fallback
+const TOKEN_SECRET = process.env.SESSION_SECRET || 'fitness_ecosystem_pro_super_secret_signing_key_2026';
+
+function generateSignedToken(userId, role = 'athlete', ttlMs = 86400000 * 365) {
+  const expiresAt = Date.now() + ttlMs;
+  const rawPayload = `${userId}:${role}:${expiresAt}:${crypto.randomBytes(8).toString('hex')}`;
+  const payloadB64 = Buffer.from(rawPayload).toString('base64url');
+  const signature = crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest('hex').slice(0, 32);
+  return `fit_${payloadB64}_${signature}`;
+}
+
+function verifySignedToken(token) {
+  if (!token || typeof token !== 'string' || !token.startsWith('fit_')) return null;
+  const parts = token.split('_');
+  if (parts.length < 3) return null;
+  const payloadB64 = parts[1];
+  const signature = parts.slice(2).join('_');
+
+  const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest('hex').slice(0, 32);
+  if (signature !== expectedSig) return null;
+
+  try {
+    const rawPayload = Buffer.from(payloadB64, 'base64url').toString('utf8');
+    const [userIdStr, role, expiresAtStr] = rawPayload.split(':');
+    const userId = parseInt(userIdStr, 10);
+    const expiresAt = parseInt(expiresAtStr, 10);
+    if (!userId || !expiresAt || Date.now() > expiresAt) return null;
+    return { userId, role, expiresAt };
+  } catch (_) {
+    return null;
+  }
+}
+
+function generateToken(userId = 0, role = 'athlete') {
+  if (userId) {
+    return generateSignedToken(userId, role);
+  }
   return crypto.randomBytes(32).toString('hex');
 }
 
@@ -122,6 +157,8 @@ module.exports = {
   hashPassword,
   verifyPassword,
   generateToken,
+  generateSignedToken,
+  verifySignedToken,
   generateSecurePin,
   RateLimiter,
   SECURITY_HEADERS

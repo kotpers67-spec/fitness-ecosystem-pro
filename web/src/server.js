@@ -228,7 +228,7 @@ const server = http.createServer(async (req, res) => {
             if (role === 'trainer') {
               db.approveTrainer(existing.id);
             }
-            const token = generateToken();
+            const token = generateToken(existing.id, existing.role);
             db.createAuthToken(token, existing.id);
             const updated = db.findUserById(existing.id);
             return sendJson(res, 200, {
@@ -329,7 +329,7 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        const token = generateToken();
+        const token = generateToken(userId, role);
         db.createAuthToken(token, userId);
 
         // Sync athlete pairing code to Google Drive cloud
@@ -486,7 +486,7 @@ const server = http.createServer(async (req, res) => {
           } catch (_) {}
         }
 
-        const token = generateToken();
+        const token = generateToken(user.id, user.role);
         db.createAuthToken(token, user.id);
 
         return sendJson(res, 200, {
@@ -569,7 +569,7 @@ const server = http.createServer(async (req, res) => {
           } catch (_) {}
         }
 
-        const token = generateToken();
+        const token = generateToken(user.id, user.role);
         db.createAuthToken(token, user.id);
 
         return sendJson(res, 200, {
@@ -692,7 +692,7 @@ const server = http.createServer(async (req, res) => {
           user = db.findUserById(userId);
         }
 
-        const token = generateToken();
+        const token = generateToken(user.id, user.role);
         db.createAuthToken(token, user.id);
 
         return sendJson(res, 200, {
@@ -924,107 +924,161 @@ const server = http.createServer(async (req, res) => {
         const body = await parseJsonBody(req);
         const { username, code } = body;
         const cleanUsername = String(username || '').replace(/^@/, '').trim().toLowerCase();
-        const cleanCode = String(code || '').trim();
+        const cleanCode = String(code || '').replace(/\D/g, '').trim();
 
-        if (!cleanUsername || !cleanCode) {
-          return sendError(res, 400, 'Введите имя пользователя и 6-значный код');
+        if (!cleanCode || cleanCode.length !== 6) {
+          return sendError(res, 400, 'Введите корректный 6-значный код');
         }
 
-        const record = telegramOtpStore.get(cleanUsername);
-        if (!record) {
-          return sendError(res, 400, 'Код не запрашивался или срок действия (5 минут) истек');
-        }
+        const now = Date.now();
+        let matchedOtpRecord = null;
+        let matchedOtpKey = null;
 
-        if (Date.now() > record.expiresAt) {
-          telegramOtpStore.delete(cleanUsername);
-          return sendError(res, 400, 'Срок действия кода истек (5 минут). Запросите новый код.');
-        }
+        if (cleanUsername) {
+          const record = telegramOtpStore.get(cleanUsername) || telegramOtpStore.get(`id_${cleanUsername}`);
+          if (record) {
+            if (now > record.expiresAt) {
+              telegramOtpStore.delete(cleanUsername);
+              return sendError(res, 400, 'Срок действия кода истек (5 минут). Запросите новый код.');
+            }
 
-        if (record.attempts >= 5) {
-          telegramOtpStore.delete(cleanUsername);
-          return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
-        }
+            if (record.attempts >= 5) {
+              telegramOtpStore.delete(cleanUsername);
+              return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
+            }
 
-        if (record.code !== cleanCode) {
-          record.attempts++;
-          return sendError(res, 400, 'Неверный код из Telegram');
-        }
-
-        // Code is verified and consumed (single-use guaranteed)
-        telegramOtpStore.delete(cleanUsername);
-
-        let user = db.findUserByUsername(cleanUsername);
-        if (!user) user = db.findUserByUsername(`tg_${cleanUsername}`);
-        if (!user) user = db.findUserByTelegramUsername(cleanUsername);
-        if (!user && cleanUsername.replace(/\D/g, '').length >= 7) {
-          user = db.findUserByPhone(cleanUsername.replace(/\D/g, ''));
-        }
-
-        if (user) {
-          if (!user.telegram_username && cleanUsername) {
-            db.linkTelegram(user.id, user.telegram_id || '', cleanUsername);
-            user.telegram_username = cleanUsername;
-          }
-
-          if (user.role === 'athlete' && cloudSyncService) {
-            try {
-              await cloudSyncService.syncAthleteFromCloud(user, db);
-              const refetched = db.findUserById(user.id);
-              if (refetched) {
-                user.full_name = refetched.full_name;
-                user.phone = refetched.phone;
-                user.avatar_base64 = refetched.avatar_base64;
-                user.client_uuid = refetched.client_uuid;
-                user.pairing_code = refetched.pairing_code;
-                user.pairing_code_created_at = refetched.pairing_code_created_at;
-                user.restrictions = refetched.restrictions;
+            if (record.code !== cleanCode) {
+              record.attempts = (record.attempts || 0) + 1;
+              if (record.attempts >= 5) {
+                telegramOtpStore.delete(cleanUsername);
+                return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
               }
-            } catch (_) {}
-          } else if (user.role === 'trainer' && cloudSyncService) {
-            try {
-              await cloudSyncService.syncTrainerFromCloud(user, db);
-              const refetched = db.findUserById(user.id);
-              if (refetched) {
-                user.full_name = refetched.full_name;
-                user.phone = refetched.phone;
-                user.avatar_base64 = refetched.avatar_base64;
-              }
-            } catch (_) {}
-          }
+              return sendError(res, 400, 'Неверный код из Telegram');
+            }
 
-          const token = generateToken();
-          db.createAuthToken(token, user.id);
+            matchedOtpRecord = record;
+            matchedOtpKey = cleanUsername;
+          }
+        }
+
+        if (!matchedOtpRecord) {
+          // If username not provided or not matched in direct store entry:
+          // Search unexpired entries in telegramOtpStore
+          for (const [key, entry] of telegramOtpStore.entries()) {
+            if (entry && entry.code === cleanCode && entry.expiresAt > now) {
+              if (entry.attempts >= 5) continue;
+              matchedOtpRecord = entry;
+              matchedOtpKey = key;
+              break;
+            }
+          }
+        }
+
+        let user = null;
+
+        if (matchedOtpRecord) {
+          if (matchedOtpKey) telegramOtpStore.delete(matchedOtpKey);
+          if (cleanUsername) telegramOtpStore.delete(cleanUsername);
+          if (matchedOtpRecord.username) telegramOtpStore.delete(matchedOtpRecord.username);
+          if (matchedOtpRecord.tgId) telegramOtpStore.delete(`id_${matchedOtpRecord.tgId}`);
+
+          if (matchedOtpRecord.userId) {
+            user = db.findUserById(matchedOtpRecord.userId);
+          }
+          if (!user && matchedOtpRecord.tgId) {
+            user = db.findUserByTelegramId(String(matchedOtpRecord.tgId));
+          }
+          if (!user && matchedOtpRecord.username) {
+            user = db.findUserByTelegramUsername(matchedOtpRecord.username) ||
+                   db.findUserByUsername(matchedOtpRecord.username) ||
+                   db.findUserByUsername(`tg_${matchedOtpRecord.username}`);
+          }
+          if (!user && cleanUsername) {
+            user = db.findUserByUsername(cleanUsername) ||
+                   db.findUserByUsername(`tg_${cleanUsername}`) ||
+                   db.findUserByTelegramUsername(cleanUsername);
+          }
+        }
+
+        // If not matched or no user resolved from OTP store, match against athlete pairing PIN in SQLite
+        if (!user) {
+          const PAIRING_TTL = 5 * 60 * 1000;
+          const candidate = db.findUserByPairingCode(cleanCode);
+          if (candidate && candidate.pairing_code_created_at && (now - candidate.pairing_code_created_at < PAIRING_TTL)) {
+            user = db.findUserById(candidate.id) || candidate;
+          }
+        }
+
+        // If OTP was valid but it belongs to a brand-new Telegram user without DB account yet
+        if (!user && matchedOtpRecord) {
           return sendJson(res, 200, {
             success: true,
-            isNewUser: false,
-            token,
-            user: {
-              id: user.id,
-              username: user.username,
-              role: user.role,
-              fullName: user.full_name,
-              phone: user.phone,
-              avatarBase64: user.avatar_base64 || '',
-              pairingCode: user.pairing_code,
-              clientUuid: user.client_uuid || '',
-              restrictions: user.restrictions || '',
-              coachName: user.coach_name || '',
-              coachPhone: user.coach_phone || '',
-              isPrivate: Boolean(user.is_private),
-              telegram_id: String(user.telegram_id || ''),
-              telegramId: String(user.telegram_id || ''),
-              telegram_username: String(user.telegram_username || cleanUsername || ''),
-              telegramUsername: String(user.telegram_username || cleanUsername || ''),
-              two_factor_enabled: Number(user.two_factor_enabled) || 0,
-              twoFactorEnabled: Boolean(user.two_factor_enabled)
-            }
+            isNewUser: true,
+            telegramUsername: matchedOtpRecord.username || cleanUsername || ''
           });
         }
 
+        if (!user) {
+          return sendError(res, 400, 'Неверный или истекший 6-значный код');
+        }
+
+        if (!user.telegram_username && cleanUsername) {
+          db.linkTelegram(user.id, user.telegram_id || '', cleanUsername);
+          user.telegram_username = cleanUsername;
+        }
+
+        if (user.role === 'athlete' && cloudSyncService) {
+          try {
+            await cloudSyncService.syncAthleteFromCloud(user, db);
+            const refetched = db.findUserById(user.id);
+            if (refetched) {
+              user.full_name = refetched.full_name;
+              user.phone = refetched.phone;
+              user.avatar_base64 = refetched.avatar_base64;
+              user.client_uuid = refetched.client_uuid;
+              user.pairing_code = refetched.pairing_code;
+              user.pairing_code_created_at = refetched.pairing_code_created_at;
+              user.restrictions = refetched.restrictions;
+            }
+          } catch (_) {}
+        } else if (user.role === 'trainer' && cloudSyncService) {
+          try {
+            await cloudSyncService.syncTrainerFromCloud(user, db);
+            const refetched = db.findUserById(user.id);
+            if (refetched) {
+              user.full_name = refetched.full_name;
+              user.phone = refetched.phone;
+              user.avatar_base64 = refetched.avatar_base64;
+            }
+          } catch (_) {}
+        }
+
+        const token = generateToken(user.id, user.role);
+        db.createAuthToken(token, user.id);
         return sendJson(res, 200, {
           success: true,
-          isNewUser: true,
-          telegramUsername: cleanUsername
+          isNewUser: false,
+          token,
+          user: {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            fullName: user.full_name,
+            phone: user.phone,
+            avatarBase64: user.avatar_base64 || '',
+            pairingCode: user.pairing_code,
+            clientUuid: user.client_uuid || '',
+            restrictions: user.restrictions || '',
+            coachName: user.coach_name || '',
+            coachPhone: user.coach_phone || '',
+            isPrivate: Boolean(user.is_private),
+            telegram_id: String(user.telegram_id || ''),
+            telegramId: String(user.telegram_id || ''),
+            telegram_username: String(user.telegram_username || cleanUsername || ''),
+            telegramUsername: String(user.telegram_username || cleanUsername || ''),
+            two_factor_enabled: Number(user.two_factor_enabled) || 0,
+            twoFactorEnabled: Boolean(user.two_factor_enabled)
+          }
         });
       }
 
@@ -1137,7 +1191,7 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        const token = generateToken();
+        const token = generateToken(user.id, user.role);
         db.createAuthToken(token, user.id);
 
         return sendJson(res, 201, {
@@ -1269,6 +1323,13 @@ const server = http.createServer(async (req, res) => {
         const freshUser = db.findUserById(user.id) || user;
         const normalizedUser = {
           ...freshUser,
+          fullName: freshUser.full_name,
+          pairingCode: freshUser.pairing_code,
+          avatarBase64: freshUser.avatar_base64 || '',
+          clientUuid: freshUser.client_uuid || '',
+          restrictions: freshUser.restrictions || '',
+          coachName: freshUser.coach_name || '',
+          coachPhone: freshUser.coach_phone || '',
           telegram_id: String(freshUser.telegram_id || ''),
           telegramId: String(freshUser.telegram_id || ''),
           telegram_username: String(freshUser.telegram_username || ''),

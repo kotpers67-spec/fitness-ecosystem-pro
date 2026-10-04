@@ -5,7 +5,7 @@
 
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
-const { generateSecurePin } = require('./security');
+const { generateSecurePin, verifySignedToken } = require('./security');
 
 class AppDatabase {
   constructor(dbPath = path.join(__dirname, '..', 'fitness.sqlite')) {
@@ -85,6 +85,11 @@ class AppDatabase {
         FOREIGN KEY(user_id) REFERENCES users(id)
       );
 
+      CREATE TABLE IF NOT EXISTS revoked_tokens (
+        token TEXT PRIMARY KEY,
+        revoked_at INTEGER NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS telegram_link_tokens (
         token TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
@@ -107,6 +112,7 @@ class AppDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_users_pairing_code ON users(pairing_code);
       CREATE INDEX IF NOT EXISTS idx_workout_sets_session ON workout_sets(session_id);
+      CREATE INDEX IF NOT EXISTS idx_revoked_tokens ON revoked_tokens(token);
     `);
 
     // Ensure backwards-compatible columns exist in existing tables
@@ -238,7 +244,7 @@ class AppDatabase {
     const cleanCode = String(code || '').trim();
     if (!cleanCode) return null;
     const stmt = this.db.prepare(`
-      SELECT id, username, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
       FROM users WHERE pairing_code = ? AND role = 'athlete'
     `);
     return stmt.get(cleanCode) || null;
@@ -719,21 +725,43 @@ class AppDatabase {
   }
 
   getUserByToken(token) {
+    if (!token || typeof token !== 'string') return null;
+    try {
+      const isRevoked = this.db.prepare('SELECT 1 FROM revoked_tokens WHERE token = ?').get(token);
+      if (isRevoked) return null;
+    } catch (_) {}
+
     const now = Date.now();
     const stmt = this.db.prepare(`
-      SELECT u.id, u.username, u.role, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.coach_name, u.coach_phone, u.pairing_code, u.pairing_code_created_at, u.is_private, u.telegram_id, u.telegram_username, u.two_factor_enabled
+      SELECT u.id, u.username, u.role, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.coach_name, u.coach_phone, u.pairing_code, u.pairing_code_created_at, u.is_private, u.telegram_id, u.telegram_username, u.two_factor_enabled, u.restrictions
       FROM auth_tokens t
       JOIN users u ON t.user_id = u.id
       WHERE t.token = ? AND t.expires_at > ?
     `);
-    return stmt.get(token, now) || null;
+    const found = stmt.get(token, now);
+    if (found) return found;
+
+    // Fallback: Verify stateless signed HMAC token if db restarted or token was evacuated
+    const payload = verifySignedToken(token);
+    if (payload && payload.userId && payload.expiresAt > now) {
+      const user = this.findUserById(payload.userId);
+      if (user) {
+        try {
+          this.createAuthToken(token, user.id, payload.expiresAt - now);
+        } catch (_) {}
+        return user;
+      }
+    }
+
+    return null;
   }
 
   deleteAuthToken(token) {
-    const stmt = this.db.prepare(`
-      DELETE FROM auth_tokens WHERE token = ?
-    `);
-    stmt.run(token);
+    if (!token || typeof token !== 'string') return;
+    try {
+      this.db.prepare('DELETE FROM auth_tokens WHERE token = ?').run(token);
+      this.db.prepare('INSERT OR REPLACE INTO revoked_tokens (token, revoked_at) VALUES (?, ?)').run(token, Date.now());
+    } catch (_) {}
   }
 
   getWorkoutSets(athleteId, date) {
