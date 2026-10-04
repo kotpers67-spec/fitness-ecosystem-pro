@@ -739,62 +739,6 @@ fun SettingsScreen(
                 }
             }
 
-            // 6. АВТООБНОВЛЕНИЕ ПРИЛОЖЕНИЯ
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = AppStrings.get("auto_update", lang),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Text("v1.0.0", fontSize = 12.sp, fontWeight = FontWeight.Black)
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Button(
-                            onClick = {
-                                isCheckingUpdate = true
-                                scope.launch {
-                                    val res = viewModel.updateService.checkForUpdates()
-                                    isCheckingUpdate = false
-                                    res.onSuccess {
-                                        updateResult = it
-                                        showUpdateDialog = true
-                                    }.onFailure {
-                                        Toast.makeText(context, "Ошибка проверки: ${it.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            if (isCheckingUpdate) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary)
-                            } else {
-                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text(AppStrings.get("check_update", lang))
-                            }
-                        }
-                    }
-                }
-            }
 
             // 7. ЛОКАЛЬНЫЙ JSON ЭКСПОРТ/ИМПОРТ & ФАЙЛЫ
             item {
@@ -867,6 +811,58 @@ fun SettingsScreen(
                                 Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Вставить JSON", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 8. СВЯЗЬ С ВЛАДЕЛЬЦАМИ ПРОЕКТА
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.SupportAgent, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text(
+                                text = "СВЯЗЬ С ВЛАДЕЛЬЦАМИ",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            text = "Вопросы по работе экосистемы или предложения? Напишите напрямую владельцам:",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/SantiLA213"))
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("@SantiLA213", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Spirit5449"))
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Text("@Spirit5449", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

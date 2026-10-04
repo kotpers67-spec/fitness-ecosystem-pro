@@ -116,8 +116,17 @@ class CloudSyncService {
     const cloud = await this.fetchCloudData(true);
     if (!cloud.pairing) cloud.pairing = {};
 
-    cloud.pairing[pin] = {
-      pin,
+    const cleanPin = String(pin).replace(/\D/g, '');
+
+    // Invalidate and purge all previous PIN entries for this athlete
+    for (const [k, v] of Object.entries(cloud.pairing)) {
+      if (v?.clientUuid === clientUuid && k !== cleanPin) {
+        delete cloud.pairing[k];
+      }
+    }
+
+    cloud.pairing[cleanPin] = {
+      pin: cleanPin,
       clientUuid,
       clientName: clientName || 'Атлет',
       phone: phone || '',
@@ -125,7 +134,7 @@ class CloudSyncService {
       restrictions: '',
       notes: '',
       timestamp: Date.now(),
-      status: cloud.pairing[pin]?.status || 'PENDING'
+      status: 'PENDING'
     };
 
     if (!cloud.clients) cloud.clients = {};
@@ -144,11 +153,12 @@ class CloudSyncService {
     }
 
     await this.pushCloudData(cloud);
-    return cloud.pairing[pin];
+    return cloud.pairing[cleanPin];
   }
 
   /**
    * Find athlete by 6-digit PIN in cloud and mark as PAIRED
+   * Enforces strict 5-minute expiration window.
    */
   async findAndPairAthlete(pin, coachName = 'Тренер', coachPhone = '') {
     const cloud = await this.fetchCloudData(true);
@@ -174,10 +184,24 @@ class CloudSyncService {
       return null;
     }
 
+    // Strict 5-minute expiration check (300,000 ms)
+    const PAIRING_CODE_TTL = 5 * 60 * 1000;
+    const now = Date.now();
+    if (pairingEntry.timestamp && (now - pairingEntry.timestamp > PAIRING_CODE_TTL)) {
+      delete cloud.pairing[foundKey];
+      await this.pushCloudData(cloud);
+      return { error: 'EXPIRED', message: 'Срок действия кода истёк (действует 5 минут). Запросите новый код.' };
+    }
+
+    if (pairingEntry.status === 'PAIRED') {
+      return { error: 'ALREADY_PAIRED', message: 'Этот код уже был использован для привязки' };
+    }
+
     pairingEntry.status = 'PAIRED';
     pairingEntry.coachName = coachName;
     pairingEntry.coachPhone = coachPhone;
     pairingEntry.pairedTimestamp = Date.now();
+    cloud.pairing[foundKey] = pairingEntry;
     cloud.pairing[foundKey] = pairingEntry;
 
     const clientUuid = pairingEntry.clientUuid;

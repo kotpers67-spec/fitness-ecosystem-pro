@@ -21,7 +21,11 @@
     trainerSets: [],
     leaderboard: [],
     athleteAvatarBase64: null,
-    trainerAvatarBase64: null
+    trainerAvatarBase64: null,
+    pinTimerInterval: null,
+    pending2FAUserId: null,
+    login2faTimerInterval: null,
+    linkTgTimerInterval: null
   };
 
   // --- DOM Elements ---
@@ -154,7 +158,29 @@
     trainerEditName: document.getElementById('trainer-edit-name'),
     trainerEditPhone: document.getElementById('trainer-edit-phone'),
     btnSaveTrainerProfile: document.getElementById('btn-save-trainer-profile'),
-    btnLogoutTrainer: document.getElementById('btn-logout-trainer')
+    btnLogoutTrainer: document.getElementById('btn-logout-trainer'),
+
+    // 2FA & Telegram Link Elements
+    pinCountdownText: document.getElementById('pin-countdown-text'),
+    athleteTgStatus: document.getElementById('athlete-tg-status'),
+    btnLinkTgAthlete: document.getElementById('btn-link-tg-athlete'),
+    athlete2faToggle: document.getElementById('athlete-2fa-toggle'),
+    trainerTgStatus: document.getElementById('trainer-tg-status'),
+    btnLinkTgTrainer: document.getElementById('btn-link-tg-trainer'),
+    trainer2faToggle: document.getElementById('trainer-2fa-toggle'),
+    dialog2faVerify: document.getElementById('dialog-2fa-verify'),
+    login2faTimerDisplay: document.getElementById('login-2fa-timer-display'),
+    formLogin2fa: document.getElementById('form-login-2fa'),
+    login2faInputCode: document.getElementById('login-2fa-input-code'),
+    dialogLinkTelegram: document.getElementById('dialog-link-telegram'),
+    formLinkTgRequest: document.getElementById('form-link-tg-request'),
+    linkTgInputUsername: document.getElementById('link-tg-input-username'),
+    linkStep1: document.getElementById('link-step-1'),
+    linkStep2: document.getElementById('link-step-2'),
+    linkTgTimerDisplay: document.getElementById('link-tg-timer-display'),
+    formLinkTgConfirm: document.getElementById('form-link-tg-confirm'),
+    linkTgInputCode: document.getElementById('link-tg-input-code'),
+    btnLinkTgBack: document.getElementById('btn-link-tg-back')
   };
 
   // --- API Client Helper ---
@@ -730,6 +756,83 @@
     } else {
       el.cardPairedCoach.style.display = 'none';
     }
+
+    // 5-minute Live PIN Countdown Timer
+    startPinCountdown();
+
+    // Telegram and 2FA status
+    renderTelegramAnd2FAStatus('athlete');
+  }
+
+  function startPinCountdown() {
+    if (state.pinTimerInterval) {
+      clearInterval(state.pinTimerInterval);
+      state.pinTimerInterval = null;
+    }
+
+    const created = state.user?.pairingCodeCreatedAt || state.user?.pairing_code_created_at || Date.now();
+    const updateCountdown = () => {
+      const elapsed = Math.floor((Date.now() - created) / 1000);
+      const remaining = Math.max(0, 300 - elapsed);
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      const mm = String(m).padStart(2, '0');
+      const ss = String(s).padStart(2, '0');
+
+      if (el.pinCountdownText) {
+        el.pinCountdownText.textContent = `${mm}:${ss}`;
+      }
+
+      if (remaining <= 0) {
+        clearInterval(state.pinTimerInterval);
+        state.pinTimerInterval = null;
+        autoRegenerateAthletePin();
+      }
+    };
+
+    updateCountdown();
+    state.pinTimerInterval = setInterval(updateCountdown, 1000);
+  }
+
+  async function autoRegenerateAthletePin() {
+    try {
+      const data = await api('/api/athlete/regenerate-pin', { method: 'POST' });
+      state.user.pairingCode = data.pairingCode;
+      state.user.pairing_code = data.pairingCode;
+      state.user.pairingCodeCreatedAt = data.pairingCodeCreatedAt || Date.now();
+      state.user.pairing_code_created_at = data.pairingCodeCreatedAt || Date.now();
+      renderAthleteProfile();
+      showToast('PIN-код обновлен (действует 5 минут)', 'info');
+    } catch (_) {}
+  }
+
+  function renderTelegramAnd2FAStatus(role) {
+    if (!state.user) return;
+    const isTgLinked = Boolean(state.user.telegram_username || state.user.telegram_id || (state.user.username && state.user.username.startsWith('tg_')));
+    const tgUsername = state.user.telegram_username || (state.user.username.startsWith('tg_') ? state.user.username.replace(/^tg_/, '') : '');
+
+    const statusEl = role === 'athlete' ? el.athleteTgStatus : el.trainerTgStatus;
+    const toggleEl = role === 'athlete' ? el.athlete2faToggle : el.trainer2faToggle;
+    const btnLink = role === 'athlete' ? el.btnLinkTgAthlete : el.btnLinkTgTrainer;
+
+    if (statusEl) {
+      if (isTgLinked) {
+        statusEl.textContent = `@${tgUsername || 'привязан'}`;
+        statusEl.classList.add('linked');
+      } else {
+        statusEl.textContent = 'Не привязан';
+        statusEl.classList.remove('linked');
+      }
+    }
+
+    if (btnLink) {
+      btnLink.textContent = isTgLinked ? '✓ Telegram привязан' : '✈ Привязать Telegram';
+      btnLink.disabled = isTgLinked;
+    }
+
+    if (toggleEl) {
+      toggleEl.checked = Boolean(state.user.two_factor_enabled || state.user.twoFactorEnabled);
+    }
   }
 
   function updatePrivacyStatusText(isPublic) {
@@ -1010,6 +1113,9 @@
     if (avatarB64 && el.trainerAvatarPreview) {
       el.trainerAvatarPreview.innerHTML = `<img src="${avatarB64}" alt="Avatar">`;
     }
+
+    // Telegram and 2FA status
+    renderTelegramAnd2FAStatus('trainer');
   }
 
   // --- Event Listeners Setup ---
@@ -1043,7 +1149,7 @@
       };
     });
 
-    // Login Form Submit
+    // Login Form Submit (with 2FA support)
     el.formLogin.onsubmit = async (e) => {
       e.preventDefault();
       const username = el.loginUsername.value.trim();
@@ -1055,6 +1161,14 @@
           method: 'POST',
           body: JSON.stringify({ username, password })
         });
+
+        if (data.require2FA) {
+          state.pending2FAUserId = data.userId;
+          open2FALoginModal(data.expiresInSeconds || 300);
+          showToast(data.message || 'Введите 6-значный код 2FA из Telegram', 'info');
+          return;
+        }
+
         state.token = data.token;
         state.user = data.user;
         localStorage.setItem('fit_token', data.token);
@@ -1062,6 +1176,166 @@
         showToast(`Добро пожаловать, ${data.user.fullName || data.user.username}!`, 'success');
       } catch {}
     };
+
+    // 2FA Verification Modal Handlers
+    function open2FALoginModal(durationSeconds = 300) {
+      if (el.login2faInputCode) el.login2faInputCode.value = '';
+      if (state.login2faTimerInterval) clearInterval(state.login2faTimerInterval);
+      let remaining = durationSeconds;
+      const updateBadge = () => {
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        const mm = String(m).padStart(2, '0');
+        const ss = String(s).padStart(2, '0');
+        if (el.login2faTimerDisplay) {
+          el.login2faTimerDisplay.textContent = `⏱ Действует: ${mm}:${ss}`;
+        }
+        if (remaining <= 0) {
+          clearInterval(state.login2faTimerInterval);
+          state.login2faTimerInterval = null;
+          if (el.login2faTimerDisplay) {
+            el.login2faTimerDisplay.textContent = '❌ Срок действия кода истек (5 минут)';
+          }
+        }
+        remaining--;
+      };
+      updateBadge();
+      state.login2faTimerInterval = setInterval(updateBadge, 1000);
+      el.dialog2faVerify?.showModal();
+      el.login2faInputCode?.focus();
+    }
+
+    if (el.formLogin2fa) {
+      el.formLogin2fa.onsubmit = async (e) => {
+        e.preventDefault();
+        const code = el.login2faInputCode.value.trim();
+        if (!code || !state.pending2FAUserId) return;
+        try {
+          const data = await api('/api/login/2fa', {
+            method: 'POST',
+            body: JSON.stringify({ userId: state.pending2FAUserId, code })
+          });
+          if (state.login2faTimerInterval) clearInterval(state.login2faTimerInterval);
+          el.dialog2faVerify?.close();
+          state.token = data.token;
+          state.user = data.user;
+          localStorage.setItem('fit_token', data.token);
+          setupAppForRole(data.user.role);
+          showToast(`Вход выполнен: ${data.user.fullName || data.user.username}!`, 'success');
+        } catch {}
+      };
+    }
+
+    document.querySelectorAll('.btn-close-2fa').forEach(btn => {
+      btn.onclick = () => {
+        if (state.login2faTimerInterval) clearInterval(state.login2faTimerInterval);
+        el.dialog2faVerify?.close();
+      };
+    });
+
+    // Telegram Account Linking Modal Handlers
+    function openLinkTelegramModal() {
+      if (el.linkStep1) el.linkStep1.style.display = 'block';
+      if (el.linkStep2) el.linkStep2.style.display = 'none';
+      if (el.linkTgInputUsername) el.linkTgInputUsername.value = '';
+      if (el.linkTgInputCode) el.linkTgInputCode.value = '';
+      el.dialogLinkTelegram?.showModal();
+      el.linkTgInputUsername?.focus();
+    }
+
+    if (el.btnLinkTgAthlete) el.btnLinkTgAthlete.onclick = openLinkTelegramModal;
+    if (el.btnLinkTgTrainer) el.btnLinkTgTrainer.onclick = openLinkTelegramModal;
+
+    document.querySelectorAll('.btn-close-link-tg').forEach(btn => {
+      btn.onclick = () => {
+        if (state.linkTgTimerInterval) clearInterval(state.linkTgTimerInterval);
+        el.dialogLinkTelegram?.close();
+      };
+    });
+
+    if (el.btnLinkTgBack) {
+      el.btnLinkTgBack.onclick = () => {
+        if (state.linkTgTimerInterval) clearInterval(state.linkTgTimerInterval);
+        if (el.linkStep1) el.linkStep1.style.display = 'block';
+        if (el.linkStep2) el.linkStep2.style.display = 'none';
+      };
+    }
+
+    if (el.formLinkTgRequest) {
+      el.formLinkTgRequest.onsubmit = async (e) => {
+        e.preventDefault();
+        const username = el.linkTgInputUsername.value.trim();
+        if (!username) return;
+        try {
+          const res = await api('/api/user/telegram/link-request', {
+            method: 'POST',
+            body: JSON.stringify({ username })
+          });
+          state.linkTgPendingUsername = username;
+          showToast(res.message || 'Код отправлен в бота Telegram', 'success');
+
+          el.linkStep1.style.display = 'none';
+          el.linkStep2.style.display = 'block';
+
+          let remaining = res.expiresInSeconds || 300;
+          if (state.linkTgTimerInterval) clearInterval(state.linkTgTimerInterval);
+          const updateLinkTimer = () => {
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            const mm = String(m).padStart(2, '0');
+            const ss = String(s).padStart(2, '0');
+            if (el.linkTgTimerDisplay) el.linkTgTimerDisplay.textContent = `⏱ Действует: ${mm}:${ss}`;
+            if (remaining <= 0) {
+              clearInterval(state.linkTgTimerInterval);
+              if (el.linkTgTimerDisplay) el.linkTgTimerDisplay.textContent = '❌ Код истек';
+            }
+            remaining--;
+          };
+          updateLinkTimer();
+          state.linkTgTimerInterval = setInterval(updateLinkTimer, 1000);
+          el.linkTgInputCode?.focus();
+        } catch (_) {}
+      };
+    }
+
+    if (el.formLinkTgConfirm) {
+      el.formLinkTgConfirm.onsubmit = async (e) => {
+        e.preventDefault();
+        const code = el.linkTgInputCode.value.trim();
+        if (!code || !state.linkTgPendingUsername) return;
+        try {
+          const res = await api('/api/user/telegram/link-confirm', {
+            method: 'POST',
+            body: JSON.stringify({ username: state.linkTgPendingUsername, code })
+          });
+          if (state.linkTgTimerInterval) clearInterval(state.linkTgTimerInterval);
+          el.dialogLinkTelegram?.close();
+          state.user.telegram_username = res.telegramUsername;
+          state.user.telegramUsername = res.telegramUsername;
+          renderTelegramAnd2FAStatus(state.user.role);
+          showToast(res.message || 'Telegram успешно привязан!', 'success');
+        } catch (_) {}
+      };
+    }
+
+    // 2FA Toggle Switch Handlers
+    const handle2faToggle = async (toggleEl) => {
+      const enabled = toggleEl.checked;
+      try {
+        const res = await api('/api/user/2fa', {
+          method: 'POST',
+          body: JSON.stringify({ enabled })
+        });
+        state.user.two_factor_enabled = res.twoFactorEnabled ? 1 : 0;
+        state.user.twoFactorEnabled = res.twoFactorEnabled;
+        showToast(res.twoFactorEnabled ? '2FA включена! Все входы требуют код из Telegram' : '2FA выключена', 'info');
+      } catch (err) {
+        toggleEl.checked = !enabled; // Revert switch on error
+      }
+    };
+
+    if (el.athlete2faToggle) el.athlete2faToggle.onchange = () => handle2faToggle(el.athlete2faToggle);
+    if (el.trainer2faToggle) el.trainer2faToggle.onchange = () => handle2faToggle(el.trainer2faToggle);
 
     // Register Form Submit
     el.formRegister.onsubmit = async (e) => {

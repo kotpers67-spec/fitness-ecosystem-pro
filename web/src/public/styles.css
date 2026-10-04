@@ -1231,4 +1231,86 @@ input:checked + .slider:before {
   margin-bottom: 14px;
 }
 
+/* PIN 5-Minute Timer Badge */
+.pin-timer-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--accent-lime);
+  background: rgba(163, 230, 53, 0.1);
+  border: 1px solid rgba(163, 230, 53, 0.25);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  margin-top: 8px;
+  width: fit-content;
+  align-self: center;
+}
+
+/* Owners Contact Row & Chips */
+.auth-owners-box {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.auth-owners-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.owners-links-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+.owner-chip {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #161616;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.owner-chip:hover {
+  background: #222222;
+  border-color: #29b6f6;
+  color: #29b6f6;
+}
+
+/* Telegram Link Status */
+.tg-link-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.tg-status-label {
+  color: var(--text-secondary);
+}
+.tg-status-val {
+  font-weight: 800;
+  color: var(--accent-amber);
+}
+.tg-status-val.linked {
+  color: var(--accent-lime);
+}
+
+
 

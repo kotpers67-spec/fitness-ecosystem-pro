@@ -122,10 +122,6 @@ fun AthleteSettingsScreen(
     val lang = settings?.language ?: "ru"
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var updateStatus by remember { mutableStateOf<String?>(null) }
-    var isCheckingUpdate by remember { mutableStateOf(false) }
-    var availableUpdate by remember { mutableStateOf<com.athleteapp.pro.data.update.AthleteUpdateCheckResult?>(null) }
-
     LaunchedEffect(syncMsg) {
         syncMsg?.let {
             snackbarHostState.showSnackbar(it)
@@ -841,6 +837,58 @@ fun AthleteSettingsScreen(
                                 Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Импорт из файла", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 7. СВЯЗЬ С ВЛАДЕЛЬЦАМИ ПРОЕКТА
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.SupportAgent, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text(
+                                text = "СВЯЗЬ С ВЛАДЕЛЬЦАМИ",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            text = "Вопросы по работе экосистемы или предложения? Напишите напрямую владельцам:",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/SantiLA213"))
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("@SantiLA213", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Spirit5449"))
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Text("@Spirit5449", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
