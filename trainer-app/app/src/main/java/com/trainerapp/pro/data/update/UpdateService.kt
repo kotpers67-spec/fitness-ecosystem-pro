@@ -49,9 +49,9 @@ class UpdateService(private val context: Context) {
     fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.6"
+            pInfo.versionName ?: "1.0.9"
         } catch (_: Exception) {
-            "1.0.6"
+            "1.0.9"
         }
     }
 
@@ -99,7 +99,7 @@ class UpdateService(private val context: Context) {
             }
 
             // 2. Fallback static release configuration for kotpers67-spec
-            val fallbackVersion = "1.0.8"
+            val fallbackVersion = "1.0.9"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
                 UpdateCheckResult(

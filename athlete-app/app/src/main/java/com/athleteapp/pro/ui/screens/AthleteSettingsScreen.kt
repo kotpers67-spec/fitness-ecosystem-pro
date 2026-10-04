@@ -963,10 +963,10 @@ fun AthleteSettingsScreen(
                                         if (data?.isUpdateAvailable == true) {
                                             updateStatusText = "Доступно новое обновление: v${data.latestVersion}!"
                                         } else {
-                                            updateStatusText = "У вас установлена актуальная версия Athlete Pro (v1.0.8)."
+                                            updateStatusText = "У вас установлена актуальная версия Athlete Pro (v$currentVersionName)."
                                         }
                                     } else {
-                                        updateStatusText = "У вас установлена актуальная версия (v1.0.8)."
+                                        updateStatusText = "У вас установлена актуальная версия (v$currentVersionName)."
                                     }
                                 }
                             },
@@ -1043,23 +1043,27 @@ fun AthleteSettingsScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = { exportAndShareAthleteFile() },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Файл в Мессенджер", fontSize = 11.sp)
+                                Text("Файл в Мессенджер", fontSize = 11.sp, maxLines = 1)
                             }
 
                             Button(
                                 onClick = { backupFilePickerLauncher.launch("*/*") },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                             ) {
                                 Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Импорт из файла", fontSize = 11.sp)
+                                Text("Импорт из файла", fontSize = 11.sp, maxLines = 1)
                             }
                         }
                     }

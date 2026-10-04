@@ -638,10 +638,10 @@ fun SettingsScreen(
                                         if (data?.isUpdateAvailable == true) {
                                             updateStatusText = "Доступна новая версия: v${data.latestVersion}!"
                                         } else {
-                                            updateStatusText = "У вас уже установлена актуальная версия Trainer Pro (v1.0.5)."
+                                            updateStatusText = "У вас уже установлена актуальная версия Trainer Pro (v$currentVersionName)."
                                         }
                                     } else {
-                                        updateStatusText = "У вас установлена актуальная версия (v1.0.5)."
+                                        updateStatusText = "У вас установлена актуальная версия (v$currentVersionName)."
                                     }
                                 }
                             },
@@ -914,23 +914,27 @@ fun SettingsScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = { exportAndShareFile() },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Файл в Мессенджер", fontSize = 11.sp)
+                                Text("Файл в Мессенджер", fontSize = 11.sp, maxLines = 1)
                             }
 
                             Button(
                                 onClick = { filePickerLauncher.launch("*/*") },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                             ) {
                                 Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Импорт из файла", fontSize = 11.sp)
+                                Text("Импорт из файла", fontSize = 11.sp, maxLines = 1)
                             }
                         }
 
@@ -942,12 +946,14 @@ fun SettingsScreen(
                                         showBackupDialog = true
                                     }
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Текст JSON", fontSize = 11.sp)
+                                Text("Текст JSON", fontSize = 11.sp, maxLines = 1)
                             }
 
                             OutlinedButton(
@@ -955,12 +961,14 @@ fun SettingsScreen(
                                     backupJsonText = ""
                                     showBackupDialog = true
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Вставить JSON", fontSize = 11.sp)
+                                Text("Вставить JSON", fontSize = 11.sp, maxLines = 1)
                             }
                         }
                     }
