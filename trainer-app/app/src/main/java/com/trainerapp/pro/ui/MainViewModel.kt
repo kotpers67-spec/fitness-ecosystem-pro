@@ -237,6 +237,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.getOrDefault(isApproved)
     }
 
+    fun completeRemoteLogin(user: com.trainerapp.pro.data.auth.TrainerRemoteUserInfo, pass: String = "") {
+        val editor = authPrefs.edit()
+            .putBoolean("is_logged_in", true)
+            .putBoolean("is_approved", true)
+            .putString("username", user.username)
+            .putString("trainer_name", user.fullName)
+            .putString("phone", user.phone)
+            .putString("auth_token", user.token)
+        if (pass.isNotBlank()) {
+            editor.putString("password_hash", hashPassword(pass))
+        }
+        if (user.telegramUsername.isNotBlank()) {
+            editor.putString("telegram_username", user.telegramUsername)
+        }
+        editor.apply()
+        isApproved = true
+        _isLoggedIn.value = true
+
+        val parts = user.fullName.trim().split(" ", limit = 2)
+        val firstName = parts.firstOrNull() ?: user.fullName.trim()
+        val lastName = if (parts.size > 1) parts[1] else ""
+        prefs.edit()
+            .putString("trainer_first_name", firstName)
+            .putString("trainer_last_name", lastName)
+            .putString("trainer_phone", user.phone.trim())
+            .apply()
+    }
+
+    suspend fun remoteLogin(username: String, pass: String): com.trainerapp.pro.data.auth.TrainerRemoteAuthResult {
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        val res = remoteAuthManager.login(username, pass)
+        if (res is com.trainerapp.pro.data.auth.TrainerRemoteAuthResult.Success) {
+            completeRemoteLogin(res.user, pass)
+        }
+        return res
+    }
+
+    suspend fun remoteVerify2FaLogin(userId: Long, otp: String): com.trainerapp.pro.data.auth.TrainerRemoteAuthResult {
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        val res = remoteAuthManager.verify2FaLogin(userId, otp)
+        if (res is com.trainerapp.pro.data.auth.TrainerRemoteAuthResult.Success) {
+            completeRemoteLogin(res.user)
+        }
+        return res
+    }
+
     fun login(username: String, pass: String): Boolean {
         if (checkCredentials(username, pass)) {
             if (!isApproved) {
@@ -258,10 +304,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .putString("trainer_name", trainerName.trim())
             .putString("phone", phone.trim())
             .putString("telegram_username", telegram.trim())
-            .putBoolean("is_logged_in", false)
-            .putBoolean("is_approved", false)
+            .putBoolean("is_logged_in", true)
+            .putBoolean("is_approved", true)
             .apply()
-        _isLoggedIn.value = false
+        _isLoggedIn.value = true
 
         val parts = trainerName.trim().split(" ", limit = 2)
         val firstName = parts.firstOrNull() ?: trainerName.trim()

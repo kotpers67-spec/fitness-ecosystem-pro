@@ -2,7 +2,6 @@ package com.trainerapp.pro.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -22,18 +21,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trainerapp.pro.data.auth.TrainerRemoteAuthResult
+import com.trainerapp.pro.data.auth.TrainerTelegramSessionStatusResult
 import com.trainerapp.pro.ui.MainViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
 fun TrainerAuthScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var isLoginMode by remember { mutableStateOf(true) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -41,24 +46,28 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
     var phone by remember { mutableStateOf("") }
     var telegram by remember { mutableStateOf("") }
     var showPendingApprovalDialog by remember { mutableStateOf(false) }
+    var pendingApprovalMessage by remember { mutableStateOf<String?>(null) }
     var passwordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var show2FaDialog by remember { mutableStateOf(false) }
+    var twoFaUserId by remember { mutableLongStateOf(0L) }
     var otpInput by remember { mutableStateOf("") }
     var otpError by remember { mutableStateOf<String?>(null) }
     var otpTimerSeconds by remember { mutableIntStateOf(300) }
-    val scope = rememberCoroutineScope()
     var isLoggingIn by remember { mutableStateOf(false) }
     var isVerifyingOtp by remember { mutableStateOf(false) }
     var isCheckingApproval by remember { mutableStateOf(false) }
     var approvalCheckNotice by remember { mutableStateOf<String?>(null) }
 
+    var isPollingTgSession by remember { mutableStateOf(false) }
+    var tgStatusText by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(show2FaDialog) {
         if (show2FaDialog) {
             otpTimerSeconds = 300
             while (otpTimerSeconds > 0) {
-                kotlinx.coroutines.delay(1000L)
+                delay(1000L)
                 otpTimerSeconds--
             }
         }
@@ -106,11 +115,47 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Telegram Fast Login Button
+            // Telegram 1-Click Fast Login Button
             Button(
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/fitnessecosystemBOT?start=login"))
-                    context.startActivity(intent)
+                    scope.launch {
+                        errorMessage = null
+                        isPollingTgSession = true
+                        tgStatusText = "Подключение к Telegram..."
+
+                        val session = viewModel.remoteAuthManager.initTelegramSession()
+                        val targetUrl = if (session != null) session.second else "https://t.me/fitnessecosystemBOT?start=login"
+
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+
+                        if (session != null) {
+                            val sessionId = session.first
+                            tgStatusText = "Ожидание нажатия кнопки СТАРТ в Telegram боте..."
+                            var elapsed = 0
+                            while (elapsed < 300 && isPollingTgSession) {
+                                delay(1500L)
+                                elapsed += 2
+                                val status = viewModel.remoteAuthManager.pollTelegramSession(sessionId)
+                                if (status is TrainerTelegramSessionStatusResult.Authorized) {
+                                    viewModel.completeRemoteLogin(status.user)
+                                    isPollingTgSession = false
+                                    tgStatusText = null
+                                    break
+                                } else if (status is TrainerTelegramSessionStatusResult.Expired) {
+                                    errorMessage = "Срок действия сессии Telegram истёк"
+                                    isPollingTgSession = false
+                                    tgStatusText = null
+                                    break
+                                }
+                            }
+                        } else {
+                            tgStatusText = null
+                            isPollingTgSession = false
+                        }
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -121,10 +166,39 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                     contentColor = Color.White
                 )
             ) {
-                Text(
-                    text = "✈ Войти через Telegram",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
+                if (isPollingTgSession) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Ожидание подтверждения...",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                } else {
+                    Text(
+                        text = "✈ Войти через Telegram (в 1 клик)",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+
+            if (tgStatusText != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = tgStatusText ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -281,35 +355,58 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                                 } else {
                                     scope.launch {
                                         isLoggingIn = true
-                                        val validCreds = viewModel.checkCredentials(username, password)
-                                        if (!validCreds) {
-                                            errorMessage = "Неверный логин или пароль"
-                                            isLoggingIn = false
-                                            return@launch
-                                        }
-
-                                        // Remote approval check if not yet approved locally
-                                        if (!viewModel.isApproved) {
-                                            val approved = viewModel.checkRemoteApprovalStatus(username, password)
-                                            if (approved) {
-                                                viewModel.isApproved = true
+                                        val res = viewModel.remoteLogin(username, password)
+                                        when (res) {
+                                            is TrainerRemoteAuthResult.Success -> {
+                                                // Logged in successfully
                                             }
-                                        }
-
-                                        if (!viewModel.isApproved) {
-                                            errorMessage = "⏳ Аккаунт тренера находится на рассмотрении (до 72 часов). Свяжитесь с владельцами: @SantiLA213 или @Spirit5449"
-                                            showPendingApprovalDialog = true
-                                            isLoggingIn = false
-                                            return@launch
-                                        }
-
-                                        if (viewModel.is2FaEnabled) {
-                                            show2FaDialog = true
-                                            otpInput = ""
-                                            otpError = null
-                                            otpTimerSeconds = 300
-                                        } else {
-                                            viewModel.completeLogin()
+                                            is TrainerRemoteAuthResult.Require2Fa -> {
+                                                twoFaUserId = res.userId
+                                                otpTimerSeconds = res.expiresInSeconds
+                                                otpInput = ""
+                                                otpError = null
+                                                show2FaDialog = true
+                                            }
+                                            is TrainerRemoteAuthResult.PendingApproval -> {
+                                                pendingApprovalMessage = res.message
+                                                showPendingApprovalDialog = true
+                                            }
+                                            is TrainerRemoteAuthResult.InvalidCredentials -> {
+                                                // Local fallback check
+                                                if (viewModel.checkCredentials(username, password)) {
+                                                    if (!viewModel.isApproved) {
+                                                        showPendingApprovalDialog = true
+                                                    } else if (viewModel.is2FaEnabled) {
+                                                        show2FaDialog = true
+                                                        otpInput = ""
+                                                        otpError = null
+                                                        otpTimerSeconds = 300
+                                                    } else {
+                                                        viewModel.completeLogin()
+                                                    }
+                                                } else {
+                                                    errorMessage = res.message
+                                                }
+                                            }
+                                            is TrainerRemoteAuthResult.Error -> {
+                                                errorMessage = res.message
+                                            }
+                                            is TrainerRemoteAuthResult.OfflineFallback -> {
+                                                if (viewModel.checkCredentials(username, password)) {
+                                                    if (!viewModel.isApproved) {
+                                                        showPendingApprovalDialog = true
+                                                    } else if (viewModel.is2FaEnabled) {
+                                                        show2FaDialog = true
+                                                        otpInput = ""
+                                                        otpError = null
+                                                        otpTimerSeconds = 300
+                                                    } else {
+                                                        viewModel.completeLogin()
+                                                    }
+                                                } else {
+                                                    errorMessage = "Неверный логин или пароль (офлайн режим)"
+                                                }
+                                            }
                                         }
                                         isLoggingIn = false
                                     }
@@ -322,14 +419,18 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                                 } else if (password.length < 4) {
                                     errorMessage = "Пароль должен быть от 4 символов"
                                 } else {
-                                    viewModel.submitTrainerRegistration(
-                                        trainerName = trainerName,
-                                        username = username,
-                                        password = password,
-                                        phone = phone,
-                                        telegram = telegram
-                                    )
-                                    showPendingApprovalDialog = true
+                                    scope.launch {
+                                        isLoggingIn = true
+                                        viewModel.submitTrainerRegistration(
+                                            trainerName = trainerName,
+                                            username = username,
+                                            password = password,
+                                            phone = phone,
+                                            telegram = telegram
+                                        )
+                                        viewModel.completeLogin()
+                                        isLoggingIn = false
+                                    }
                                 }
                             }
                         },
@@ -464,13 +565,29 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                         } else {
                             scope.launch {
                                 isVerifyingOtp = true
-                                val ok = viewModel.verify2FaOtpRemote(otpInput, username)
-                                isVerifyingOtp = false
-                                if (ok) {
-                                    show2FaDialog = false
+                                if (twoFaUserId > 0L) {
+                                    val res = viewModel.remoteVerify2FaLogin(twoFaUserId, otpInput)
+                                    if (res is TrainerRemoteAuthResult.Success) {
+                                        show2FaDialog = false
+                                    } else if (res is TrainerRemoteAuthResult.Error) {
+                                        otpError = res.message
+                                    } else {
+                                        val ok = viewModel.verify2FaOtpRemote(otpInput, username)
+                                        if (ok) {
+                                            show2FaDialog = false
+                                        } else {
+                                            otpError = "Неверный код подтверждения"
+                                        }
+                                    }
                                 } else {
-                                    otpError = "Неверный код подтверждения"
+                                    val ok = viewModel.verify2FaOtpRemote(otpInput, username)
+                                    if (ok) {
+                                        show2FaDialog = false
+                                    } else {
+                                        otpError = "Неверный код подтверждения"
+                                    }
                                 }
+                                isVerifyingOtp = false
                             }
                         }
                     }
@@ -505,7 +622,7 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Ваша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.\n\nЕсли аккаунт не будет создан в течение 72 часов, обратитесь к владельцам:")
+                    Text(pendingApprovalMessage ?: "Ваша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.\n\nЕсли аккаунт не будет создан в течение 72 часов, обратитесь к владельцам:")
                     Button(
                         onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/SantiLA213"))

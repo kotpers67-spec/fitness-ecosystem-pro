@@ -2,7 +2,6 @@ package com.athleteapp.pro.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,17 +20,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.athleteapp.pro.data.auth.AthleteRemoteAuthResult
+import com.athleteapp.pro.data.auth.TelegramSessionStatusResult
 import com.athleteapp.pro.ui.AthleteViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun AthleteAuthScreen(viewModel: AthleteViewModel) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var isLoginMode by remember { mutableStateOf(true) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -39,17 +45,23 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
     var phone by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoggingIn by remember { mutableStateOf(false) }
 
     var show2FaDialog by remember { mutableStateOf(false) }
+    var twoFaUserId by remember { mutableLongStateOf(0L) }
     var otpInput by remember { mutableStateOf("") }
     var otpError by remember { mutableStateOf<String?>(null) }
     var otpTimerSeconds by remember { mutableIntStateOf(300) }
+    var isVerifying2Fa by remember { mutableStateOf(false) }
+
+    var isPollingTgSession by remember { mutableStateOf(false) }
+    var tgStatusText by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(show2FaDialog) {
         if (show2FaDialog) {
             otpTimerSeconds = 300
             while (otpTimerSeconds > 0) {
-                kotlinx.coroutines.delay(1000L)
+                delay(1000L)
                 otpTimerSeconds--
             }
         }
@@ -97,11 +109,47 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Telegram Fast Login Button
+            // Telegram 1-Click Fast Login Button
             Button(
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/fitnessecosystemBOT?start=login"))
-                    context.startActivity(intent)
+                    scope.launch {
+                        errorMessage = null
+                        isPollingTgSession = true
+                        tgStatusText = "Подключение к Telegram..."
+
+                        val session = viewModel.remoteAuthManager.initTelegramSession()
+                        val targetUrl = if (session != null) session.second else "https://t.me/fitnessecosystemBOT?start=login"
+
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+
+                        if (session != null) {
+                            val sessionId = session.first
+                            tgStatusText = "Ожидание нажатия кнопки СТАРТ в Telegram боте..."
+                            var elapsed = 0
+                            while (elapsed < 300 && isPollingTgSession) {
+                                delay(1500L)
+                                elapsed += 2
+                                val status = viewModel.remoteAuthManager.pollTelegramSession(sessionId)
+                                if (status is TelegramSessionStatusResult.Authorized) {
+                                    viewModel.completeRemoteLogin(status.user)
+                                    isPollingTgSession = false
+                                    tgStatusText = null
+                                    break
+                                } else if (status is TelegramSessionStatusResult.Expired) {
+                                    errorMessage = "Срок действия сессии Telegram истёк"
+                                    isPollingTgSession = false
+                                    tgStatusText = null
+                                    break
+                                }
+                            }
+                        } else {
+                            tgStatusText = null
+                            isPollingTgSession = false
+                        }
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -112,10 +160,39 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
                     contentColor = Color.White
                 )
             ) {
-                Text(
-                    text = "✈ Войти через Telegram",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
+                if (isPollingTgSession) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Ожидание подтверждения...",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                } else {
+                    Text(
+                        text = "✈ Войти через Telegram (в 1 клик)",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+
+            if (tgStatusText != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = tgStatusText ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -251,24 +328,61 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
                     Spacer(modifier = Modifier.height(20.dp))
 
                     Button(
+                        enabled = !isLoggingIn,
                         onClick = {
                             errorMessage = null
                             if (isLoginMode) {
                                 if (username.isBlank() || password.isBlank()) {
                                     errorMessage = "Введите логин и пароль"
                                 } else {
-                                    val validCreds = viewModel.checkCredentials(username, password)
-                                    if (!validCreds) {
-                                        errorMessage = "Неверный логин или пароль"
-                                    } else {
-                                        if (viewModel.is2FaEnabled) {
-                                            show2FaDialog = true
-                                            otpInput = ""
-                                            otpError = null
-                                            otpTimerSeconds = 300
-                                        } else {
-                                            viewModel.completeLogin()
+                                    scope.launch {
+                                        isLoggingIn = true
+                                        val res = viewModel.remoteLogin(username, password)
+                                        when (res) {
+                                            is AthleteRemoteAuthResult.Success -> {
+                                                // Logged in successfully
+                                            }
+                                            is AthleteRemoteAuthResult.Require2Fa -> {
+                                                twoFaUserId = res.userId
+                                                otpTimerSeconds = res.expiresInSeconds
+                                                otpInput = ""
+                                                otpError = null
+                                                show2FaDialog = true
+                                            }
+                                            is AthleteRemoteAuthResult.InvalidCredentials -> {
+                                                // Check local fallback
+                                                if (viewModel.checkCredentials(username, password)) {
+                                                    if (viewModel.is2FaEnabled) {
+                                                        show2FaDialog = true
+                                                        otpInput = ""
+                                                        otpError = null
+                                                        otpTimerSeconds = 300
+                                                    } else {
+                                                        viewModel.completeLogin()
+                                                    }
+                                                } else {
+                                                    errorMessage = res.message
+                                                }
+                                            }
+                                            is AthleteRemoteAuthResult.Error -> {
+                                                errorMessage = res.message
+                                            }
+                                            is AthleteRemoteAuthResult.OfflineFallback -> {
+                                                if (viewModel.checkCredentials(username, password)) {
+                                                    if (viewModel.is2FaEnabled) {
+                                                        show2FaDialog = true
+                                                        otpInput = ""
+                                                        otpError = null
+                                                        otpTimerSeconds = 300
+                                                    } else {
+                                                        viewModel.completeLogin()
+                                                    }
+                                                } else {
+                                                    errorMessage = "Неверный логин или пароль (офлайн режим)"
+                                                }
+                                            }
                                         }
+                                        isLoggingIn = false
                                     }
                                 }
                             } else {
@@ -279,12 +393,19 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
                                 } else if (password.length < 4) {
                                     errorMessage = "Пароль должен быть от 4 символов"
                                 } else {
-                                    viewModel.register(
-                                        fullName = fullName,
-                                        username = username,
-                                        password = password,
-                                        phone = phone
-                                    )
+                                    scope.launch {
+                                        isLoggingIn = true
+                                        val regRes = viewModel.remoteRegister(
+                                            fullName = fullName,
+                                            username = username,
+                                            password = password,
+                                            phone = phone
+                                        )
+                                        if (regRes is AthleteRemoteAuthResult.Error) {
+                                            errorMessage = regRes.message
+                                        }
+                                        isLoggingIn = false
+                                    }
                                 }
                             }
                         },
@@ -297,10 +418,18 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
                             contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
-                        Text(
-                            text = if (isLoginMode) "Войти" else "Зарегистрироваться",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
+                        if (isLoggingIn) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text(
+                                text = if (isLoginMode) "Войти" else "Зарегистрироваться",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
                     }
                 }
             }
@@ -402,22 +531,51 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
             },
             confirmButton = {
                 Button(
+                    enabled = !isVerifying2Fa,
                     onClick = {
                         if (otpTimerSeconds <= 0) {
                             otpError = "Срок действия кода истёк (5 минут)"
                         } else if (otpInput.length != 6) {
                             otpError = "Введите ровно 6 цифр"
                         } else {
-                            val ok = viewModel.verify2FaOtp(otpInput)
-                            if (ok) {
-                                show2FaDialog = false
-                            } else {
-                                otpError = "Неверный код подтверждения"
+                            scope.launch {
+                                isVerifying2Fa = true
+                                if (twoFaUserId > 0L) {
+                                    val res = viewModel.remoteVerify2Fa(twoFaUserId, otpInput)
+                                    if (res is AthleteRemoteAuthResult.Success) {
+                                        show2FaDialog = false
+                                    } else if (res is AthleteRemoteAuthResult.Error) {
+                                        otpError = res.message
+                                    } else {
+                                        val ok = viewModel.verify2FaOtp(otpInput)
+                                        if (ok) {
+                                            show2FaDialog = false
+                                        } else {
+                                            otpError = "Неверный код подтверждения"
+                                        }
+                                    }
+                                } else {
+                                    val ok = viewModel.verify2FaOtp(otpInput)
+                                    if (ok) {
+                                        show2FaDialog = false
+                                    } else {
+                                        otpError = "Неверный код подтверждения"
+                                    }
+                                }
+                                isVerifying2Fa = false
                             }
                         }
                     }
                 ) {
-                    Text("Подтвердить")
+                    if (isVerifying2Fa) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Подтвердить")
+                    }
                 }
             },
             dismissButton = {

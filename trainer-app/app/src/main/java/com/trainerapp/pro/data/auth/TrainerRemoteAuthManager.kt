@@ -9,6 +9,18 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
+data class TrainerRemoteUserInfo(
+    val id: Long = 0,
+    val username: String = "",
+    val role: String = "trainer",
+    val fullName: String = "",
+    val phone: String = "",
+    val telegramUsername: String = "",
+    val isApproved: Boolean = false,
+    val twoFactorEnabled: Boolean = false,
+    val token: String = ""
+)
+
 sealed class RemoteOtpResult {
     object Success : RemoteOtpResult()
     data class Rejected(val message: String) : RemoteOtpResult()
@@ -21,9 +33,25 @@ sealed class RemoteApprovalResult {
     object Unreachable : RemoteApprovalResult()
 }
 
+sealed class TrainerRemoteAuthResult {
+    data class Success(val token: String, val user: TrainerRemoteUserInfo) : TrainerRemoteAuthResult()
+    data class Require2Fa(val userId: Long, val message: String, val expiresInSeconds: Int) : TrainerRemoteAuthResult()
+    data class PendingApproval(val message: String) : TrainerRemoteAuthResult()
+    data class InvalidCredentials(val message: String) : TrainerRemoteAuthResult()
+    data class Error(val message: String) : TrainerRemoteAuthResult()
+    object OfflineFallback : TrainerRemoteAuthResult()
+}
+
+sealed class TrainerTelegramSessionStatusResult {
+    data class Authorized(val token: String, val user: TrainerRemoteUserInfo) : TrainerTelegramSessionStatusResult()
+    data class Pending(val message: String = "Ожидание авторизации...") : TrainerTelegramSessionStatusResult()
+    data class Expired(val message: String = "Сессия истекла") : TrainerTelegramSessionStatusResult()
+    data class Error(val message: String) : TrainerTelegramSessionStatusResult()
+}
+
 /**
- * Dedicated auth manager handling remote 2FA OTP verification and 72h registration approval checks
- * against backend endpoints with graceful offline fallback.
+ * Dedicated auth manager handling remote login, 2FA OTP verification, 72h registration approval checks,
+ * and 1-click Telegram session auth against backend endpoints with graceful offline fallback.
  */
 class TrainerRemoteAuthManager(
     var backendBaseUrl: String = "https://fitness-ecosystem-pro.onrender.com"
@@ -34,6 +62,224 @@ class TrainerRemoteAuthManager(
 
     fun isValidOtpFormat(otp: String): Boolean = cleanOtp(otp).length == 6
 
+    /**
+     * Remote login via POST /api/login
+     */
+    suspend fun login(username: String, pass: String): TrainerRemoteAuthResult = withContext(Dispatchers.IO) {
+        val cleanUser = username.trim()
+        if (cleanUser.isBlank() || pass.isBlank()) {
+            return@withContext TrainerRemoteAuthResult.InvalidCredentials("Введите логин и пароль")
+        }
+
+        try {
+            val url = URL("$backendBaseUrl/api/login")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 6000
+                readTimeout = 6000
+            }
+
+            val payload = JsonObject().apply {
+                addProperty("username", cleanUser)
+                addProperty("password", pass)
+            }
+
+            conn.outputStream.use { os ->
+                os.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
+            }
+
+            val code = conn.responseCode
+            val responseText = if (code in 200..299) {
+                conn.inputStream.bufferedReader().readText()
+            } else {
+                conn.errorStream?.bufferedReader()?.readText() ?: ""
+            }
+
+            val json = runCatching { JsonParser.parseString(responseText).asJsonObject }.getOrNull()
+
+            if (code == 200 && json != null) {
+                if (json.has("require2FA") && json.get("require2FA").asBoolean) {
+                    val userId = if (json.has("userId")) json.get("userId").asLong else 0L
+                    val msg = if (json.has("message")) json.get("message").asString else "Требуется код 2FA"
+                    val exp = if (json.has("expiresInSeconds")) json.get("expiresInSeconds").asInt else 300
+                    return@withContext TrainerRemoteAuthResult.Require2Fa(userId, msg, exp)
+                }
+
+                val token = if (json.has("token")) json.get("token").asString else ""
+                val userObj = json.getAsJsonObject("user")
+                val user = if (userObj != null) {
+                    TrainerRemoteUserInfo(
+                        id = if (userObj.has("id")) userObj.get("id").asLong else 0L,
+                        username = if (userObj.has("username")) userObj.get("username").asString else cleanUser,
+                        role = if (userObj.has("role")) userObj.get("role").asString else "trainer",
+                        fullName = if (userObj.has("fullName") && !userObj.get("fullName").isJsonNull) userObj.get("fullName").asString else "",
+                        phone = if (userObj.has("phone") && !userObj.get("phone").isJsonNull) userObj.get("phone").asString else "",
+                        telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else "",
+                        isApproved = true,
+                        twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
+                        token = token
+                    )
+                } else {
+                    TrainerRemoteUserInfo(username = cleanUser, isApproved = true, token = token)
+                }
+                return@withContext TrainerRemoteAuthResult.Success(token, user)
+            } else if (code == 403) {
+                val errMsg = json?.get("error")?.asString ?: "⏳ Аккаунт тренера находится на рассмотрении (до 72 часов)"
+                return@withContext TrainerRemoteAuthResult.PendingApproval(errMsg)
+            } else if (code == 401) {
+                val errMsg = json?.get("error")?.asString ?: "Неверный логин или пароль"
+                return@withContext TrainerRemoteAuthResult.InvalidCredentials(errMsg)
+            } else if (code in 400..499) {
+                val errMsg = json?.get("error")?.asString ?: "Ошибка авторизации ($code)"
+                return@withContext TrainerRemoteAuthResult.Error(errMsg)
+            }
+        } catch (_: Exception) {
+            return@withContext TrainerRemoteAuthResult.OfflineFallback
+        }
+
+        return@withContext TrainerRemoteAuthResult.OfflineFallback
+    }
+
+    /**
+     * Verify 2FA OTP code via POST /api/login/2fa
+     */
+    suspend fun verify2FaLogin(userId: Long, otp: String): TrainerRemoteAuthResult = withContext(Dispatchers.IO) {
+        val clean = cleanOtp(otp)
+        if (clean.length != 6) {
+            return@withContext TrainerRemoteAuthResult.Error("Код должен содержать ровно 6 цифр")
+        }
+
+        try {
+            val url = URL("$backendBaseUrl/api/login/2fa")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+
+            val payload = JsonObject().apply {
+                addProperty("userId", userId)
+                addProperty("code", clean)
+            }
+
+            conn.outputStream.use { os ->
+                os.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
+            }
+
+            val code = conn.responseCode
+            val responseText = if (code in 200..299) {
+                conn.inputStream.bufferedReader().readText()
+            } else {
+                conn.errorStream?.bufferedReader()?.readText() ?: ""
+            }
+
+            val json = runCatching { JsonParser.parseString(responseText).asJsonObject }.getOrNull()
+
+            if (code == 200 && json != null) {
+                val token = if (json.has("token")) json.get("token").asString else ""
+                val userObj = json.getAsJsonObject("user")
+                val user = if (userObj != null) {
+                    TrainerRemoteUserInfo(
+                        id = if (userObj.has("id")) userObj.get("id").asLong else userId,
+                        username = if (userObj.has("username")) userObj.get("username").asString else "",
+                        role = if (userObj.has("role")) userObj.get("role").asString else "trainer",
+                        fullName = if (userObj.has("fullName") && !userObj.get("fullName").isJsonNull) userObj.get("fullName").asString else "",
+                        phone = if (userObj.has("phone") && !userObj.get("phone").isJsonNull) userObj.get("phone").asString else "",
+                        telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else "",
+                        isApproved = true,
+                        twoFactorEnabled = true,
+                        token = token
+                    )
+                } else {
+                    TrainerRemoteUserInfo(id = userId, isApproved = true, token = token)
+                }
+                return@withContext TrainerRemoteAuthResult.Success(token, user)
+            } else {
+                val errMsg = json?.get("error")?.asString ?: "Неверный код 2FA"
+                return@withContext TrainerRemoteAuthResult.Error(errMsg)
+            }
+        } catch (_: Exception) {
+            return@withContext TrainerRemoteAuthResult.OfflineFallback
+        }
+    }
+
+    /**
+     * Submit trainer registration via POST /api/register
+     */
+    suspend fun registerTrainer(
+        trainerName: String,
+        username: String,
+        pass: String,
+        phone: String,
+        telegram: String
+    ): TrainerRemoteAuthResult = withContext(Dispatchers.IO) {
+        val cleanUser = username.trim()
+        val cleanName = trainerName.trim()
+        val cleanPhone = phone.trim()
+        val cleanTg = telegram.trim()
+
+        try {
+            val url = URL("$backendBaseUrl/api/register")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 6000
+                readTimeout = 6000
+            }
+
+            val payload = JsonObject().apply {
+                addProperty("username", cleanUser)
+                addProperty("password", pass)
+                addProperty("fullName", cleanName)
+                addProperty("phone", cleanPhone)
+                addProperty("telegram", cleanTg)
+                addProperty("role", "trainer")
+            }
+
+            conn.outputStream.use { os ->
+                os.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
+            }
+
+            val code = conn.responseCode
+            val responseText = if (code in 200..299) {
+                conn.inputStream.bufferedReader().readText()
+            } else {
+                conn.errorStream?.bufferedReader()?.readText() ?: ""
+            }
+
+            val json = runCatching { JsonParser.parseString(responseText).asJsonObject }.getOrNull()
+
+            if (code == 200 && json != null) {
+                val token = if (json.has("token")) json.get("token").asString else ""
+                val isApproved = if (json.has("isApproved")) json.get("isApproved").asBoolean else false
+                val user = TrainerRemoteUserInfo(
+                    username = cleanUser,
+                    fullName = cleanName,
+                    phone = cleanPhone,
+                    telegramUsername = cleanTg,
+                    isApproved = isApproved,
+                    token = token
+                )
+                if (isApproved) {
+                    return@withContext TrainerRemoteAuthResult.Success(token, user)
+                } else {
+                    val msg = if (json.has("message")) json.get("message").asString else "Заявка на рассмотрении (до 72 часов)"
+                    return@withContext TrainerRemoteAuthResult.PendingApproval(msg)
+                }
+            } else {
+                val errMsg = json?.get("error")?.asString ?: "Ошибка регистрации"
+                return@withContext TrainerRemoteAuthResult.Error(errMsg)
+            }
+        } catch (_: Exception) {
+            return@withContext TrainerRemoteAuthResult.OfflineFallback
+        }
+    }
+
     suspend fun verifyOtp(username: String, otp: String): RemoteOtpResult = withContext(Dispatchers.IO) {
         val clean = cleanOtp(otp)
         if (clean.length != 6) {
@@ -42,12 +288,13 @@ class TrainerRemoteAuthManager(
 
         try {
             val url = URL("$backendBaseUrl/api/auth/telegram/verify-otp")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json; utf-8")
-            conn.doOutput = true
-            conn.connectTimeout = 4000
-            conn.readTimeout = 4000
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 4000
+                readTimeout = 4000
+            }
 
             val payload = JsonObject().apply {
                 addProperty("username", username.trim().removePrefix("@"))
@@ -71,7 +318,6 @@ class TrainerRemoteAuthManager(
                 return@withContext RemoteOtpResult.Rejected(errMsg)
             }
         } catch (_: Exception) {
-            // Unreachable or offline -> fallback
             return@withContext RemoteOtpResult.OfflineFallback
         }
 
@@ -86,10 +332,11 @@ class TrainerRemoteAuthManager(
         try {
             val enc = URLEncoder.encode(cleanUser, "UTF-8")
             val url = URL("$backendBaseUrl/api/trainer/approval-status?username=$enc")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 4000
-            conn.readTimeout = 4000
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 4000
+                readTimeout = 4000
+            }
             val code = conn.responseCode
             if (code in 200..299) {
                 val text = conn.inputStream.bufferedReader().readText()
@@ -107,12 +354,13 @@ class TrainerRemoteAuthManager(
         // 2. Try POST /api/trainer/approval-status with {"username": cleanUser}
         try {
             val url = URL("$backendBaseUrl/api/trainer/approval-status")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json; utf-8")
-            conn.doOutput = true
-            conn.connectTimeout = 4000
-            conn.readTimeout = 4000
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 4000
+                readTimeout = 4000
+            }
             val payload = JsonObject().apply {
                 addProperty("username", cleanUser)
             }
@@ -137,12 +385,13 @@ class TrainerRemoteAuthManager(
         if (!password.isNullOrBlank()) {
             try {
                 val url = URL("$backendBaseUrl/api/login")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json; utf-8")
-                conn.doOutput = true
-                conn.connectTimeout = 4000
-                conn.readTimeout = 4000
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    doOutput = true
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                }
                 val payload = JsonObject().apply {
                     addProperty("username", cleanUser)
                     addProperty("password", password)
@@ -160,5 +409,82 @@ class TrainerRemoteAuthManager(
         }
 
         return@withContext RemoteApprovalResult.Unreachable
+    }
+
+    /**
+     * Initialize Telegram 1-Click login session via POST /api/auth/telegram/session-init
+     */
+    suspend fun initTelegramSession(): Pair<String, String>? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$backendBaseUrl/api/auth/telegram/session-init")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            conn.outputStream.use { os -> os.write("{}".toByteArray(Charsets.UTF_8)) }
+
+            if (conn.responseCode == 200) {
+                val text = conn.inputStream.bufferedReader().readText()
+                val json = JsonParser.parseString(text).asJsonObject
+                if (json.has("sessionId") && json.has("botUrl")) {
+                    return@withContext Pair(json.get("sessionId").asString, json.get("botUrl").asString)
+                }
+            }
+        } catch (_: Exception) {}
+        null
+    }
+
+    /**
+     * Poll Telegram 1-Click login session status via GET /api/auth/telegram/session-status?sessionId=...
+     */
+    suspend fun pollTelegramSession(sessionId: String): TrainerTelegramSessionStatusResult = withContext(Dispatchers.IO) {
+        try {
+            val enc = URLEncoder.encode(sessionId, "UTF-8")
+            val url = URL("$backendBaseUrl/api/auth/telegram/session-status?sessionId=$enc")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 4000
+                readTimeout = 4000
+            }
+
+            val code = conn.responseCode
+            val text = if (code in 200..299) conn.inputStream.bufferedReader().readText() else conn.errorStream?.bufferedReader()?.readText() ?: ""
+            val json = runCatching { JsonParser.parseString(text).asJsonObject }.getOrNull()
+
+            if (code == 200 && json != null) {
+                val status = if (json.has("status")) json.get("status").asString else ""
+                if (status == "AUTHORIZED") {
+                    val token = if (json.has("token")) json.get("token").asString else ""
+                    val userObj = json.getAsJsonObject("user")
+                    val user = if (userObj != null) {
+                        TrainerRemoteUserInfo(
+                            id = if (userObj.has("id")) userObj.get("id").asLong else 0L,
+                            username = if (userObj.has("username")) userObj.get("username").asString else "",
+                            role = if (userObj.has("role")) userObj.get("role").asString else "trainer",
+                            fullName = if (userObj.has("fullName") && !userObj.get("fullName").isJsonNull) userObj.get("fullName").asString else "",
+                            phone = if (userObj.has("phone") && !userObj.get("phone").isJsonNull) userObj.get("phone").asString else "",
+                            telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else "",
+                            isApproved = true,
+                            twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
+                            token = token
+                        )
+                    } else {
+                        TrainerRemoteUserInfo(isApproved = true, token = token)
+                    }
+                    return@withContext TrainerTelegramSessionStatusResult.Authorized(token, user)
+                } else if (status == "EXPIRED") {
+                    return@withContext TrainerTelegramSessionStatusResult.Expired()
+                } else {
+                    return@withContext TrainerTelegramSessionStatusResult.Pending()
+                }
+            } else {
+                return@withContext TrainerTelegramSessionStatusResult.Error("Ошибка проверки сессии")
+            }
+        } catch (e: Exception) {
+            return@withContext TrainerTelegramSessionStatusResult.Error(e.message ?: "Сетевая ошибка")
+        }
     }
 }

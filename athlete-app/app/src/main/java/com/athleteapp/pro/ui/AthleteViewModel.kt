@@ -100,6 +100,12 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
     private val _isLoggedIn = MutableStateFlow(authPrefs.getBoolean("is_logged_in", false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
+    val remoteAuthManager = com.athleteapp.pro.data.auth.AthleteRemoteAuthManager()
+
+    companion object {
+        var backendBaseUrl: String = "https://fitness-ecosystem-pro.onrender.com"
+    }
+
     var pinCreatedAt: Long
         get() = authPrefs.getLong("pin_created_at", 0L)
         set(value) = authPrefs.edit().putLong("pin_created_at", value).apply()
@@ -178,6 +184,54 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
         return true
     }
 
+    fun completeRemoteLogin(user: com.athleteapp.pro.data.auth.AthleteRemoteUserInfo, pass: String = "") {
+        val editor = authPrefs.edit()
+            .putBoolean("is_logged_in", true)
+            .putString("username", user.username)
+            .putString("full_name", user.fullName)
+            .putString("phone", user.phone)
+            .putString("auth_token", user.token)
+        if (pass.isNotBlank()) {
+            editor.putString("password_hash", hashPassword(pass))
+        }
+        if (user.telegramUsername.isNotBlank()) {
+            editor.putString("telegram_username", user.telegramUsername)
+        }
+        editor.apply()
+        _isLoggedIn.value = true
+
+        viewModelScope.launch {
+            val current = profile.value ?: AthleteProfileEntity()
+            val pin = if (user.pairingCode.isNotBlank()) user.pairingCode else if (current.pairingPin.length == 6) current.pairingPin else String.format(Locale.US, "%06d", Random().nextInt(1000000))
+            dao.saveProfile(
+                current.copy(
+                    fullName = user.fullName.ifBlank { current.fullName },
+                    phone = user.phone.ifBlank { current.phone },
+                    pairingPin = pin
+                )
+            )
+            autoSync()
+        }
+    }
+
+    suspend fun remoteLogin(username: String, pass: String): com.athleteapp.pro.data.auth.AthleteRemoteAuthResult {
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        val res = remoteAuthManager.login(username, pass)
+        if (res is com.athleteapp.pro.data.auth.AthleteRemoteAuthResult.Success) {
+            completeRemoteLogin(res.user, pass)
+        }
+        return res
+    }
+
+    suspend fun remoteVerify2Fa(userId: Long, otp: String): com.athleteapp.pro.data.auth.AthleteRemoteAuthResult {
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        val res = remoteAuthManager.verify2FaOtp(userId, otp)
+        if (res is com.athleteapp.pro.data.auth.AthleteRemoteAuthResult.Success) {
+            completeRemoteLogin(res.user)
+        }
+        return res
+    }
+
     fun verify2FaOtp(otp: String): Boolean {
         val clean = otp.filter { it.isDigit() }
         if (clean.length == 6) {
@@ -196,6 +250,17 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
             return completeLogin()
         }
         return false
+    }
+
+    suspend fun remoteRegister(fullName: String, username: String, password: String, phone: String): com.athleteapp.pro.data.auth.AthleteRemoteAuthResult {
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        val res = remoteAuthManager.register(fullName, username, password, phone)
+        if (res is com.athleteapp.pro.data.auth.AthleteRemoteAuthResult.Success) {
+            completeRemoteLogin(res.user, password)
+        } else if (res is com.athleteapp.pro.data.auth.AthleteRemoteAuthResult.OfflineFallback) {
+            register(fullName, username, password, phone)
+        }
+        return res
     }
 
     fun register(fullName: String, username: String, password: String, phone: String) {
