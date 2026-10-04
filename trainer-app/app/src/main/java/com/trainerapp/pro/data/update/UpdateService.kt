@@ -126,16 +126,16 @@ class UpdateService(private val context: Context) {
                 }
             } catch (_: Exception) {}
 
-            // Резервный фолбэк для v1.0.5 release
-            val fallbackVersion = "1.0.5"
+            // Резервный фолбэк для v1.0.8 release
+            val fallbackVersion = "1.0.8"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
                 UpdateCheckResult(
                     isUpdateAvailable = isFallbackNewer,
                     currentVersion = currentVersionName,
                     latestVersion = fallbackVersion,
-                    releaseNotes = "Версия $fallbackVersion доступна в облаке",
-                    downloadUrl = "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/trainer-pro-v1.0.5.apk"
+                    releaseNotes = "Версия $fallbackVersion доступна",
+                    downloadUrl = "https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v1.0.8/trainer-pro-v1.0.8.apk"
                 )
             )
         } catch (e: Exception) {

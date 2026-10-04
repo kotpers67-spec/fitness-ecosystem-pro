@@ -295,7 +295,8 @@ class GoogleDriveSyncManager {
                     notes = if (client.notes.isBlank()) clientData.notes else client.notes,
                     clientUuid = clientData.clientUuid,
                     pairingCode = cleanPin,
-                    membershipStatus = "Активен"
+                    membershipStatus = "Активен",
+                    avatarBase64 = if (!clientData.avatarBase64.isNullOrBlank()) clientData.avatarBase64 else client.avatarBase64
                 )
                 dao.updateClient(updated)
                 client = updated
@@ -387,6 +388,13 @@ class GoogleDriveSyncManager {
             val athletePhone = foundPairingEntry.get("phone")?.asString ?: ""
             val athleteGoal = foundPairingEntry.get("goal")?.asString ?: ""
             val athleteNotes = foundPairingEntry.get("notes")?.asString ?: ""
+            var athleteAvatar: String? = foundPairingEntry.get("avatarBase64")?.asString?.takeIf { it.isNotBlank() }
+            if (athleteAvatar.isNullOrBlank() && rootObj.has("clients")) {
+                val clientsObj = rootObj.getAsJsonObject("clients")
+                if (clientsObj.has(athleteUuid) && clientsObj.get(athleteUuid).isJsonObject) {
+                    athleteAvatar = clientsObj.getAsJsonObject(athleteUuid).get("avatarBase64")?.asString?.takeIf { it.isNotBlank() }
+                }
+            }
 
             foundPairingEntry.addProperty("pin", cleanPin)
             foundPairingEntry.addProperty("clientUuid", athleteUuid)
@@ -408,7 +416,8 @@ class GoogleDriveSyncManager {
                 notes = athleteNotes,
                 membershipStatus = "Активен",
                 clientUuid = athleteUuid,
-                pairingCode = cleanPin
+                pairingCode = cleanPin,
+                avatarBase64 = athleteAvatar
             )
             return Result.success(Pair(client, rootObj))
         }

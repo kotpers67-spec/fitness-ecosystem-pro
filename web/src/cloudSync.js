@@ -163,7 +163,7 @@ class CloudSyncService {
    * Find athlete by 6-digit PIN in cloud and mark as PAIRED
    * Enforces strict 5-minute expiration window.
    */
-  async findAndPairAthlete(pin, coachName = 'Тренер', coachPhone = '') {
+  async findAndPairAthlete(pin, coachName = 'Тренер', coachPhone = '', coachAvatarBase64 = '') {
     const cloud = await this.fetchCloudData(true);
     if (!cloud.pairing) return null;
 
@@ -203,9 +203,15 @@ class CloudSyncService {
     pairingEntry.status = 'PAIRED';
     pairingEntry.coachName = coachName;
     pairingEntry.coachPhone = coachPhone;
+    pairingEntry.coachAvatarBase64 = coachAvatarBase64 || '';
     pairingEntry.pairedTimestamp = Date.now();
     cloud.pairing[foundKey] = pairingEntry;
-    cloud.pairing[foundKey] = pairingEntry;
+
+    if (cloud.clients && cloud.clients[clientUuid]) {
+      cloud.clients[clientUuid].coachName = coachName;
+      cloud.clients[clientUuid].coachPhone = coachPhone;
+      cloud.clients[clientUuid].coachAvatarBase64 = coachAvatarBase64 || '';
+    }
 
     const clientUuid = pairingEntry.clientUuid;
     const clientPayload = (cloud.clients && cloud.clients[clientUuid]) ? cloud.clients[clientUuid] : null;

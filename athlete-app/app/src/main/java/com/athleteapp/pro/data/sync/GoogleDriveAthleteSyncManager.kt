@@ -235,6 +235,9 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                     addProperty("goal", currentProfile.goal)
                     addProperty("restrictions", currentProfile.restrictions)
                     addProperty("notes", currentProfile.notes)
+                    if (!currentProfile.avatarBase64.isNullOrBlank()) {
+                        addProperty("avatarBase64", currentProfile.avatarBase64)
+                    }
                     addProperty("timestamp", if ((pinCreatedAt ?: 0L) > 0L) pinCreatedAt!! else System.currentTimeMillis())
                     addProperty("status", if (currentProfile.isPairedWithCoach) "PAIRED" else "PENDING")
                     if (currentProfile.pairedCoachName.isNotBlank()) {

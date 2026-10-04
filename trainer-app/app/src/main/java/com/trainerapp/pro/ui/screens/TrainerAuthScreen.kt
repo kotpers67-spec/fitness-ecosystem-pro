@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -211,7 +212,7 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                             value = telegram,
                             onValueChange = { telegram = it },
                             label = { Text("Telegram (@username)") },
-                            leadingIcon = { Icon(Icons.Default.Send, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             shape = RoundedCornerShape(10.dp)

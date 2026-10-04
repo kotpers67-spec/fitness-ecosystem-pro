@@ -137,6 +137,7 @@ class TrainerStrictPairingTest {
                     addProperty("phone", "+79998887766")
                     addProperty("goal", "Набор массы")
                     addProperty("notes", "Без травм")
+                    addProperty("avatarBase64", "base64-avatar-athlete-data")
                     addProperty("timestamp", validTimestamp)
                     addProperty("status", "PENDING")
                 })
@@ -162,6 +163,7 @@ class TrainerStrictPairingTest {
         assertEquals("+79998887766", client.phone)
         assertEquals("Набор массы", client.goal)
         assertEquals("654321", client.pairingCode)
+        assertEquals("base64-avatar-athlete-data", client.avatarBase64)
 
         // Verify updated root object
         val entry = updatedRoot.getAsJsonObject("pairing").getAsJsonObject("654321")
