@@ -1484,7 +1484,7 @@
             });
             state.token = data.token;
             state.user = data.user;
-            localStorage.setItem('fit_token', data.token);
+            saveAuthToken(data.token);
             setupAppForRole(data.user.role);
             showToast(`Вход выполнен: ${data.user.fullName || data.user.username}!`, 'success');
             return;

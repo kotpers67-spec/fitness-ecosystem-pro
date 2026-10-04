@@ -87,6 +87,18 @@ class AppDatabase {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
       );
+
+      CREATE TABLE IF NOT EXISTS anthropometry (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        weight_kg REAL NOT NULL,
+        chest_cm REAL DEFAULT 0,
+        waist_cm REAL DEFAULT 0,
+        biceps_cm REAL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      );
     `);
 
     // Ensure backwards-compatible columns exist in existing tables
@@ -457,7 +469,7 @@ class AppDatabase {
       SELECT s.id, ws.date, s.exercise_name, s.weight_kg, s.reps, s.rpe, s.is_completed, s.created_at
       FROM workout_sets s
       JOIN workout_sessions ws ON s.session_id = ws.id
-      WHERE ws.athlete_id = ? AND s.is_completed = 1
+      WHERE ws.athlete_id = ?
     `;
     const params = [athleteId];
     if (exerciseName) {
@@ -467,6 +479,49 @@ class AppDatabase {
     sql += ' ORDER BY ws.date DESC, s.id DESC';
     const stmt = this.db.prepare(sql);
     return stmt.all(...params);
+  }
+
+  getAthleteExercises(athleteId) {
+    const stmt = this.db.prepare(`
+      SELECT DISTINCT s.exercise_name
+      FROM workout_sets s
+      JOIN workout_sessions ws ON s.session_id = ws.id
+      WHERE ws.athlete_id = ?
+      ORDER BY s.exercise_name ASC
+    `);
+    const rows = stmt.all(athleteId);
+    return rows.map(r => r.exercise_name);
+  }
+
+  getExerciseProgressTimeline(athleteId, exerciseName) {
+    const stmt = this.db.prepare(`
+      SELECT ws.date, s.weight_kg, s.reps, s.rpe, s.is_completed, s.id
+      FROM workout_sets s
+      JOIN workout_sessions ws ON s.session_id = ws.id
+      WHERE ws.athlete_id = ? AND s.exercise_name = ?
+      ORDER BY ws.date ASC, s.id ASC
+    `);
+    return stmt.all(athleteId, exerciseName);
+  }
+
+  addAnthropometry(userId, weightKg, date = null, chestCm = 0, waistCm = 0, bicepsCm = 0) {
+    const entryDate = date || new Date().toISOString().slice(0, 10);
+    const stmt = this.db.prepare(`
+      INSERT INTO anthropometry (user_id, date, weight_kg, chest_cm, waist_cm, biceps_cm)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const res = stmt.run(userId, entryDate, Number(weightKg) || 0, Number(chestCm) || 0, Number(waistCm) || 0, Number(bicepsCm) || 0);
+    return Number(res.lastInsertRowid);
+  }
+
+  getAnthropometryHistory(userId) {
+    const stmt = this.db.prepare(`
+      SELECT id, user_id, date, weight_kg, chest_cm, waist_cm, biceps_cm, created_at
+      FROM anthropometry
+      WHERE user_id = ?
+      ORDER BY date ASC, id ASC
+    `);
+    return stmt.all(userId);
   }
 
   addWorkoutSet(sessionId, exerciseName, weightKg, reps, rpe = 8.0, isCompleted = 1) {

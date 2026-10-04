@@ -40,13 +40,17 @@ let tgBotInstance = initTelegramBot({
   userTgChatMap
 });
 
+const RELEASES_DIR = path.resolve(__dirname, '../../releases');
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
-  '.svg': 'image/svg+xml'
+  '.svg': 'image/svg+xml',
+  '.apk': 'application/vnd.android.package-archive',
+  '.webmanifest': 'application/manifest+json'
 };
 
 function sendJson(res, statusCode, data) {
@@ -1264,6 +1268,52 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, setId });
       }
 
+      // PROGRESS & CHARTS: Get list of all exercises for athlete
+      if (pathname === '/api/progress/exercises' && req.method === 'GET') {
+        const targetAthleteId = user.role === 'athlete'
+          ? user.id
+          : Number(reqUrl.searchParams.get('athleteId') || user.id);
+        const exercises = db.getAthleteExercises(targetAthleteId);
+        return sendJson(res, 200, { exercises });
+      }
+
+      // PROGRESS & CHARTS: Get exercise history timeline (Weight, Reps, Sets, RPE)
+      if (pathname === '/api/progress/exercise' && req.method === 'GET') {
+        const targetAthleteId = user.role === 'athlete'
+          ? user.id
+          : Number(reqUrl.searchParams.get('athleteId') || user.id);
+        const exerciseName = reqUrl.searchParams.get('exercise') || '';
+        if (!exerciseName) {
+          return sendError(res, 400, 'Укажите название упражнения');
+        }
+        const timeline = db.getExerciseProgressTimeline(targetAthleteId, exerciseName);
+        return sendJson(res, 200, { exerciseName, timeline });
+      }
+
+      // PROGRESS & CHARTS: Get body weight / anthropometry history
+      if (pathname === '/api/progress/anthropometry' && req.method === 'GET') {
+        const targetAthleteId = user.role === 'athlete'
+          ? user.id
+          : Number(reqUrl.searchParams.get('athleteId') || user.id);
+        const history = db.getAnthropometryHistory(targetAthleteId);
+        return sendJson(res, 200, { history });
+      }
+
+      // PROGRESS & CHARTS: Add new body weight / anthropometry record
+      if (pathname === '/api/progress/anthropometry' && req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const targetAthleteId = user.role === 'athlete'
+          ? user.id
+          : Number(body.athleteId || user.id);
+        const { weightKg, date, chestCm, waistCm, bicepsCm } = body;
+        if (!weightKg || Number(weightKg) <= 0) {
+          return sendError(res, 400, 'Укажите корректный вес тела в кг');
+        }
+        const id = db.addAnthropometry(targetAthleteId, Number(weightKg), date, chestCm, waistCm, bicepsCm);
+        const history = db.getAnthropometryHistory(targetAthleteId);
+        return sendJson(res, 201, { success: true, id, history });
+      }
+
       return sendError(res, 404, 'API endpoint not found');
     }
 
@@ -1291,6 +1341,24 @@ const server = http.createServer(async (req, res) => {
     if (safePathname.endsWith('.sqlite') || safePathname.endsWith('.db')) {
       res.writeHead(403);
       return res.end('Access Denied');
+    }
+
+    // Serve official Android APK downloads from releases directory
+    if (safePathname.startsWith('/releases/') || safePathname.startsWith('releases/')) {
+      const fileName = path.basename(safePathname);
+      if (fileName.endsWith('.apk')) {
+        const apkPath = path.resolve(RELEASES_DIR, fileName);
+        if (apkPath.startsWith(RELEASES_DIR) && fs.existsSync(apkPath) && fs.statSync(apkPath).isFile()) {
+          res.writeHead(200, {
+            'Content-Type': 'application/vnd.android.package-archive',
+            'Content-Disposition': `attachment; filename="${fileName}"`,
+            'Content-Length': fs.statSync(apkPath).size
+          });
+          return fs.createReadStream(apkPath).pipe(res);
+        }
+      }
+      res.writeHead(404);
+      return res.end('Release APK Not Found');
     }
 
     let relPath = safePathname.replace(/^\/+/, '');
