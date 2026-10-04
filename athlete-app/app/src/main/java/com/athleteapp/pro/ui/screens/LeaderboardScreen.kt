@@ -69,7 +69,14 @@ fun LeaderboardScreen(
         if (!isPrivate && (myEntry.workoutsCount > 0 || myEntry.tonnageKg > 0)) {
             rawList.add(myEntry)
         }
-        rawList.addAll(cloudAthletes.filter { !it.isMe && (it.workoutsCount > 0 || it.tonnageKg > 0) })
+        rawList.addAll(cloudAthletes.filter { 
+            !it.isMe && 
+            (it.workoutsCount > 0 || it.tonnageKg > 0) &&
+            !it.name.contains("Смирнов", ignoreCase = true) &&
+            !it.name.contains("Smirnov", ignoreCase = true) &&
+            !it.name.contains("Спам", ignoreCase = true) &&
+            !it.name.contains("Тест", ignoreCase = true)
+        })
         rawList
             .sortedByDescending { it.points }
             .mapIndexed { index, entry -> entry.copy(rank = index + 1) }

@@ -105,7 +105,11 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                             if (otherUuid != clientUuid && entry.value.isJsonObject) {
                                 try {
                                     val otherPayload = gson.fromJson(entry.value, AthleteSyncPayload::class.java)
-                                    if (otherPayload != null && otherPayload.clientName.isNotBlank()) {
+                                    if (otherPayload != null && otherPayload.clientName.isNotBlank() &&
+                                        !otherPayload.clientName.contains("Смирнов", ignoreCase = true) &&
+                                        !otherPayload.clientName.contains("Smirnov", ignoreCase = true) &&
+                                        !otherPayload.clientName.contains("Спам", ignoreCase = true) &&
+                                        !otherPayload.clientName.contains("Тест", ignoreCase = true)) {
                                         val workoutsCount = otherPayload.assignedWorkouts.count { it.completed }
                                         val tonnage = otherPayload.assignedWorkouts
                                             .flatMap { it.exercises }

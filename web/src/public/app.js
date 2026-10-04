@@ -1031,7 +1031,10 @@
   async function loadLeaderboard() {
     try {
       const data = await api('/api/leaderboard');
-      state.leaderboard = data.leaderboard || [];
+      state.leaderboard = (data.leaderboard || []).filter(u => {
+        const n = (u.name || '').toLowerCase();
+        return !n.includes('смирнов') && !n.includes('smirnov') && !n.includes('тест') && !n.includes('спам');
+      });
 
       // Find current user stats
       const myName = (state.user?.fullName || state.user?.full_name || state.user?.username || '').toLowerCase();

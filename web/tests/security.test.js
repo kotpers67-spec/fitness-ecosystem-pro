@@ -174,7 +174,7 @@ describe('Fitness Ecosystem Pro - Security Test Suite', () => {
         username: athleteUser,
         password: 'securePassword123!',
         role: 'athlete',
-        fullName: 'Алексей Смирнов',
+        fullName: 'Тестовый Атлет',
         phone: '+79991234567'
       });
       assert.equal(res.statusCode, 201);
