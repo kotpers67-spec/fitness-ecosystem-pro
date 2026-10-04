@@ -100,7 +100,7 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
             // Telegram Fast Login Button
             Button(
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Fitness_Ecosystem_Bot?start=login"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/fitnessecosystemBOT?start=login"))
                     context.startActivity(intent)
                 },
                 modifier = Modifier

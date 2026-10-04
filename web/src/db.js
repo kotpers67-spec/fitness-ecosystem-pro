@@ -307,7 +307,7 @@ class AppDatabase {
   findUserByTelegramId(telegramId) {
     if (!telegramId) return null;
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private, telegram_id, telegram_username, two_factor_enabled
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled
       FROM users WHERE telegram_id = ? AND telegram_id != ''
     `);
     return stmt.get(String(telegramId)) || null;
@@ -317,7 +317,7 @@ class AppDatabase {
     const clean = String(tgUsername || '').replace(/^@/, '').trim().toLowerCase();
     if (!clean) return null;
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private, telegram_id, telegram_username, two_factor_enabled
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled
       FROM users WHERE LOWER(telegram_username) = ? OR LOWER(username) = ?
     `);
     return stmt.get(clean, `tg_${clean}`) || null;

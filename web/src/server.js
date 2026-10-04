@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { URL } = require('node:url');
 const crypto = require('node:crypto');
+const QRCode = require('qrcode');
 const AppDatabase = require('./db');
 const { cloudSyncService } = require('./cloudSync');
 const {
@@ -30,14 +31,15 @@ const telegramOtpStore = new Map(); // key: username -> { code, expiresAt, attem
 const userTgChatMap = new Map(); // key: username -> chatId
 
 // Real Telegram Bot Instance (grammY)
-let activeBotUsername = process.env.BOT_USERNAME || '';
+let activeBotUsername = process.env.BOT_USERNAME || 'fitnessecosystemBOT';
 const { initTelegramBot, send2FAOtp, createOwnersKeyboard, OWNER_LINKS } = require('./bot');
 
 let tgBotInstance = initTelegramBot({
   token: process.env.BOT_TOKEN,
   db,
   telegramOtpStore,
-  userTgChatMap
+  userTgChatMap,
+  cloudSyncService
 });
 
 const RELEASES_DIR = fs.existsSync(path.resolve(__dirname, '../releases'))
@@ -484,6 +486,27 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      // PUBLIC API: Real Vector SVG QR Code generator (ISO/IEC 18004 compliant)
+      if (pathname === '/api/qr-svg' && req.method === 'GET') {
+        const text = parsedUrl.searchParams.get('text') || '000000';
+        const cleanText = String(text).slice(0, 256);
+        try {
+          const svg = await QRCode.toString(cleanText, {
+            type: 'svg',
+            margin: 4,
+            color: { dark: '#000000', light: '#ffffff' }
+          });
+          res.writeHead(200, {
+            'Content-Type': 'image/svg+xml; charset=utf-8',
+            'Cache-Control': 'public, max-age=300',
+            ...SECURITY_HEADERS
+          });
+          return res.end(svg);
+        } catch (err) {
+          return sendError(res, 500, 'Ошибка генерации QR-кода', err.message);
+        }
+      }
+
       // TELEGRAM OTP: 1. Request One-Time 6-digit Code (Valid 5 minutes)
       if (pathname === '/api/auth/telegram/request-otp' && req.method === 'POST') {
         const body = await parseJsonBody(req);
@@ -494,24 +517,53 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 400, 'Укажите корректный Telegram логин');
         }
 
-        // Generate 6-digit random code
-        const code = String(Math.floor(100000 + Math.random() * 900000));
-        const expiresAt = Date.now() + 5 * 60 * 1000; // Strictly 5 minutes
+        const user = db.findUserByTelegramUsername(cleanUsername);
+        const PAIRING_TTL = 5 * 60 * 1000;
+        const now = Date.now();
+        let code = null;
+        let expiresAt = null;
+
+        // If athlete already has an active 5-minute code, reuse it for 100% parity across Web, Bot, and App!
+        if (user && user.role === 'athlete' && user.pairing_code && (now - (user.pairing_code_created_at || 0) < PAIRING_TTL)) {
+          code = String(user.pairing_code);
+          expiresAt = (user.pairing_code_created_at || now) + PAIRING_TTL;
+        } else {
+          const existing = telegramOtpStore.get(cleanUsername);
+          if (existing && existing.expiresAt > now) {
+            code = existing.code;
+            expiresAt = existing.expiresAt;
+          } else {
+            code = String(Math.floor(100000 + Math.random() * 900000));
+            expiresAt = now + PAIRING_TTL;
+            if (user && user.role === 'athlete') {
+              db.updatePairingCode(user.id, code);
+              user.pairing_code = code;
+              user.pairing_code_created_at = now;
+              cloudSyncService.registerAthletePairing(code, user.client_uuid, user.full_name, user.phone, '').catch(() => {});
+            }
+          }
+        }
 
         telegramOtpStore.set(cleanUsername, {
           code,
           expiresAt,
           attempts: 0
         });
+        if (user && user.telegram_id) {
+          telegramOtpStore.set(`id_${user.telegram_id}`, { code, expiresAt, attempts: 0 });
+        }
+        if (user && user.username) {
+          telegramOtpStore.set(user.username, { code, expiresAt, attempts: 0 });
+        }
 
         let delivered = false;
-        const targetChatId = userTgChatMap.get(cleanUsername);
+        const targetChatId = userTgChatMap.get(cleanUsername) || (user && user.telegram_id ? userTgChatMap.get(user.telegram_id) : null);
 
         if (tgBotInstance && targetChatId) {
           try {
             await tgBotInstance.api.sendMessage(
               targetChatId,
-              `🔐 Ваш 6-значный код для входа в <b>Fitness Ecosystem Pro</b>:\n\n<code>${code}</code>\n\n⏱ Действует ровно 5 минут. Введите его на сайте.`,
+              `🔐 Ваш единый 6-значный код <b>Fitness Ecosystem Pro</b>:\n\n<code>${code}</code>\n\n⏱ Действует ровно 5 минут. Введите его на сайте или назовите тренеру.`,
               { parse_mode: 'HTML' }
             );
             delivered = true;

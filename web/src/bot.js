@@ -116,9 +116,75 @@ async function handleLinkToken(ctx, token, db, userTgChatMap) {
 }
 
 /**
+ * Resolves the unified 6-digit code for a user across Web, Bot, and Mobile App.
+ * If user is an athlete, uses and maintains the athlete's 5-minute pairing PIN.
+ * Guarantees that the code displayed on website, mobile app, and bot is 100% IDENTICAL.
+ */
+function getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncService) {
+  let user = null;
+  if (tgId) {
+    user = db.findUserByTelegramId(String(tgId));
+  }
+  if (!user && username) {
+    user = db.findUserByTelegramUsername(username);
+  }
+
+  const now = Date.now();
+  const PAIRING_TTL = 5 * 60 * 1000;
+  let code = null;
+  let expiresAt = null;
+
+  // 1. If athlete has an active pairing PIN in DB, reuse it
+  if (user && user.role === 'athlete') {
+    const isPinActive = user.pairing_code && (now - (user.pairing_code_created_at || 0) < PAIRING_TTL);
+    if (isPinActive) {
+      code = String(user.pairing_code);
+      expiresAt = (user.pairing_code_created_at || now) + PAIRING_TTL;
+    } else {
+      // Regenerate athlete PIN and sync to cloud registry
+      code = String(Math.floor(100000 + Math.random() * 900000));
+      expiresAt = now + PAIRING_TTL;
+      db.updatePairingCode(user.id, code);
+      user.pairing_code = code;
+      user.pairing_code_created_at = now;
+      if (cloudSyncService && typeof cloudSyncService.registerAthletePairing === 'function') {
+        cloudSyncService.registerAthletePairing(code, user.client_uuid, user.full_name, user.phone, '').catch(() => {});
+      }
+    }
+  }
+
+  // 2. Check existing unexpired code in memory store
+  if (!code && telegramOtpStore) {
+    const existingById = tgId ? telegramOtpStore.get(`id_${tgId}`) : null;
+    const existingByUsername = username ? telegramOtpStore.get(username) : null;
+    const active = (existingById && existingById.expiresAt > now) ? existingById :
+                   (existingByUsername && existingByUsername.expiresAt > now) ? existingByUsername : null;
+    if (active) {
+      code = active.code;
+      expiresAt = active.expiresAt;
+    }
+  }
+
+  // 3. Fallback: generate fresh code
+  if (!code) {
+    code = String(Math.floor(100000 + Math.random() * 900000));
+    expiresAt = now + PAIRING_TTL;
+  }
+
+  // Sync to telegramOtpStore across all aliases
+  if (telegramOtpStore) {
+    if (username) telegramOtpStore.set(username, { code, expiresAt, attempts: 0 });
+    if (tgId) telegramOtpStore.set(`id_${tgId}`, { code, expiresAt, attempts: 0 });
+    if (user && user.username) telegramOtpStore.set(user.username, { code, expiresAt, attempts: 0 });
+  }
+
+  return { code, expiresAt, user };
+}
+
+/**
  * Setup command handlers and event listeners on grammY Bot instance
  */
-function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
+function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap, cloudSyncService }) {
   // /start handler with deep-linking support (/start link_<token>)
   bot.command('start', async (ctx) => {
     const username = ctx.from?.username ? ctx.from.username.replace(/^@/, '').toLowerCase() : null;
@@ -135,22 +201,21 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
       return;
     }
 
-    // Default /start greeting with fresh 5-min login code
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = Date.now() + 5 * 60 * 1000;
+    // Unified 5-minute code
+    const { code, user } = getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncService);
 
-    if (telegramOtpStore) {
-      if (username) telegramOtpStore.set(username, { code, expiresAt, attempts: 0 });
-      telegramOtpStore.set(`id_${tgId}`, { code, expiresAt, attempts: 0 });
-    }
+    const hint = (user && user.role === 'athlete')
+      ? 'ℹ️ Этот же код отображается в вашем профиле на сайте и в мобильном приложении.\n\n'
+      : '';
 
     await ctx.reply(
       `👋 Привет, <b>${ctx.from?.first_name || 'атлет'}</b>!\n\n` +
       `Добро пожаловать в <b>Fitness Ecosystem Pro</b> — платформу для атлетов и персональных тренеров.\n\n` +
-      `🔐 Ваш одноразовый код для входа на сайт:\n\n` +
+      `🔐 Ваш единый код для входа на сайт и подключения тренера:\n\n` +
       `👉 <code>${code}</code> 👈\n` +
       `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
       `⏱ Код действует <b>5 минут</b>.\n\n` +
+      hint +
       `Используйте кнопки меню ниже для быстрого управления:`,
       {
         parse_mode: 'HTML',
@@ -187,19 +252,18 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
   bot.hears(['🔑 Код входа', '/code', '/login'], async (ctx) => {
     const username = ctx.from?.username ? ctx.from.username.replace(/^@/, '').toLowerCase() : null;
     const tgId = String(ctx.from?.id || '');
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = Date.now() + 5 * 60 * 1000;
+    const { code, user } = getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncService);
 
-    if (telegramOtpStore) {
-      if (username) telegramOtpStore.set(username, { code, expiresAt, attempts: 0 });
-      telegramOtpStore.set(`id_${tgId}`, { code, expiresAt, attempts: 0 });
-    }
+    const hint = (user && user.role === 'athlete')
+      ? '\n\nℹ️ Этот же код отображается в вашем профиле на сайте и в мобильном приложении.'
+      : '';
 
     await ctx.reply(
-      `🔐 Ваш одноразовый код для входа на сайт:\n\n` +
+      `🔐 Ваш единый код для входа на сайт и подключения тренера:\n\n` +
       `👉 <code>${code}</code> 👈\n` +
       `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
-      `⏱ Код действует <b>5 минут</b>.`,
+      `⏱ Код действует <b>5 минут</b>.` +
+      hint,
       {
         parse_mode: 'HTML',
         reply_markup: createMainMenuKeyboard()
@@ -287,19 +351,18 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
       }
     }
 
-    // Default text fallback: generate fresh 5-min code
+    // Default text fallback: generate or return unified 5-min code
     if (!text.startsWith('/start') && !text.startsWith('/code') && !text.startsWith('/login') && !text.startsWith('/contacts') && !text.startsWith('/help')) {
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = Date.now() + 5 * 60 * 1000;
-      if (telegramOtpStore) {
-        if (username) telegramOtpStore.set(username, { code, expiresAt, attempts: 0 });
-        telegramOtpStore.set(`id_${tgId}`, { code, expiresAt, attempts: 0 });
-      }
+      const { code, user } = getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncService);
+      const hint = (user && user.role === 'athlete')
+        ? '\n\nℹ️ Этот же код отображается в вашем профиле на сайте и в мобильном приложении.'
+        : '';
       await ctx.reply(
-        `🔐 Ваш код для входа на сайт:\n\n` +
+        `🔐 Ваш единый код для входа на сайт и подключения тренера:\n\n` +
         `👉 <code>${code}</code> 👈\n` +
         `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
-        `⏱ Действует <b>5 минут</b>.`,
+        `⏱ Действует <b>5 минут</b>.` +
+        hint,
         {
           parse_mode: 'HTML',
           reply_markup: createOwnersKeyboard()
@@ -338,11 +401,11 @@ async function send2FAOtp(bot, telegramId, otp) {
 /**
  * Initialize grammY Bot
  */
-function initTelegramBot({ token, db, telegramOtpStore, userTgChatMap }) {
+function initTelegramBot({ token, db, telegramOtpStore, userTgChatMap, cloudSyncService }) {
   if (!token) return null;
   try {
     const bot = new Bot(token);
-    setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap });
+    setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap, cloudSyncService });
 
     // Set menu commands
     bot.api.setMyCommands([

@@ -1206,7 +1206,7 @@
       : 'Приватный режим включен. Ваш рейтинг скрыт';
   }
 
-  function renderVectorQrCode(pinCode) {
+  async function renderVectorQrCode(pinCode) {
     if (!el.athleteQrContainer) return;
     el.athleteQrContainer.innerHTML = '';
 
@@ -1216,11 +1216,23 @@
     }
 
     if (typeof window.generateQrSvg === 'function') {
-      const svg = window.generateQrSvg(pinCode, { size: 200, color: '#000000', background: '#ffffff', margin: 2 });
-      el.athleteQrContainer.innerHTML = svg;
-    } else {
-      el.athleteQrContainer.innerHTML = `<div style="font-size:24px;font-weight:900;color:var(--accent-lime);">${pinCode}</div>`;
+      const svg = window.generateQrSvg(pinCode, { size: 200, color: '#000000', background: '#ffffff', margin: 4 });
+      if (svg) {
+        el.athleteQrContainer.innerHTML = svg;
+        return;
+      }
     }
+
+    try {
+      const res = await fetch(`/api/qr-svg?text=${encodeURIComponent(pinCode)}`);
+      if (res.ok) {
+        const svg = await res.text();
+        el.athleteQrContainer.innerHTML = svg;
+        return;
+      }
+    } catch (_) {}
+
+    el.athleteQrContainer.innerHTML = `<div style="font-size:24px;font-weight:900;color:var(--accent-lime);">${pinCode}</div>`;
   }
 
   // --- TRAINER: Clients & Management ---
@@ -1931,7 +1943,7 @@
 
           const botHint = document.getElementById('tg-bot-link-hint');
           if (botHint) {
-            const bName = res.botUsername || 'fitness_ecosystem_bot';
+            const bName = res.botUsername || 'fitnessecosystemBOT';
             botHint.innerHTML = `<a href="https://t.me/${bName}?start=login" target="_blank" class="app-btn btn-secondary" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;padding:9px 12px;background:#2AABEE;color:#fff;border-radius:10px;font-weight:600;margin-top:6px;"><span>🤖</span><span>Открыть бота @${bName} для получения кода</span></a>`;
             botHint.style.display = 'block';
           }

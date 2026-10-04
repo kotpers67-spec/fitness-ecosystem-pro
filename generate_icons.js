@@ -43,7 +43,6 @@ function createPng(width, height, pixelFn) {
   ihdr.writeUInt8(0, 12);
   const ihdrChunk = makeChunk('IHDR', ihdr);
 
-  // Build raw scanlines: each row = filter byte (0) + width * 4 bytes
   const rowSize = 1 + width * 4;
   const raw = Buffer.alloc(height * rowSize);
 
@@ -67,80 +66,107 @@ function createPng(width, height, pixelFn) {
   return Buffer.concat([sig, ihdrChunk, idatChunk, iendChunk]);
 }
 
-// Draw a modern Fitness Pro Icon:
-// Dark background #121212 with Lime Green #C8FF00 border & Dumbbell / Lightning / PRO Emblem
-function renderIconPixel(x, y, w, h) {
-  const nx = (x / w) * 2 - 1; // -1 to 1
-  const ny = (y / h) * 2 - 1; // -1 to 1
+// 1. Athlete Icon (Neon Lime #c8ff00 + Dumbbell)
+function renderAthleteIcon(x, y, w, h) {
+  const nx = (x / w) * 2 - 1;
+  const ny = (y / h) * 2 - 1;
   const dist = Math.sqrt(nx * nx + ny * ny);
 
-  // Background: Rich Dark Charcoal #141414
   let r = 20, g = 20, b = 20, a = 255;
 
-  // Outer Squircle / Circle Highlight Ring (Lime Green Accent)
-  if (dist > 0.72 && dist < 0.82) {
-    // Vibrant Lime #c8ff00
-    return [200, 255, 0, 255];
-  }
+  if (dist > 0.72 && dist < 0.82) return [200, 255, 0, 255]; // Lime border
+  if (dist <= 0.72) { r = 24; g = 24; b = 24; }
 
-  // Inside circle background
-  if (dist <= 0.72) {
-    r = 24; g = 24; b = 24;
-  }
+  // Dumbbell bar
+  if (Math.abs(ny) <= 0.06 && Math.abs(nx) <= 0.42) return [200, 255, 0, 255];
 
-  // Center Dumbbell / Barbell Graphic in Lime Green #c8ff00
-  // Bar: y in [-0.06, 0.06], x in [-0.45, 0.45]
-  if (Math.abs(ny) <= 0.06 && Math.abs(nx) <= 0.42) {
-    return [200, 255, 0, 255]; // Bar
-  }
+  // Weights Left
+  if (nx >= -0.42 && nx <= -0.34 && Math.abs(ny) <= 0.32) return [200, 255, 0, 255];
+  if (nx >= -0.32 && nx <= -0.26 && Math.abs(ny) <= 0.24) return [200, 255, 0, 255];
 
-  // Left Plates:
-  // Outer plate: x in [-0.42, -0.34], y in [-0.32, 0.32]
-  if (nx >= -0.42 && nx <= -0.34 && Math.abs(ny) <= 0.32) {
-    return [200, 255, 0, 255];
-  }
-  // Inner plate: x in [-0.32, -0.26], y in [-0.24, 0.24]
-  if (nx >= -0.32 && nx <= -0.26 && Math.abs(ny) <= 0.24) {
-    return [200, 255, 0, 255];
-  }
+  // Weights Right
+  if (nx >= 0.26 && nx <= 0.32 && Math.abs(ny) <= 0.24) return [200, 255, 0, 255];
+  if (nx >= 0.34 && nx <= 0.42 && Math.abs(ny) <= 0.32) return [200, 255, 0, 255];
 
-  // Right Plates:
-  // Inner plate: x in [0.26, 0.32], y in [-0.24, 0.24]
-  if (nx >= 0.26 && nx <= 0.32 && Math.abs(ny) <= 0.24) {
-    return [200, 255, 0, 255];
-  }
-  // Outer plate: x in [0.34, 0.42], y in [-0.32, 0.32]
-  if (nx >= 0.34 && nx <= 0.42 && Math.abs(ny) <= 0.32) {
-    return [200, 255, 0, 255];
-  }
+  // Grip Knurling
+  if (Math.abs(nx) <= 0.12 && Math.abs(ny) <= 0.08) return [230, 255, 80, 255];
 
-  // Center Grip / Collar knurling accents:
-  if (Math.abs(nx) <= 0.12 && Math.abs(ny) <= 0.08) {
-    return [230, 255, 80, 255]; // Brighter center grip
+  return [r, g, b, a];
+}
+
+// 2. Trainer Icon (Emerald Green #10b981 + Coach Clipboard/Whistle)
+function renderTrainerIcon(x, y, w, h) {
+  const nx = (x / w) * 2 - 1;
+  const ny = (y / h) * 2 - 1;
+  const dist = Math.sqrt(nx * nx + ny * ny);
+
+  let r = 16, g = 24, b = 20, a = 255;
+
+  if (dist > 0.72 && dist < 0.82) return [16, 185, 129, 255]; // Emerald border
+  if (dist <= 0.72) { r = 20; g = 30; b = 25; }
+
+  // Clipboard Outline: x in [-0.32, 0.32], y in [-0.38, 0.42]
+  if (Math.abs(nx) <= 0.32 && ny >= -0.38 && ny <= 0.42) {
+    // Border of board
+    if (Math.abs(nx) >= 0.26 || ny >= 0.36 || (ny <= -0.32 && Math.abs(nx) >= 0.15)) {
+      return [16, 185, 129, 255];
+    }
+    // Top Clip: x in [-0.15, 0.15], y in [-0.44, -0.30]
+    if (Math.abs(nx) <= 0.15 && ny >= -0.44 && ny <= -0.30) {
+      return [52, 211, 153, 255];
+    }
+    // 3 Plan Lines on board
+    if ((Math.abs(ny - (-0.12)) <= 0.03 || Math.abs(ny - (0.05)) <= 0.03 || Math.abs(ny - (0.22)) <= 0.03) && Math.abs(nx) <= 0.20) {
+      return [52, 211, 153, 255];
+    }
+    // Checkmark on first line: x in [-0.22, -0.16]
+    if (nx >= -0.24 && nx <= -0.16 && Math.abs(ny - (-0.12)) <= 0.04) {
+      return [200, 255, 0, 255];
+    }
   }
 
   return [r, g, b, a];
 }
 
 const pubDir = path.join(__dirname, 'web', 'src', 'public');
-fs.writeFileSync(path.join(pubDir, 'icon-192.png'), createPng(192, 192, renderIconPixel));
-fs.writeFileSync(path.join(pubDir, 'icon-512.png'), createPng(512, 512, renderIconPixel));
 
-// Also generate a matching SVG icon
-const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+// Write Athlete Icons
+fs.writeFileSync(path.join(pubDir, 'icon-192.png'), createPng(192, 192, renderAthleteIcon));
+fs.writeFileSync(path.join(pubDir, 'icon-512.png'), createPng(512, 512, renderAthleteIcon));
+fs.writeFileSync(path.join(pubDir, 'icon-athlete-192.png'), createPng(192, 192, renderAthleteIcon));
+fs.writeFileSync(path.join(pubDir, 'icon-athlete-512.png'), createPng(512, 512, renderAthleteIcon));
+
+// Write Trainer Icons
+fs.writeFileSync(path.join(pubDir, 'icon-trainer-192.png'), createPng(192, 192, renderTrainerIcon));
+fs.writeFileSync(path.join(pubDir, 'icon-trainer-512.png'), createPng(512, 512, renderTrainerIcon));
+
+// Matching SVGs
+const athleteSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="#141414"/>
   <circle cx="256" cy="256" r="196" fill="#1c1c1c" stroke="#c8ff00" stroke-width="18"/>
-  <!-- Dumbbell Bar -->
   <rect x="140" y="242" width="232" height="28" rx="8" fill="#c8ff00"/>
-  <!-- Left Weights -->
   <rect x="148" y="196" width="22" height="120" rx="8" fill="#c8ff00"/>
   <rect x="122" y="174" width="20" height="164" rx="8" fill="#c8ff00"/>
-  <!-- Right Weights -->
   <rect x="342" y="196" width="22" height="120" rx="8" fill="#c8ff00"/>
   <rect x="370" y="174" width="20" height="164" rx="8" fill="#c8ff00"/>
-  <!-- Center Knurling -->
   <rect x="226" y="238" width="60" height="36" rx="6" fill="#f0ff75"/>
 </svg>`;
 
-fs.writeFileSync(path.join(pubDir, 'icon.svg'), svgContent, 'utf-8');
-console.log('Successfully generated high-contrast PWA icons (192, 512, SVG)!');
+const trainerSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0f1f17"/>
+  <circle cx="256" cy="256" r="196" fill="#142920" stroke="#10b981" stroke-width="18"/>
+  <!-- Clipboard -->
+  <rect x="160" y="150" width="192" height="230" rx="16" fill="none" stroke="#10b981" stroke-width="16"/>
+  <!-- Clip -->
+  <rect x="216" y="130" width="80" height="36" rx="8" fill="#34d399"/>
+  <!-- Lines -->
+  <line x1="200" y1="220" x2="310" y2="220" stroke="#34d399" stroke-width="12" stroke-linecap="round"/>
+  <line x1="200" y1="270" x2="310" y2="270" stroke="#34d399" stroke-width="12" stroke-linecap="round"/>
+  <line x1="200" y1="320" x2="280" y2="320" stroke="#34d399" stroke-width="12" stroke-linecap="round"/>
+</svg>`;
+
+fs.writeFileSync(path.join(pubDir, 'icon.svg'), athleteSvg, 'utf-8');
+fs.writeFileSync(path.join(pubDir, 'icon-athlete.svg'), athleteSvg, 'utf-8');
+fs.writeFileSync(path.join(pubDir, 'icon-trainer.svg'), trainerSvg, 'utf-8');
+
+console.log('Successfully generated Athlete & Trainer distinct icons!');
