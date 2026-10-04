@@ -19,7 +19,7 @@ const OWNER_LINKS = {
  */
 function createMainMenuKeyboard() {
   return new Keyboard()
-    .text('🔑 Код входа').text('🔄 Сменить роль').row()
+    .text('🔑 Код входа').row()
     .text('🔗 Привязать аккаунт').text('💬 Связь с владельцами').row()
     .text('❓ Справка')
     .resized();
