@@ -1182,7 +1182,124 @@ input:checked + .slider:before {
   }
 }
 
-/* Dialog Styles */
+/* Role Selector Cards (Framer-grade Dark UI) */
+.role-selector-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+.role-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  user-select: none;
+}
+.role-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.role-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+.role-card.selected {
+  background: rgba(42, 171, 238, 0.08);
+  border-color: #2AABEE;
+  box-shadow: 0 0 20px rgba(42, 171, 238, 0.25), inset 0 0 0 1px #2AABEE;
+}
+.role-card[data-role="athlete"].selected {
+  background: rgba(52, 199, 89, 0.08);
+  border-color: #34C759;
+  box-shadow: 0 0 20px rgba(52, 199, 89, 0.25), inset 0 0 0 1px #34C759;
+}
+.role-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.role-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  transition: all 0.2s ease;
+}
+.role-card.selected .role-card-icon.athlete-icon {
+  background: #34C759;
+  color: #000;
+  box-shadow: 0 4px 12px rgba(52, 199, 89, 0.4);
+}
+.role-card.selected .role-card-icon.trainer-icon {
+  background: #2AABEE;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(42, 171, 238, 0.4);
+}
+.role-card-tag {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+.role-card-tag.approval-tag {
+  background: rgba(255, 149, 0, 0.15);
+  color: #FF9500;
+  border: 1px solid rgba(255, 149, 0, 0.3);
+}
+.role-card-title {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+}
+.role-card-desc {
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+}
+.pending-approval-box {
+  background: rgba(255, 149, 0, 0.08);
+  border: 1.5px solid rgba(255, 149, 0, 0.4);
+  border-radius: 14px;
+  padding: 16px;
+  margin-top: 16px;
+  text-align: center;
+}
+.pending-approval-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #FF9500;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.pending-approval-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 12px;
+}
 .app-dialog {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);

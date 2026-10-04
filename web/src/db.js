@@ -94,6 +94,7 @@ class AppDatabase {
     safeAddColumn('users', "telegram_id TEXT DEFAULT ''");
     safeAddColumn('users', "telegram_username TEXT DEFAULT ''");
     safeAddColumn('users', "two_factor_enabled INTEGER DEFAULT 0");
+    safeAddColumn('users', "is_approved INTEGER DEFAULT 1");
 
     safeAddColumn('workout_sessions', "is_self_workout_allowed INTEGER DEFAULT 0");
     safeAddColumn('workout_sessions', "assigned_by_trainer_id INTEGER DEFAULT NULL");
@@ -109,14 +110,20 @@ class AppDatabase {
 
   // --- User Operations (Strictly Parameterized) ---
 
-  createUser(username, passwordHash, role, fullName, phone = '', pairingCode = '', clientUuid = '', avatarBase64 = '') {
+  createUser(username, passwordHash, role, fullName, phone = '', pairingCode = '', clientUuid = '', avatarBase64 = '', isApproved = null) {
     const pairingCreatedAt = pairingCode ? Date.now() : 0;
+    const approvedVal = isApproved !== null ? (isApproved ? 1 : 0) : (role === 'trainer' ? 0 : 1);
     const stmt = this.db.prepare(`
-      INSERT INTO users (username, password_hash, role, full_name, phone, pairing_code, client_uuid, avatar_base64, is_private, pairing_code_created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+      INSERT INTO users (username, password_hash, role, full_name, phone, pairing_code, client_uuid, avatar_base64, is_private, pairing_code_created_at, is_approved)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `);
-    const result = stmt.run(username, passwordHash, role, fullName, phone, pairingCode, clientUuid, avatarBase64, pairingCreatedAt);
+    const result = stmt.run(username, passwordHash, role, fullName, phone, pairingCode, clientUuid, avatarBase64, pairingCreatedAt, approvedVal);
     return Number(result.lastInsertRowid);
+  }
+
+  approveTrainer(userId) {
+    const stmt = this.db.prepare(`UPDATE users SET is_approved = 1 WHERE id = ? AND role = 'trainer'`);
+    return stmt.run(userId);
   }
 
   findUserByUsername(username) {

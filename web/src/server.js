@@ -70,6 +70,15 @@ if (process.env.BOT_TOKEN) {
         userTgChatMap.set(username, ctx.chat.id);
       }
       const text = ctx.message.text.trim();
+      if (text.startsWith('/approve_')) {
+        const targetId = parseInt(text.replace('/approve_', ''), 10);
+        if (targetId) {
+          db.approveTrainer(targetId);
+          const approvedUser = db.findUserById(targetId);
+          await ctx.reply(`✅ <b>АККАУНТ ТРЕНЕРА ПОДТВЕРЖДЕН!</b>\n\nТренер #${targetId} (<b>${approvedUser?.full_name || 'Тренер'}</b>) теперь имеет полный доступ к созданию планов и ведению подопечных на сайте.`, { parse_mode: 'HTML' });
+          return;
+        }
+      }
       if (!text.startsWith('/start') && !text.startsWith('/code') && !text.startsWith('/login')) {
         const code = String(Math.floor(100000 + Math.random() * 900000));
         const expiresAt = Date.now() + 5 * 60 * 1000;
@@ -204,7 +213,34 @@ const server = http.createServer(async (req, res) => {
         const escapedFullName = escapeHtml(cleanFullName);
         const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
 
-        const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode, clientUuid, avatarBase64 || '');
+        const isApproved = role === 'athlete' ? 1 : 0;
+        const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode, clientUuid, avatarBase64 || '', isApproved);
+
+        if (role === 'trainer') {
+          // Send notification to owner/admin via Telegram
+          if (tgBotInstance) {
+            for (const [uName, cId] of userTgChatMap.entries()) {
+              try {
+                await tgBotInstance.api.sendMessage(
+                  cId,
+                  `🔔 <b>НОВАЯ ЗАЯВКА НА АККАУНТ ТРЕНЕРА!</b>\n\n` +
+                  `👤 <b>ФИО:</b> ${escapedFullName}\n` +
+                  `🏷 <b>Логин:</b> ${cleanUsername}\n` +
+                  `📞 <b>Телефон:</b> ${escapedPhone || 'Не указан'}\n\n` +
+                  `Для подтверждения отправьте команду:\n<code>/approve_${userId}</code>`,
+                  { parse_mode: 'HTML' }
+                );
+              } catch (_) {}
+            }
+          }
+
+          return sendJson(res, 201, {
+            success: true,
+            pendingApproval: true,
+            message: 'Ваша заявка на создание аккаунта тренера принята. Если в течение 72 часов аккаунт не будет создан, обратитесь к владельцу в Telegram: @SantiLA213 или @Spirit5449'
+          });
+        }
+
         const token = generateToken();
         db.createAuthToken(token, userId);
 
@@ -236,6 +272,11 @@ const server = http.createServer(async (req, res) => {
         }
 
         const user = db.findUserByUsername(cleanUsername);
+
+        if (user && user.role === 'trainer' && user.is_approved === 0) {
+          return sendError(res, 403, '⏳ Ваша заявка на создание аккаунта тренера принята. Если в течение 72 часов аккаунт не будет создан, обратитесь к владельцу в Telegram: @SantiLA213 или @Spirit5449');
+        }
+
         if (!user || !verifyPassword(password, user.password_hash)) {
           return sendError(res, 401, 'Неверный логин или пароль');
         }

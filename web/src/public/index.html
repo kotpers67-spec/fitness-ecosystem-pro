@@ -101,13 +101,30 @@
             <div class="form-group">
               <label class="field-label">Выберите вашу роль (нельзя изменить позже)</label>
               <div class="role-selector-cards">
-                <label class="role-card selected">
+                <label class="role-card selected" data-role="athlete">
                   <input type="radio" name="reg-role" value="athlete" checked>
+                  <div class="role-card-header">
+                    <div class="role-card-icon athlete-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M2 11v2M22 11v2M12 4v16"/>
+                      </svg>
+                    </div>
+                    <span class="role-card-tag">БЫСТРЫЙ ВХОД</span>
+                  </div>
                   <div class="role-card-title">АТЛЕТ</div>
                   <div class="role-card-desc">Тренировки по плану, отметка подходов, рейтинг</div>
                 </label>
-                <label class="role-card">
+
+                <label class="role-card" data-role="trainer">
                   <input type="radio" name="reg-role" value="trainer">
+                  <div class="role-card-header">
+                    <div class="role-card-icon trainer-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm13 0l-3.5 3.5L17 13"/>
+                      </svg>
+                    </div>
+                    <span class="role-card-tag approval-tag">ПОДТВЕРЖДЕНИЕ</span>
+                  </div>
                   <div class="role-card-title">ТРЕНЕР</div>
                   <div class="role-card-desc">Ведение подопечных, назначение тренировок</div>
                 </label>
