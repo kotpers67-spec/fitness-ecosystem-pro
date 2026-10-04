@@ -2477,13 +2477,13 @@
       showToast('Приложение Fitness Pro успешно установлено!', 'success');
     });
 
-    // Bi-Directional Cloud Sync Handler (Google Drive / МойДиск)
+    // Bi-Directional Cloud Sync Handler
     let isSyncing = false;
     async function triggerCloudSync() {
       if (isSyncing) return;
       isSyncing = true;
       document.querySelectorAll('.sync-icon').forEach(icon => icon.classList.add('spinning'));
-      showToast('Синхронизация с МойДиск (Google Drive)...', 'info');
+      showToast('Облачная синхронизация...', 'info');
 
       try {
         const res = await api('/api/sync', { method: 'POST' });
@@ -2493,7 +2493,7 @@
         if (el.athleteSyncStatusText) el.athleteSyncStatusText.textContent = statusMsg;
         if (el.trainerSyncStatusText) el.trainerSyncStatusText.textContent = statusMsg;
 
-        showToast('Данные успешно синхронизированы с Google Drive!', 'success');
+        showToast('Данные успешно синхронизированы с облаком!', 'success');
 
         // Refresh currently active views with fresh data
         if (state.user?.role === 'athlete') {
