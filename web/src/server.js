@@ -62,6 +62,10 @@ function sendJson(res, statusCode, data) {
     'Content-Type': 'application/json; charset=utf-8',
     ...SECURITY_HEADERS
   };
+  const existingCookie = res.getHeader('Set-Cookie');
+  if (existingCookie) {
+    headers['Set-Cookie'] = existingCookie;
+  }
   if (data && data.token) {
     headers['Set-Cookie'] = `fit_token=${data.token}; Path=/; Max-Age=31536000; SameSite=Lax`;
   }
@@ -138,6 +142,9 @@ const server = http.createServer(async (req, res) => {
         // Anti-Injection & Strict Validation
         if (!cleanUsername || !password || !role || !cleanFullName) {
           return sendError(res, 400, 'Заполните все обязательные поля');
+        }
+        if (avatarBase64 && avatarBase64.length > 30000) {
+          return sendError(res, 400, 'Аватар слишком большой (максимум 30 КБ)');
         }
         if (hasSqlInjectionVector(cleanUsername) || hasSqlInjectionVector(cleanFullName)) {
           return sendError(res, 400, 'Обнаружены недопустимые символы или попытка инъекции.');
@@ -517,7 +524,12 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 400, 'Укажите корректный Telegram логин');
         }
 
-        const user = db.findUserByTelegramUsername(cleanUsername);
+        let user = db.findUserByTelegramUsername(cleanUsername);
+        if (!user) user = db.findUserByUsername(cleanUsername);
+        if (!user) user = db.findUserByUsername(`tg_${cleanUsername}`);
+        if (!user && cleanUsername.replace(/\D/g, '').length >= 7) {
+          user = db.findUserByPhone(cleanUsername.replace(/\D/g, ''));
+        }
         const PAIRING_TTL = 5 * 60 * 1000;
         const now = Date.now();
         let code = null;
@@ -622,8 +634,15 @@ const server = http.createServer(async (req, res) => {
         let user = db.findUserByUsername(cleanUsername);
         if (!user) user = db.findUserByUsername(`tg_${cleanUsername}`);
         if (!user) user = db.findUserByTelegramUsername(cleanUsername);
+        if (!user && cleanUsername.replace(/\D/g, '').length >= 7) {
+          user = db.findUserByPhone(cleanUsername.replace(/\D/g, ''));
+        }
 
         if (user) {
+          if (!user.telegram_username && cleanUsername) {
+            db.linkTelegram(user.id, user.telegram_id || '', cleanUsername);
+            user.telegram_username = cleanUsername;
+          }
           const token = generateToken();
           db.createAuthToken(token, user.id);
           return sendJson(res, 200, {
@@ -675,8 +694,21 @@ const server = http.createServer(async (req, res) => {
 
         const usernameKey = `tg_${cleanUsername}`;
         let user = db.findUserByUsername(usernameKey);
+        if (!user) user = db.findUserByTelegramUsername(cleanUsername);
+        if (!user && cleanPhone) user = db.findUserByPhone(cleanPhone);
+        if (!user) user = db.findUserByFullName(cleanFullName);
 
-        if (!user) {
+        if (user) {
+          // Existing user found by phone or full name: link Telegram and update profile
+          if (!user.telegram_username && cleanUsername) {
+            db.linkTelegram(user.id, user.telegram_id || '', cleanUsername);
+            user.telegram_username = cleanUsername;
+          }
+          if (avatarBase64 && !user.avatar_base64) {
+            db.updateProfile(user.id, user.full_name, user.phone, avatarBase64);
+            user.avatar_base64 = avatarBase64;
+          }
+        } else {
           const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
           const escapedFullName = escapeHtml(cleanFullName);
           const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
@@ -698,6 +730,7 @@ const server = http.createServer(async (req, res) => {
             cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapedFullName, escapedPhone, '', avatarBase64 || '').catch(() => {});
           }
 
+          db.linkTelegram(userId, '', cleanUsername);
           user = db.findUserById(userId);
         }
 
@@ -787,9 +820,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       // UPDATE PROFILE (Name, Phone, Photo/Avatar)
-      if (pathname === '/api/user/profile' && (req.method === 'PUT' || req.method === 'POST')) {
+      if ((pathname === '/api/user/profile' || pathname === '/api/profile') && (req.method === 'PUT' || req.method === 'POST')) {
         const body = await parseJsonBody(req);
         const { fullName, phone, avatarBase64 } = body;
+        if (avatarBase64 && avatarBase64.length > 30000) {
+          return sendError(res, 400, 'Аватар слишком большой (максимум 30 КБ)');
+        }
         const cleanName = String(fullName || user.full_name).trim();
         const cleanPhone = phone !== undefined ? String(phone).trim() : user.phone;
 
@@ -834,8 +870,13 @@ const server = http.createServer(async (req, res) => {
 
       // LOGOUT
       if (pathname === '/api/logout' && req.method === 'POST') {
-        const token = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+        let token = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+        if (!token && req.headers['cookie']) {
+          const match = req.headers['cookie'].match(/(?:^|;\s*)fit_token=([^;]+)/);
+          if (match) token = match[1];
+        }
         if (token) db.deleteAuthToken(token);
+        res.setHeader('Set-Cookie', 'fit_token=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax');
         return sendJson(res, 200, { success: true });
       }
 
@@ -897,10 +938,32 @@ const server = http.createServer(async (req, res) => {
 
         console.log(`[Telegram Link] OTP for linking @${cleanUsername} to user #${user.id}: ${otp}`);
 
+        // Try direct bot push if bot knows chat
+        let delivered = false;
+        const targetChatId = userTgChatMap.get(cleanUsername);
+        if (tgBotInstance && targetChatId) {
+          try {
+            await tgBotInstance.api.sendMessage(
+              targetChatId,
+              `🔐 <b>Код для привязки Telegram к аккаунту:</b>\n\n👉 <code>${otp}</code> 👈\n\n⏱ Действует ровно 5 минут. Введите этот код в поле подтверждения на сайте.`,
+              { parse_mode: 'HTML' }
+            );
+            delivered = true;
+          } catch (err) {
+            console.warn('[Telegram Link] Не удалось отправить напрямую:', err.message);
+          }
+        }
+
+        const botName = activeBotUsername || process.env.BOT_USERNAME || '';
         return sendJson(res, 200, {
           success: true,
-          message: 'Код подтверждения отправлен в Telegram бота. Действует 5 минут.',
+          message: delivered 
+            ? 'Код отправлен вам в бота Telegram! Скопируйте его и введите ниже.'
+            : 'Запрос создан. Перейдите в Telegram бота, нажмите START, скопируйте полученный код и введите его ниже.',
           expiresInSeconds: 300,
+          delivered,
+          botUsername: botName,
+          botLink: botName ? `https://t.me/${botName}?start=link` : '',
           debugCode: (process.env.NODE_ENV === 'test' || !process.env.BOT_TOKEN) ? otp : undefined
         });
       }
@@ -1075,6 +1138,9 @@ const server = http.createServer(async (req, res) => {
         if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
         const athleteId = Number(reqUrl.searchParams.get('athleteId'));
         if (!athleteId) return sendError(res, 400, 'Укажите athleteId');
+        if (!db.isAthletePairedToTrainer(user.id, athleteId)) {
+          return sendError(res, 403, 'Атлет не привязан к данному тренеру');
+        }
         const athlete = db.findUserById(athleteId);
         if (!athlete) return sendError(res, 404, 'Атлет не найден');
         return sendJson(res, 200, { success: true, athleteId, restrictions: athlete.restrictions || '' });
@@ -1087,6 +1153,9 @@ const server = http.createServer(async (req, res) => {
         const athleteId = Number(body.athleteId);
         const restrictions = String(body.restrictions || '').trim();
         if (!athleteId) return sendError(res, 400, 'Укажите athleteId');
+        if (!db.isAthletePairedToTrainer(user.id, athleteId)) {
+          return sendError(res, 403, 'Атлет не привязан к данному тренеру');
+        }
 
         db.updateAthleteRestrictions(athleteId, restrictions);
 
@@ -1105,6 +1174,9 @@ const server = http.createServer(async (req, res) => {
         const { athleteId, date, isSelfAllowed, notes, exercises } = body;
         if (!athleteId || !date) {
           return sendError(res, 400, 'Укажите athleteId и дату тренировки');
+        }
+        if (!db.isAthletePairedToTrainer(user.id, Number(athleteId))) {
+          return sendError(res, 403, 'Атлет не привязан к данному тренеру');
         }
 
         const sessionId = db.assignTrainerWorkout(user.id, Number(athleteId), date, isSelfAllowed ? 1 : 0, notes || '');
@@ -1141,6 +1213,9 @@ const server = http.createServer(async (req, res) => {
         if (!athleteId || !exerciseName) {
           return sendError(res, 400, 'Укажите athleteId и exercise');
         }
+        if (!db.isAthletePairedToTrainer(user.id, athleteId)) {
+          return sendError(res, 403, 'Атлет не привязан к данному тренеру');
+        }
         const stats = db.getLastExerciseStats(athleteId, exerciseName);
         return sendJson(res, 200, { stats });
       }
@@ -1151,6 +1226,12 @@ const server = http.createServer(async (req, res) => {
           ? user.id 
           : Number(reqUrl.searchParams.get('athleteId') || user.id);
         const date = reqUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10);
+
+        if (user.role === 'trainer' && targetAthleteId !== user.id) {
+          if (!db.isAthletePairedToTrainer(user.id, targetAthleteId)) {
+            return sendError(res, 403, 'Атлет не привязан к данному тренеру');
+          }
+        }
 
         const athlete = db.findUserById(targetAthleteId);
 

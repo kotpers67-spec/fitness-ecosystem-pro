@@ -214,6 +214,7 @@
     linkTgInputCode: document.getElementById('link-tg-input-code'),
     btnLinkTgBack: document.getElementById('btn-link-tg-back'),
     btnLinkTgDeeplink: document.getElementById('btn-link-tg-deeplink'),
+    btnOpenTgBotLink: document.getElementById('btn-open-tg-bot-link'),
 
     // Progress & 3-Scale Charts & Weight
     athleteCurrentWeightVal: document.getElementById('athlete-current-weight-val'),
@@ -1742,7 +1743,13 @@
             body: JSON.stringify({ username })
           });
           state.linkTgPendingUsername = username;
-          showToast(res.message || 'Код отправлен в бота Telegram', 'success');
+          if (res.botLink && el.btnOpenTgBotLink) {
+            el.btnOpenTgBotLink.href = res.botLink;
+          } else if (res.botUsername && el.btnOpenTgBotLink) {
+            el.btnOpenTgBotLink.href = `https://t.me/${res.botUsername}?start=link`;
+          }
+
+          showToast(res.message || 'Перейдите в бота и нажмите START для получения кода', 'info');
 
           el.linkStep1.style.display = 'none';
           el.linkStep2.style.display = 'block';

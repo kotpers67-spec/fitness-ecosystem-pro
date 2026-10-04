@@ -201,6 +201,25 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap, cloudSyncS
       return;
     }
 
+    // Check if there is an active account linking request for this user
+    const pendingLink = username ? telegramOtpStore?.get(`link_${username}`) : null;
+    const isLinkMode = payload === 'link' || Boolean(pendingLink);
+
+    if (pendingLink && pendingLink.expiresAt > Date.now()) {
+      await ctx.reply(
+        `🔐 <b>Код для привязки Telegram к аккаунту:</b>\n\n` +
+        `👉 <code>${pendingLink.code}</code> 👈\n` +
+        `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
+        `⏱ Код действует <b>5 минут</b>.\n` +
+        `Введите этот 6-значный код на сайте или в мобильном приложении для завершения привязки.`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: createMainMenuKeyboard()
+        }
+      );
+      return;
+    }
+
     // Unified 5-minute code
     const { code, user } = getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncService);
 
