@@ -2408,7 +2408,9 @@
       }
     }
 
-    if (el.btnOpenDownloadModal) el.btnOpenDownloadModal.onclick = openDownloadDialog;
+    document.querySelectorAll('.btn-open-download-modal, #btn-open-download-modal').forEach(btn => {
+      btn.onclick = openDownloadDialog;
+    });
     if (el.btnCloseDownloadDialog) el.btnCloseDownloadDialog.onclick = closeDownloadDialog;
 
     // Trigger PWA Installation Prompt

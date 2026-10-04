@@ -40,7 +40,9 @@ let tgBotInstance = initTelegramBot({
   userTgChatMap
 });
 
-const RELEASES_DIR = path.resolve(__dirname, '../../releases');
+const RELEASES_DIR = fs.existsSync(path.resolve(__dirname, '../releases'))
+  ? path.resolve(__dirname, '../releases')
+  : path.resolve(__dirname, '../../releases');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -1343,7 +1345,7 @@ const server = http.createServer(async (req, res) => {
       return res.end('Access Denied');
     }
 
-    // Serve official Android APK downloads from releases directory
+    // Serve official Android APK downloads from releases directory (with GitHub fallback)
     if (safePathname.startsWith('/releases/') || safePathname.startsWith('releases/')) {
       const fileName = path.basename(safePathname);
       if (fileName.endsWith('.apk')) {
@@ -1355,6 +1357,13 @@ const server = http.createServer(async (req, res) => {
             'Content-Length': fs.statSync(apkPath).size
           });
           return fs.createReadStream(apkPath).pipe(res);
+        } else {
+          // Fallback: Redirect to GitHub Releases
+          const tag = fileName.includes('v1.0.6') ? 'v1.0.6' : 'v1.0.5';
+          res.writeHead(302, {
+            'Location': `https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/${tag}/${fileName}`
+          });
+          return res.end();
         }
       }
       res.writeHead(404);
