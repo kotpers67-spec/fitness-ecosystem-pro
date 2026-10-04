@@ -214,7 +214,7 @@ class AppDatabase {
 
   findUserById(id) {
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
       FROM users WHERE id = ?
     `);
     return stmt.get(id) || null;
@@ -287,6 +287,10 @@ class AppDatabase {
     return stmt.run(newCode, now, athleteId);
   }
 
+  updatePairingCode(athleteId, newCode) {
+    return this.regeneratePairingCode(athleteId, newCode);
+  }
+
   consumePairingCode(athleteId) {
     const stmt = this.db.prepare(`
       UPDATE users SET pairing_code = '', pairing_code_created_at = 0 WHERE id = ? AND role = 'athlete'
@@ -298,7 +302,10 @@ class AppDatabase {
     const cleanUsername = String(telegramUsername || '').replace(/^@/, '').trim().toLowerCase();
     const cleanId = String(telegramId || '').trim();
     const stmt = this.db.prepare(`
-      UPDATE users SET telegram_id = ?, telegram_username = ? WHERE id = ?
+      UPDATE users SET 
+        telegram_id = COALESCE(NULLIF(?, ''), telegram_id), 
+        telegram_username = COALESCE(NULLIF(?, ''), telegram_username) 
+      WHERE id = ?
     `);
     return stmt.run(cleanId, cleanUsername, userId);
   }
@@ -642,7 +649,7 @@ class AppDatabase {
       SELECT u.id, u.full_name, u.avatar_base64,
              COUNT(DISTINCT ws.id) as workouts_count,
              COALESCE(SUM(s.weight_kg * s.reps), 0) as total_tonnage,
-             ROUND(COUNT(DISTINCT ws.id) * 100 + COALESCE(SUM(s.weight_kg * s.reps), 0) * 0.1) as points
+             CAST(COUNT(DISTINCT ws.id) * 10 + FLOOR(COALESCE(SUM(s.weight_kg * s.reps), 0) / 100.0) AS INTEGER) as points
       FROM users u
       JOIN workout_sessions ws ON u.id = ws.athlete_id
       JOIN workout_sets s ON ws.id = s.session_id AND s.is_completed = 1

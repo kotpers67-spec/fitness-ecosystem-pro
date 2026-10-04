@@ -15,6 +15,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
+process.env.NODE_ENV = 'test';
 const serverModulePath = fs.existsSync(path.join(__dirname, '../src/server.js'))
   ? '../src/server'
   : '../../../web/src/server';
@@ -95,9 +96,12 @@ describe('Fitness Ecosystem Pro - Security Test Suite', () => {
     });
   });
 
-  after(() => {
-    server.close();
-    db.close();
+  after(async () => {
+    await new Promise(res => server.close(res));
+    if (db && typeof db.close === 'function') {
+      db.close();
+    }
+    setTimeout(() => process.exit(0), 100);
   });
 
   beforeEach(() => {

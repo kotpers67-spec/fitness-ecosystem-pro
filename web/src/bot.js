@@ -5,7 +5,9 @@
  *           Owner Contact buttons (@SantiLA213, @Spirit5449), Trainer approval.
  */
 
+const crypto = require('node:crypto');
 const { Bot, InlineKeyboard, Keyboard } = require('grammy');
+const { generateSecurePin, hashPassword, generateToken, escapeHtml } = require('./security');
 
 const OWNER_LINKS = {
   santi: 'https://t.me/SantiLA213',
@@ -142,7 +144,9 @@ function getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncServi
       expiresAt = (user.pairing_code_created_at || now) + PAIRING_TTL;
     } else {
       // Regenerate athlete PIN and sync to cloud registry
-      code = String(Math.floor(100000 + Math.random() * 900000));
+      code = (db && typeof db.generateUniquePairingCode === 'function')
+        ? db.generateUniquePairingCode(user.id)
+        : generateSecurePin();
       expiresAt = now + PAIRING_TTL;
       db.updatePairingCode(user.id, code);
       user.pairing_code = code;
@@ -165,9 +169,23 @@ function getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncServi
     }
   }
 
-  // 3. Fallback: generate fresh code
+  // 3. Fallback: generate fresh code with collision retry loop
   if (!code) {
-    code = String(Math.floor(100000 + Math.random() * 900000));
+    let freshPin;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      freshPin = generateSecurePin();
+      let collides = false;
+      if (telegramOtpStore) {
+        for (const [k, v] of telegramOtpStore.entries()) {
+          if (v && v.code === freshPin && v.expiresAt > now) {
+            collides = true;
+            break;
+          }
+        }
+      }
+      if (!collides) break;
+    }
+    code = freshPin;
     expiresAt = now + PAIRING_TTL;
   }
 
@@ -184,8 +202,14 @@ function getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncServi
 /**
  * Setup command handlers and event listeners on grammY Bot instance
  */
-function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap, cloudSyncService }) {
-  // /start handler with deep-linking support (/start link_<token>)
+function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, userTgChatMap, cloudSyncService }) {
+  if (typeof bot.catch === 'function') {
+    bot.catch((err) => {
+      console.error('grammY error boundary:', err);
+    });
+  }
+
+  // /start handler with deep-linking support (/start auth_<session>, /start link_<token>, /start login)
   bot.command('start', async (ctx) => {
     const username = ctx.from?.username ? ctx.from.username.replace(/^@/, '').toLowerCase() : null;
     const chatId = ctx.chat?.id;
@@ -195,23 +219,110 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap, cloudSyncS
     if (tgId && userTgChatMap) userTgChatMap.set(tgId, chatId);
 
     const payload = (ctx.match || '').trim();
+
+    // 1-Click Seamless Authorization: /start auth_<sessionId>
+    if (payload.startsWith('auth_')) {
+      const sessionId = payload.trim();
+      const session = telegramSessionStore ? telegramSessionStore.get(sessionId) : null;
+      const now = Date.now();
+      if (!session || now > session.expiresAt) {
+        await ctx.reply(
+          '⚠️ <b>Срок действия сессии входа истёк (5 минут).</b>\n\n' +
+          'Нажмите кнопку «Войти через Telegram» на сайте или в приложении заново.',
+          { parse_mode: 'HTML', reply_markup: createMainMenuKeyboard() }
+        );
+        return;
+      }
+
+      const fullName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ') || username || 'Telegram Атлет';
+      let user = null;
+      if (tgId) user = db.findUserByTelegramId(tgId);
+      if (!user && username) user = db.findUserByTelegramUsername(username);
+      if (!user && username) user = db.findUserByUsername(username);
+      if (!user && username) user = db.findUserByUsername(`tg_${username}`);
+
+      if (!user) {
+        const usernameKey = username ? `tg_${username}` : `tg_${tgId}`;
+        const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
+        const pairingCode = db.generateUniquePairingCode();
+        const clientUuid = crypto.randomUUID();
+
+        const userId = db.createUser(
+          usernameKey,
+          passwordHash,
+          'athlete',
+          escapeHtml(fullName),
+          '',
+          pairingCode,
+          clientUuid,
+          ''
+        );
+        db.linkTelegram(userId, tgId, username || '');
+        if (cloudSyncService && typeof cloudSyncService.registerAthletePairing === 'function') {
+          cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapeHtml(fullName), '', '').catch(() => {});
+        }
+        user = db.findUserById(userId);
+      } else {
+        if (!user.telegram_id && tgId) {
+          db.linkTelegram(user.id, tgId, username || '');
+          user = db.findUserById(user.id);
+        }
+      }
+
+      const token = generateToken();
+      db.createAuthToken(token, user.id);
+
+      session.status = 'AUTHORIZED';
+      session.token = token;
+      session.user = {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        fullName: user.full_name,
+        phone: user.phone,
+        avatarBase64: user.avatar_base64 || '',
+        pairingCode: user.pairing_code,
+        clientUuid: user.client_uuid || '',
+        coachName: user.coach_name || '',
+        coachPhone: user.coach_phone || '',
+        isPrivate: Boolean(user.is_private)
+      };
+
+      const roleTitle = user.role === 'trainer' ? 'Тренер' : 'Атлет';
+      const webAppKeyboard = new InlineKeyboard()
+        .url('🌐 Открыть Fitness Ecosystem', 'https://fitness-ecosystem-pro.onrender.com')
+        .row()
+        .url('💬 Поддержка создателей', OWNER_LINKS.santi);
+
+      await ctx.reply(
+        `⚡ <b>Вход в Fitness Ecosystem Pro выполнен в 1 клик!</b>\n\n` +
+        `👤 Профиль: <b>${user.full_name || fullName}</b>\n` +
+        `🏷 Роль: <b>${roleTitle}</b>\n\n` +
+        `🚀 В браузере или мобильном приложении вход произошёл автоматически!\n` +
+        `Вы можете вернуться в открытое окно.`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: webAppKeyboard
+        }
+      );
+      return;
+    }
+
     if (payload.startsWith('link_')) {
       const token = payload.replace(/^link_/, '').trim();
       await handleLinkToken(ctx, token, db, userTgChatMap);
       return;
     }
 
-    // Check if there is an active account linking request for this user
-    const pendingLink = username ? telegramOtpStore?.get(`link_${username}`) : null;
-    const isLinkMode = payload === 'link' || Boolean(pendingLink);
-
-    if (pendingLink && pendingLink.expiresAt > Date.now()) {
+    // Dedicated deep-link handler: /start login (?start=login)
+    if (payload === 'login') {
+      const { code } = getUnifiedUserCode(tgId, username, db, telegramOtpStore, cloudSyncService);
       await ctx.reply(
-        `🔐 <b>Код для привязки Telegram к аккаунту:</b>\n\n` +
-        `👉 <code>${pendingLink.code}</code> 👈\n` +
-        `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
-        `⏱ Код действует <b>5 минут</b>.\n` +
-        `Введите этот 6-значный код на сайте или в мобильном приложении для завершения привязки.`,
+        `🔐 <b>Код авторизации в системе:</b>\n\n` +
+        `👉 <code>${code}</code> 👈\n\n` +
+        `⏱ Код действителен в течение <b>5 минут</b>.\n` +
+        `Введите этот код в форме входа на сайте или в приложении.\n\n` +
+        `⚠️ <b>Безопасность:</b> Никому не передавайте этот код!`,
         {
           parse_mode: 'HTML',
           reply_markup: createMainMenuKeyboard()
@@ -337,6 +448,36 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap, cloudSyncS
     );
   });
 
+  // Inline button callback query handler for trainer approval
+  if (typeof bot.callbackQuery === 'function') {
+    bot.callbackQuery(/^approve_(\d+)$/, async (ctx) => {
+      const callerUsername = (ctx.from?.username || '').replace(/^@/, '');
+      const callerTgId = String(ctx.from?.id || '');
+      const adminChatId = String(process.env.ADMIN_CHAT_ID || '').trim();
+      const isAuthorized =
+        ['SantiLA213', 'Spirit5449'].some(u => u.toLowerCase() === callerUsername.toLowerCase()) ||
+        (adminChatId && callerTgId === adminChatId);
+
+      if (!isAuthorized) {
+        await ctx.answerCallbackQuery({ text: '⛔ У вас нет прав администратора', show_alert: true });
+        return;
+      }
+
+      const targetId = parseInt(ctx.match[1], 10);
+      if (targetId) {
+        db.approveTrainer(targetId);
+        const approvedUser = db.findUserById(targetId);
+        await ctx.answerCallbackQuery({ text: `✅ Тренер #${targetId} успешно одобрен!` });
+        await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: [] } }).catch(() => {});
+        await ctx.reply(
+          `✅ <b>АККАУНТ ТРЕНЕРА ОДОБРЕН КНОПКОЙ!</b>\n\n` +
+          `Тренер #${targetId} (<b>${approvedUser?.full_name || 'Тренер'}</b>) получил доступ на сайте.`,
+          { parse_mode: 'HTML' }
+        );
+      }
+    });
+  }
+
   // Text messages fallback & approval handler
   bot.on('message:text', async (ctx) => {
     const username = ctx.from?.username ? ctx.from.username.replace(/^@/, '').toLowerCase() : null;
@@ -348,6 +489,18 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap, cloudSyncS
 
     // Trainer approval command (/approve_<id>)
     if (text.startsWith('/approve_')) {
+      const callerUsername = (ctx.from?.username || '').replace(/^@/, '');
+      const callerTgId = String(ctx.from?.id || '');
+      const adminChatId = String(process.env.ADMIN_CHAT_ID || '').trim();
+      const isAuthorized =
+        ['SantiLA213', 'Spirit5449'].some(u => u.toLowerCase() === callerUsername.toLowerCase()) ||
+        (adminChatId && callerTgId === adminChatId);
+
+      if (!isAuthorized) {
+        await ctx.reply('У вас нет прав администратора');
+        return;
+      }
+
       const targetId = parseInt(text.replace('/approve_', ''), 10);
       if (targetId) {
         db.approveTrainer(targetId);
@@ -420,11 +573,14 @@ async function send2FAOtp(bot, telegramId, otp) {
 /**
  * Initialize grammY Bot
  */
-function initTelegramBot({ token, db, telegramOtpStore, userTgChatMap, cloudSyncService }) {
+function initTelegramBot({ token, db, telegramOtpStore, telegramSessionStore, userTgChatMap, cloudSyncService }) {
   if (!token) return null;
   try {
     const bot = new Bot(token);
-    setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap, cloudSyncService });
+    bot.catch((err) => {
+      console.error('grammY error boundary:', err);
+    });
+    setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, userTgChatMap, cloudSyncService });
 
     // Set menu commands
     bot.api.setMyCommands([

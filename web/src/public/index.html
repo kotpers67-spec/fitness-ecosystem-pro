@@ -35,9 +35,6 @@
           <span class="sync-icon">🔄</span>
           <span>Синхронизация</span>
         </button>
-        <button type="button" class="btn-open-download-modal icon-btn" title="Скачать APK" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(200, 255, 0, 0.15); color: var(--accent-lime); border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 800; gap: 4px; border: 1px solid var(--border-lime); cursor: pointer;">
-          <span>📱 APK</span>
-        </button>
         <span class="role-badge" id="topbar-role-badge"></span>
         <button id="btn-logout-header" class="icon-btn" title="Выйти" style="display: none;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -842,12 +839,47 @@
       </section>
 
       <!-- Dialog: Telegram OTP Auth Modal (5-minute one-time code + profile completion) -->
+      <!-- DIALOG: Вход через Telegram (1-Click & OTP) -->
       <dialog id="dialog-telegram-auth" class="app-dialog">
         <div class="dialog-content">
           
-          <!-- STEP 1: Request Code -->
-          <div id="tg-step-request">
-            <div class="dialog-title">ВХОД ЧЕРЕЗ TELEGRAM</div>
+          <!-- STEP 0: 1-Click Instant Login (Default) -->
+          <div id="tg-step-oneclick">
+            <div class="dialog-title">ВХОД В 1 КЛИК ЧЕРЕЗ TELEGRAM</div>
+            <p class="dialog-subtitle">Нажмите кнопку для быстрого входа через бота <b>@fitnessecosystemBOT</b> без ввода кодов:</p>
+            
+            <div style="margin: 16px 0 12px;">
+              <a id="btn-tg-oneclick-open" href="#" target="_blank" class="app-btn btn-telegram" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 700; padding: 14px; text-decoration: none; width: 100%; box-shadow: 0 4px 18px rgba(0, 136, 204, 0.35);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                </svg>
+                <span>⚡ Открыть Telegram и войти</span>
+              </a>
+            </div>
+
+            <div class="tg-status-box" style="margin-bottom: 14px; padding: 10px 14px; background: rgba(0, 136, 204, 0.08); border: 1px dashed rgba(0, 136, 204, 0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span class="tg-pulse-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #0088cc; box-shadow: 0 0 8px #0088cc;"></span>
+              <span id="tg-oneclick-status-text" style="font-size: 13px; color: var(--text-primary);">Ожидание перехода в Telegram...</span>
+            </div>
+
+            <div id="tg-oneclick-qr-container" style="text-align: center; margin-bottom: 14px; display: none;">
+              <div id="tg-oneclick-qr-svg" style="display: inline-block; padding: 6px; background: #ffffff; border-radius: 10px; line-height: 0;"></div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Или отсканируйте QR-код камерой</div>
+            </div>
+
+            <div class="auth-divider" style="margin: 12px 0 8px;">
+              <span>или</span>
+            </div>
+
+            <button type="button" id="btn-toggle-tg-manual-code" class="app-btn btn-secondary" style="font-size: 12px; width: 100%; border: 1px solid var(--border-color);">
+              🔑 Войти по 6-значному коду
+            </button>
+            <button type="button" class="app-btn btn-secondary btn-close-tg" style="width: 100%; margin-top: 8px;">Отмена</button>
+          </div>
+
+          <!-- STEP 1: Request Code Manually (Fallback) -->
+          <div id="tg-step-request" style="display: none;">
+            <div class="dialog-title">ВХОД ПО КОДУ ИЗ TELEGRAM</div>
             <p class="dialog-subtitle">Введите ваш Telegram @username. В бота придёт одноразовый 6-значный код (действует 5 минут).</p>
             <form id="form-tg-request">
               <div class="form-group" style="margin-bottom: 16px;">
@@ -855,7 +887,7 @@
                 <input type="text" id="tg-input-username" class="app-input" placeholder="@durov или логин" required autocomplete="username">
               </div>
               <div class="dialog-actions">
-                <button type="button" class="app-btn btn-secondary btn-close-tg">Отмена</button>
+                <button type="button" id="btn-tg-back-to-oneclick" class="app-btn btn-secondary">Назад</button>
                 <button type="submit" class="app-btn btn-telegram" id="btn-submit-tg-request">Получить код в Telegram</button>
               </div>
             </form>
@@ -992,7 +1024,12 @@
         <div class="dialog-content">
           <div class="dialog-header">
             <h3 class="dialog-title">Новый замер веса тела</h3>
-            <button type="button" class="dialog-close-btn" id="btn-close-weight-dialog">✕</button>
+            <button type="button" class="dialog-close-btn" id="btn-close-weight-dialog" aria-label="Закрыть">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
           </div>
           <p class="card-desc">Внесите текущий вес тела для отслеживания динамики на графике</p>
           <form id="form-add-weight">
@@ -1017,6 +1054,12 @@
         <div class="dialog-content">
           <div class="dialog-header">
             <h3 class="dialog-title">Мобильные приложения</h3>
+            <button type="button" class="dialog-close-btn" id="btn-close-download-dialog" aria-label="Закрыть">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
           </div>
           <p class="card-desc">Установите на смартфон официальное приложение с офлайн-доступом и мгновенной синхронизацией:</p>
 

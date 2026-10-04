@@ -5,9 +5,10 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node tests/security.test.js && node tests/pin_2fa.test.js",
+    "test": "node tests/security.test.js && node tests/pin_2fa.test.js && node --test tests/cloud_sync_anthropometry.test.js && node --test tests/m1_hardening.test.js",
     "test:security": "node tests/security.test.js",
-    "test:pin": "node tests/pin_2fa.test.js"
+    "test:pin": "node tests/pin_2fa.test.js",
+    "test:sync": "node --test tests/cloud_sync_anthropometry.test.js"
   },
   "dependencies": {
     "grammy": "^1.28.0",

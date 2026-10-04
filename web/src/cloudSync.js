@@ -40,10 +40,15 @@ function decryptPayload(rawText) {
 }
 
 class CloudSyncService {
-  constructor() {
+  constructor(db = null) {
+    this.db = db;
     this.cachedCloudData = null;
     this.lastFetchTime = 0;
     this.cacheTtlMs = 15000; // 15 seconds cache to keep UI instantaneous
+  }
+
+  setDb(db) {
+    this.db = db;
   }
 
   getCloudUrl() {
@@ -285,7 +290,7 @@ class CloudSyncService {
   /**
    * Push assigned workouts from web trainer to cloud client so athlete's mobile app receives them!
    */
-  async pushAssignedWorkouts(clientUuid, clientName, workouts) {
+  async pushAssignedWorkouts(clientUuid, clientName, workouts, userId = null, db = null) {
     const cloud = await this.fetchCloudData(true);
     if (!cloud.clients) cloud.clients = {};
 
@@ -297,6 +302,30 @@ class CloudSyncService {
 
     existing.assignedWorkouts = workouts;
     existing.syncTimestamp = Date.now();
+
+    // Populate anthropometry history from local db if available
+    const resolvedDb = db || this.db;
+    let targetUserId = userId;
+    if (!targetUserId && resolvedDb && clientUuid) {
+      const user = resolvedDb.findUserByClientUuid(clientUuid);
+      if (user) targetUserId = user.id;
+    }
+    if (targetUserId && resolvedDb && typeof resolvedDb.getAnthropometryHistory === 'function') {
+      const anthHistory = resolvedDb.getAnthropometryHistory(targetUserId) || [];
+      if (anthHistory.length > 0) {
+        existing.anthropometry = anthHistory.map(a => ({
+          date: a.date,
+          weightKg: Number(a.weight_kg != null ? a.weight_kg : a.weightKg) || 0,
+          chestCm: Number(a.chest_cm != null ? a.chest_cm : a.chestCm) || 0,
+          waistCm: Number(a.waist_cm != null ? a.waist_cm : a.waistCm) || 0,
+          bicepsCm: Number(a.biceps_cm != null ? a.biceps_cm : a.bicepsCm) || 0
+        }));
+      }
+    }
+    if (!Array.isArray(existing.anthropometry)) {
+      existing.anthropometry = [];
+    }
+
     cloud.clients[clientUuid] = existing;
 
     return await this.pushCloudData(cloud);
@@ -305,7 +334,7 @@ class CloudSyncService {
   /**
    * Sync complete workout session and sets to Google Drive (upserting target date)
    */
-  async syncWorkoutSessionToCloud(clientUuid, clientName, date, session, sets) {
+  async syncWorkoutSessionToCloud(clientUuid, clientName, date, session, sets, userId = null, db = null) {
     if (!clientUuid) return false;
     const cloud = await this.fetchCloudData(true);
     if (!cloud.clients) cloud.clients = {};
@@ -367,10 +396,178 @@ class CloudSyncService {
       client.assignedWorkouts.push(sessionObj);
     }
 
+    // Populate anthropometry history from local db if available
+    const resolvedDb = db || this.db;
+    let targetUserId = userId;
+    if (!targetUserId && resolvedDb && clientUuid) {
+      const user = resolvedDb.findUserByClientUuid(clientUuid);
+      if (user) targetUserId = user.id;
+    }
+    if (targetUserId && resolvedDb && typeof resolvedDb.getAnthropometryHistory === 'function') {
+      const anthHistory = resolvedDb.getAnthropometryHistory(targetUserId) || [];
+      if (anthHistory.length > 0) {
+        client.anthropometry = anthHistory.map(a => ({
+          date: a.date,
+          weightKg: Number(a.weight_kg != null ? a.weight_kg : a.weightKg) || 0,
+          chestCm: Number(a.chest_cm != null ? a.chest_cm : a.chestCm) || 0,
+          waistCm: Number(a.waist_cm != null ? a.waist_cm : a.waistCm) || 0,
+          bicepsCm: Number(a.biceps_cm != null ? a.biceps_cm : a.bicepsCm) || 0
+        }));
+      }
+    }
+    if (!Array.isArray(client.anthropometry)) {
+      client.anthropometry = [];
+    }
+
     client.syncTimestamp = Date.now();
     cloud.clients[clientUuid] = client;
 
     return await this.pushCloudData(cloud);
+  }
+
+  /**
+   * Push athlete anthropometry history directly to Google Drive
+   */
+  async syncAnthropometryToCloud(clientUuid, clientName, anthropometryList) {
+    if (!clientUuid) return false;
+    const cloud = await this.fetchCloudData(true);
+    if (!cloud.clients) cloud.clients = {};
+
+    const client = cloud.clients[clientUuid] || {
+      clientUuid,
+      clientName: clientName || 'Атлет',
+      syncTimestamp: Date.now(),
+      assignedWorkouts: [],
+      anthropometry: []
+    };
+
+    client.anthropometry = (anthropometryList || []).map(a => ({
+      date: a.date,
+      weightKg: Number(a.weight_kg != null ? a.weight_kg : a.weightKg) || 0,
+      chestCm: Number(a.chest_cm != null ? a.chest_cm : a.chestCm) || 0,
+      waistCm: Number(a.waist_cm != null ? a.waist_cm : a.waistCm) || 0,
+      bicepsCm: Number(a.biceps_cm != null ? a.biceps_cm : a.bicepsCm) || 0
+    }));
+
+    client.syncTimestamp = Date.now();
+    cloud.clients[clientUuid] = client;
+    return await this.pushCloudData(cloud);
+  }
+
+  /**
+   * Sync cloud payload (workouts and anthropometry) into local SQLite database.
+   * Persists new anthropometry measurement rows into db.addAnthropometry if not already present.
+   */
+  async syncCloudWorkoutsToLocal(clientUuidOrData, userId = null, db = null) {
+    const resolvedDb = db || this.db;
+    if (!resolvedDb) return { syncedWorkouts: 0, syncedAnthropometry: 0 };
+
+    let clientData = null;
+    let clientUuid = null;
+
+    if (clientUuidOrData && typeof clientUuidOrData === 'object') {
+      clientData = clientUuidOrData;
+      clientUuid = clientData.clientUuid || null;
+    } else if (typeof clientUuidOrData === 'string') {
+      clientUuid = clientUuidOrData;
+      const cloud = await this.fetchCloudData(true);
+      clientData = cloud.clients ? cloud.clients[clientUuid] : null;
+    }
+
+    if (!clientData) {
+      return { syncedWorkouts: 0, syncedAnthropometry: 0 };
+    }
+
+    let targetUserId = userId;
+    if (!targetUserId && clientUuid) {
+      const user = resolvedDb.findUserByClientUuid(clientUuid);
+      if (user) targetUserId = user.id;
+    }
+
+    if (!targetUserId) {
+      return { syncedWorkouts: 0, syncedAnthropometry: 0 };
+    }
+
+    let syncedAnthropometry = 0;
+    // 1. Parse cloud payload clientData.anthropometry and persist if not already present
+    if (Array.isArray(clientData.anthropometry)) {
+      const existingHistory = resolvedDb.getAnthropometryHistory(targetUserId) || [];
+      for (const m of clientData.anthropometry) {
+        if (!m || !m.date) continue;
+        const mDate = String(m.date).trim();
+        const mWeight = Number(m.weightKg != null ? m.weightKg : (m.weight_kg != null ? m.weight_kg : m.weight)) || 0;
+        const mChest = Number(m.chestCm != null ? m.chestCm : (m.chest_cm != null ? m.chest_cm : 0)) || 0;
+        const mWaist = Number(m.waistCm != null ? m.waistCm : (m.waist_cm != null ? m.waist_cm : 0)) || 0;
+        const mBiceps = Number(m.bicepsCm != null ? m.bicepsCm : (m.biceps_cm != null ? m.biceps_cm : 0)) || 0;
+
+        if (mWeight <= 0) continue;
+
+        const alreadyExists = existingHistory.some(e => {
+          if (e.date !== mDate) return false;
+          const wtDiff = Math.abs((Number(e.weight_kg) || 0) - mWeight);
+          return wtDiff < 0.01;
+        });
+
+        if (!alreadyExists) {
+          resolvedDb.addAnthropometry(targetUserId, mWeight, mDate, mChest, mWaist, mBiceps);
+          existingHistory.push({
+            user_id: targetUserId,
+            date: mDate,
+            weight_kg: mWeight,
+            chest_cm: mChest,
+            waist_cm: mWaist,
+            biceps_cm: mBiceps
+          });
+          syncedAnthropometry++;
+        }
+      }
+    }
+
+    let syncedWorkouts = 0;
+    // 2. Parse cloud payload clientData.assignedWorkouts and update local workout sessions/sets
+    if (Array.isArray(clientData.assignedWorkouts)) {
+      for (const cw of clientData.assignedWorkouts) {
+        if (!cw.date) continue;
+        const { session, sets } = resolvedDb.getWorkoutSessionWithSets(targetUserId, cw.date);
+        const sessionId = session ? session.id : resolvedDb.assignTrainerWorkout(
+          session?.assigned_by_trainer_id || 1,
+          targetUserId,
+          cw.date,
+          cw.isSelfWorkoutAllowed ? 1 : 0,
+          cw.notes || ''
+        );
+
+        if (Array.isArray(cw.exercises)) {
+          for (const ex of cw.exercises) {
+            const exName = ex.name || 'Упражнение';
+            if (Array.isArray(ex.sets)) {
+              for (const s of ex.sets) {
+                const weight = Number(s.actualWeightKg || s.targetWeightKg || s.weight || 0);
+                const reps = Number(s.actualReps || s.targetReps || s.reps || 1);
+                const isCompleted = Boolean(s.isCompleted);
+                const rpe = Number(s.rpe || 8.0);
+
+                const existingSet = sets.find(ls => ls.exercise_name === exName && ls.reps === reps && Math.abs(ls.weight_kg - weight) < 0.01);
+                if (existingSet) {
+                  if (isCompleted && !existingSet.is_completed) {
+                    resolvedDb.toggleWorkoutSet(existingSet.id, true);
+                    syncedWorkouts++;
+                  }
+                } else {
+                  const newSetId = resolvedDb.addWorkoutSet(sessionId, exName, weight, reps, rpe, 0);
+                  if (isCompleted) {
+                    resolvedDb.toggleWorkoutSet(newSetId, true);
+                  }
+                  syncedWorkouts++;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return { syncedWorkouts, syncedAnthropometry };
   }
 
   /**
@@ -408,7 +605,7 @@ class CloudSyncService {
         }
 
         const workoutsCount = completedWorkouts.length;
-        const points = Math.round(workoutsCount * 100 + (tonnage * 0.1));
+        const points = workoutsCount * 10 + Math.floor(tonnage / 100);
 
         map.set(name.toLowerCase(), {
           name,

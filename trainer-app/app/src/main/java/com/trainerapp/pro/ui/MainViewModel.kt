@@ -142,6 +142,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         telegramUsername = username
     }
 
+    val remoteAuthManager = com.trainerapp.pro.data.auth.TrainerRemoteAuthManager()
+
+    companion object {
+        var backendBaseUrl: String = "https://fitness-ecosystem-pro.onrender.com"
+    }
+
     var isApproved: Boolean
         get() = authPrefs.getBoolean("is_approved", false)
         set(value) = authPrefs.edit().putBoolean("is_approved", value).apply()
@@ -159,13 +165,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
-    fun verify2FaOtp(otp: String): Boolean {
-        val clean = otp.filter { it.isDigit() }
-        if (clean.length == 6) {
-            completeLogin()
-            return true
+    /**
+     * Remote verification of 2FA OTP against backend /api/auth/telegram/verify-otp
+     * with graceful fallback to local validation if offline or server is unreachable.
+     */
+    suspend fun verify2FaOtpRemote(otp: String, username: String? = null): Boolean = withContext(Dispatchers.IO) {
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        val targetUser = (username?.trim()?.ifBlank { null }
+            ?: authPrefs.getString("username", "")?.ifBlank { null }
+            ?: telegramUsername.ifBlank { null }
+            ?: "trainer")
+
+        when (val res = remoteAuthManager.verifyOtp(targetUser, otp)) {
+            is com.trainerapp.pro.data.auth.RemoteOtpResult.Success -> {
+                completeLogin()
+                true
+            }
+            is com.trainerapp.pro.data.auth.RemoteOtpResult.Rejected -> {
+                false
+            }
+            is com.trainerapp.pro.data.auth.RemoteOtpResult.OfflineFallback -> {
+                if (remoteAuthManager.isValidOtpFormat(otp)) {
+                    completeLogin()
+                    true
+                } else false
+            }
         }
-        return false
+    }
+
+    fun verify2FaOtp(otp: String, username: String? = null): Boolean {
+        val clean = otp.filter { it.isDigit() }
+        if (clean.length != 6) return false
+        return try {
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                verify2FaOtpRemote(clean, username)
+            }
+        } catch (_: Exception) {
+            if (clean.length == 6) {
+                completeLogin()
+                true
+            } else false
+        }
+    }
+
+    /**
+     * Remote approval check for 72h registration verification against server
+     * /api/trainer/approval-status or /api/me / /api/login, preserving local state fallback.
+     */
+    suspend fun checkRemoteApprovalStatus(username: String, password: String? = null): Boolean = withContext(Dispatchers.IO) {
+        remoteAuthManager.backendBaseUrl = backendBaseUrl
+        when (val res = remoteAuthManager.checkApprovalStatus(username, password)) {
+            is com.trainerapp.pro.data.auth.RemoteApprovalResult.Approved -> {
+                isApproved = true
+                true
+            }
+            is com.trainerapp.pro.data.auth.RemoteApprovalResult.Pending -> {
+                isApproved = false
+                false
+            }
+            is com.trainerapp.pro.data.auth.RemoteApprovalResult.Unreachable -> {
+                isApproved
+            }
+        }
+    }
+
+    fun checkRemoteApprovalStatusSync(username: String, password: String? = null): Boolean {
+        return runCatching {
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                checkRemoteApprovalStatus(username, password)
+            }
+        }.getOrDefault(isApproved)
     }
 
     fun login(username: String, pass: String): Boolean {
@@ -206,7 +275,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Send notification to owners & server for approval
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val url = java.net.URL("https://fitness-ecosystem-pro.onrender.com/api/register")
+                val url = java.net.URL("$backendBaseUrl/api/register")
                 val conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json; utf-8")

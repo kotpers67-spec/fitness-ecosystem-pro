@@ -63,8 +63,8 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                         if (pairingObj.has(cleanPin)) {
                             val pinEntry = pairingObj.getAsJsonObject(cleanPin)
                             val status = if (pinEntry.has("status")) pinEntry.get("status").asString else ""
-                            val coachName = if (pinEntry.has("coachName")) pinEntry.get("coachName").asString else "Алексей Романов"
-                            val coachPhone = if (pinEntry.has("coachPhone")) pinEntry.get("coachPhone").asString else "+7 (999) 123-45-67"
+                            val coachName = if (pinEntry.has("coachName") && pinEntry.get("coachName").asString.isNotBlank()) pinEntry.get("coachName").asString else "Тренер"
+                            val coachPhone = if (pinEntry.has("coachPhone")) pinEntry.get("coachPhone").asString else ""
                             val coachB64 = if (pinEntry.has("coachAvatarBase64")) pinEntry.get("coachAvatarBase64").asString else null
 
                             if (status.equals("PAIRED", ignoreCase = true)) {
@@ -185,7 +185,7 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             val myPayload = AthleteSyncPayload(
                 clientUuid = clientUuid,
                 athleteId = athleteId,
-                clientName = currentProfile.fullName.ifBlank { "Александр Смирнов" },
+                clientName = currentProfile.fullName.ifBlank { "Атлет" },
                 avatarBase64 = currentProfile.avatarBase64,
                 syncTimestamp = System.currentTimeMillis(),
                 assignedWorkouts = syncSessions,

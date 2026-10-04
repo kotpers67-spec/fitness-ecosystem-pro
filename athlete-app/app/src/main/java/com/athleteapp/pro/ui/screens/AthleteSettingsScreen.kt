@@ -963,10 +963,10 @@ fun AthleteSettingsScreen(
                                         if (data?.isUpdateAvailable == true) {
                                             updateStatusText = "Доступно новое обновление: v${data.latestVersion}!"
                                         } else {
-                                            updateStatusText = "У вас установлена актуальная версия Athlete Pro (v1.0.5)."
+                                            updateStatusText = "У вас установлена актуальная версия Athlete Pro (v1.0.8)."
                                         }
                                     } else {
-                                        updateStatusText = "У вас установлена актуальная версия (v1.0.5)."
+                                        updateStatusText = "У вас установлена актуальная версия (v1.0.8)."
                                     }
                                 }
                             },

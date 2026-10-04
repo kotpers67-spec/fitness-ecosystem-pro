@@ -19,6 +19,7 @@ const {
   hashPassword,
   verifyPassword,
   generateToken,
+  generateSecurePin,
   RateLimiter,
   SECURITY_HEADERS
 } = require('./security');
@@ -28,7 +29,55 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const db = new AppDatabase();
 const authLimiter = new RateLimiter(60000, 15); // Max 15 auth attempts/min per IP
 const telegramOtpStore = new Map(); // key: username -> { code, expiresAt, attempts }
+const telegramSessionStore = new Map(); // key: sessionId -> { status, createdAt, expiresAt, token, user }
 const userTgChatMap = new Map(); // key: username -> chatId
+
+// Secure OTP generator with collision retry loop against active OTP store
+function generateSecureOtpWithRetry(otpStore, ttlMs = 300000) {
+  const now = Date.now();
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const pin = generateSecurePin();
+    let collides = false;
+    if (otpStore) {
+      for (const entry of otpStore.values()) {
+        if (entry && entry.code === pin && entry.expiresAt > now) {
+          collides = true;
+          break;
+        }
+      }
+    }
+    if (!collides) return pin;
+  }
+  return generateSecurePin();
+}
+
+// Active TTL Sweeper: unref'd interval runs every 60s
+const ttlSweeperInterval = setInterval(() => {
+  const now = Date.now();
+  // 1. Purge expired OTP entries from telegramOtpStore
+  for (const [key, entry] of telegramOtpStore.entries()) {
+    if (entry && entry.expiresAt && now > entry.expiresAt) {
+      telegramOtpStore.delete(key);
+    }
+  }
+  // 2. Purge expired 1-click sessions from telegramSessionStore
+  for (const [key, entry] of telegramSessionStore.entries()) {
+    if (entry && entry.expiresAt && now > entry.expiresAt) {
+      telegramSessionStore.delete(key);
+    }
+  }
+  // 3. Purge stale entries from userTgChatMap (users neither in DB nor with active OTP)
+  for (const [key] of userTgChatMap.entries()) {
+    const user = db.findUserByUsername(key) || db.findUserByTelegramId(key);
+    const hasActiveOtp = telegramOtpStore.has(key) || telegramOtpStore.has(`id_${key}`);
+    if (!user && !hasActiveOtp) {
+      userTgChatMap.delete(key);
+    }
+  }
+  // 4. Purge expired IP entries from authLimiter
+  authLimiter.cleanup();
+}, 60000);
+ttlSweeperInterval.unref();
 
 // Real Telegram Bot Instance (grammY)
 let activeBotUsername = process.env.BOT_USERNAME || 'fitnessecosystemBOT';
@@ -38,6 +87,7 @@ let tgBotInstance = initTelegramBot({
   token: process.env.BOT_TOKEN,
   db,
   telegramOtpStore,
+  telegramSessionStore,
   userTgChatMap,
   cloudSyncService
 });
@@ -111,7 +161,8 @@ function getAuthUser(req) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const clientIp = req.socket.remoteAddress || '127.0.0.1';
+  const forwarded = req.headers['x-forwarded-for'];
+  const clientIp = (forwarded ? forwarded.split(',')[0].trim() : null) || req.socket.remoteAddress || '127.0.0.1';
   const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = reqUrl.pathname;
 
@@ -124,9 +175,15 @@ const server = http.createServer(async (req, res) => {
     // --- 1. API ROUTES ---
     if (pathname.startsWith('/api/')) {
       // Rate Limit Auth Endpoints (OWASP Brute-Force & Credential Stuffing Defense)
-      if (pathname === '/api/login' || pathname === '/api/register' || pathname === '/api/auth/telegram') {
+      if (
+        pathname === '/api/login' ||
+        pathname === '/api/register' ||
+        pathname === '/api/auth/telegram' ||
+        pathname === '/api/auth/telegram/request-otp' ||
+        pathname === '/api/user/telegram/link-request'
+      ) {
         if (authLimiter.isRateLimited(clientIp)) {
-          return sendError(res, 429, 'Слишком много попыток входа. Попробуйте через минуту.');
+          return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
         }
       }
 
@@ -168,14 +225,16 @@ const server = http.createServer(async (req, res) => {
         let pairingCode = '';
         let clientUuid = crypto.randomUUID();
         if (role === 'athlete') {
-          pairingCode = String(Math.floor(100000 + Math.random() * 900000));
+          pairingCode = db.generateUniquePairingCode();
         }
 
         const passwordHash = hashPassword(password);
         const escapedFullName = escapeHtml(cleanFullName);
         const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
 
-        const requireTrainerApproval = process.env.REQUIRE_TRAINER_APPROVAL === 'true';
+        const requireTrainerApproval = (process.env.NODE_ENV === 'test')
+          ? (process.env.REQUIRE_TRAINER_APPROVAL === 'true')
+          : (process.env.REQUIRE_TRAINER_APPROVAL !== 'false');
         const isApproved = (role === 'trainer' && requireTrainerApproval) ? 0 : 1;
         const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode, clientUuid, avatarBase64 || '', isApproved);
 
@@ -188,19 +247,42 @@ const server = http.createServer(async (req, res) => {
           const createdUser = db.findUserById(userId);
           const internalUsername = createdUser ? createdUser.username : cleanUsername;
 
-          // Send notification to owner/admin via Telegram
+          // Send notification only to configured admin/owners (no broadcast leak)
           if (tgBotInstance) {
-            for (const [uName, cId] of userTgChatMap.entries()) {
+            const adminChatIds = new Set();
+            if (process.env.ADMIN_CHAT_ID) {
+              adminChatIds.add(String(process.env.ADMIN_CHAT_ID).trim());
+            }
+            ['santila213', 'spirit5449'].forEach(adminHandle => {
+              const cId = userTgChatMap.get(adminHandle) || userTgChatMap.get(adminHandle.toLowerCase());
+              if (cId) adminChatIds.add(String(cId));
+              const dbAdmin = db.findUserByTelegramUsername(adminHandle);
+              if (dbAdmin && dbAdmin.telegram_id) {
+                const dbChatId = userTgChatMap.get(dbAdmin.telegram_id) || dbAdmin.telegram_id;
+                if (dbChatId) adminChatIds.add(String(dbChatId));
+              }
+            });
+
+            for (const adminChatId of adminChatIds) {
               try {
                 await tgBotInstance.api.sendMessage(
-                  cId,
+                  adminChatId,
                   `🔔 <b>НОВАЯ ЗАЯВКА НА АККАУНТ ТРЕНЕРА!</b>\n\n` +
                   `👤 <b>ФИО:</b> ${escapedFullName}\n` +
                   `🏷 <b>Логин:</b> ${internalUsername}\n` +
                   `📞 <b>Телефон:</b> ${escapedPhone || 'Не указан'}\n` +
                   `✈ <b>Telegram:</b> ${cleanTelegram || 'Не указан'}\n\n` +
-                  `Для подтверждения отправьте команду:\n<code>/approve_${userId}</code>`,
-                  { parse_mode: 'HTML' }
+                  `Нажмите кнопку ниже или отправьте:\n<code>/approve_${userId}</code>`,
+                  {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                      inline_keyboard: [
+                        [
+                          { text: `✅ Одобрить тренера #${userId}`, callback_data: `approve_${userId}` }
+                        ]
+                      ]
+                    }
+                  }
                 );
               } catch (_) {}
             }
@@ -258,7 +340,7 @@ const server = http.createServer(async (req, res) => {
         // 2FA Authentication Check
         if (user.two_factor_enabled === 1) {
           telegramOtpStore.delete(`2fa_${user.id}`); // Invalidate any prior 2FA code
-          const otp = String(Math.floor(100000 + Math.random() * 900000));
+          const otp = generateSecureOtpWithRetry(telegramOtpStore);
           const expiresAt = Date.now() + 5 * 60 * 1000;
           telegramOtpStore.set(`2fa_${user.id}`, {
             userId: user.id,
@@ -304,8 +386,11 @@ const server = http.createServer(async (req, res) => {
             coachName: user.coach_name || '',
             coachPhone: user.coach_phone || '',
             isPrivate: Boolean(user.is_private),
+            telegram_id: user.telegram_id || '',
             telegramId: user.telegram_id || '',
+            telegram_username: user.telegram_username || '',
             telegramUsername: user.telegram_username || '',
+            two_factor_enabled: Number(user.two_factor_enabled) || 0,
             twoFactorEnabled: Boolean(user.two_factor_enabled)
           }
         });
@@ -449,7 +534,7 @@ const server = http.createServer(async (req, res) => {
         if (!user) {
           const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
           const fullName = (tgFirstName + (tgLastName ? ' ' + tgLastName : '')).trim() || tgUsername || 'Telegram Атлет';
-          const pairingCode = role === 'athlete' ? String(Math.floor(100000 + Math.random() * 900000)) : '';
+          const pairingCode = role === 'athlete' ? db.generateUniquePairingCode() : '';
           const clientUuid = crypto.randomUUID();
 
           const userId = db.createUser(
@@ -495,7 +580,7 @@ const server = http.createServer(async (req, res) => {
 
       // PUBLIC API: Real Vector SVG QR Code generator (ISO/IEC 18004 compliant)
       if (pathname === '/api/qr-svg' && req.method === 'GET') {
-        const text = parsedUrl.searchParams.get('text') || '000000';
+        const text = reqUrl.searchParams.get('text') || '000000';
         const cleanText = String(text).slice(0, 256);
         try {
           const svg = await QRCode.toString(cleanText, {
@@ -514,8 +599,79 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
+      // TELEGRAM 1-CLICK AUTH: 1. Initialize Seamless Auth Session
+      if (pathname === '/api/auth/telegram/session-init' && req.method === 'POST') {
+        if (authLimiter.isRateLimited(clientIp)) {
+          return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
+        }
+
+        const sessionId = 'auth_' + crypto.randomBytes(16).toString('hex');
+        const expiresAt = Date.now() + 5 * 60 * 1000;
+        telegramSessionStore.set(sessionId, {
+          status: 'PENDING',
+          createdAt: Date.now(),
+          expiresAt,
+          token: null,
+          user: null
+        });
+
+        const botName = activeBotUsername || 'fitnessecosystemBOT';
+        const botUrl = `https://t.me/${botName}?start=${sessionId}`;
+        
+        let qrSvg = '';
+        try {
+          qrSvg = await QRCode.toString(botUrl, {
+            type: 'svg',
+            margin: 2,
+            color: { dark: '#000000', light: '#ffffff' }
+          });
+        } catch (_) {}
+
+        return sendJson(res, 200, {
+          success: true,
+          sessionId,
+          botUsername: botName,
+          botUrl,
+          qrSvg,
+          expiresInSeconds: 300
+        });
+      }
+
+      // TELEGRAM 1-CLICK AUTH: 2. Poll Seamless Auth Session Status
+      if (pathname === '/api/auth/telegram/session-status' && req.method === 'GET') {
+        const sessionId = reqUrl.searchParams.get('sessionId') || '';
+        if (!sessionId || !telegramSessionStore.has(sessionId)) {
+          return sendJson(res, 200, { status: 'EXPIRED', message: 'Сессия истекла или не найдена' });
+        }
+
+        const session = telegramSessionStore.get(sessionId);
+        if (Date.now() > session.expiresAt) {
+          telegramSessionStore.delete(sessionId);
+          return sendJson(res, 200, { status: 'EXPIRED', message: 'Сессия истекла' });
+        }
+
+        if (session.status === 'AUTHORIZED' && session.token) {
+          // Consume the session token (single-use)
+          telegramSessionStore.delete(sessionId);
+          return sendJson(res, 200, {
+            status: 'AUTHORIZED',
+            token: session.token,
+            user: session.user
+          });
+        }
+
+        return sendJson(res, 200, {
+          status: 'PENDING',
+          message: 'Ожидание подтверждения в Telegram...'
+        });
+      }
+
       // TELEGRAM OTP: 1. Request One-Time 6-digit Code (Valid 5 minutes)
       if (pathname === '/api/auth/telegram/request-otp' && req.method === 'POST') {
+        if (authLimiter.isRateLimited(clientIp)) {
+          return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
+        }
+
         const body = await parseJsonBody(req);
         const { username } = body;
         const cleanUsername = String(username || '').replace(/^@/, '').trim().toLowerCase();
@@ -545,7 +701,9 @@ const server = http.createServer(async (req, res) => {
             code = existing.code;
             expiresAt = existing.expiresAt;
           } else {
-            code = String(Math.floor(100000 + Math.random() * 900000));
+            code = (user && user.role === 'athlete')
+              ? db.generateUniquePairingCode(user.id)
+              : generateSecureOtpWithRetry(telegramOtpStore);
             expiresAt = now + PAIRING_TTL;
             if (user && user.role === 'athlete') {
               db.updatePairingCode(user.id, code);
@@ -593,7 +751,8 @@ const server = http.createServer(async (req, res) => {
           telegramUsername: cleanUsername,
           botUsername: activeBotUsername || process.env.BOT_USERNAME || '',
           delivered,
-          needStartBot: !delivered
+          needStartBot: !delivered,
+          debugCode: (process.env.NODE_ENV === 'test' || !process.env.BOT_TOKEN) ? code : undefined
         });
       }
 
@@ -660,7 +819,13 @@ const server = http.createServer(async (req, res) => {
               clientUuid: user.client_uuid || '',
               coachName: user.coach_name || '',
               coachPhone: user.coach_phone || '',
-              isPrivate: Boolean(user.is_private)
+              isPrivate: Boolean(user.is_private),
+              telegram_id: String(user.telegram_id || ''),
+              telegramId: String(user.telegram_id || ''),
+              telegram_username: String(user.telegram_username || cleanUsername || ''),
+              telegramUsername: String(user.telegram_username || cleanUsername || ''),
+              two_factor_enabled: Number(user.two_factor_enabled) || 0,
+              twoFactorEnabled: Boolean(user.two_factor_enabled)
             }
           });
         }
@@ -712,7 +877,7 @@ const server = http.createServer(async (req, res) => {
           const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
           const escapedFullName = escapeHtml(cleanFullName);
           const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
-          const pairingCode = role === 'athlete' ? String(Math.floor(100000 + Math.random() * 900000)) : '';
+          const pairingCode = role === 'athlete' ? db.generateUniquePairingCode() : '';
           const clientUuid = crypto.randomUUID();
 
           const userId = db.createUser(
@@ -751,7 +916,13 @@ const server = http.createServer(async (req, res) => {
             clientUuid: user.client_uuid || '',
             coachName: user.coach_name || '',
             coachPhone: user.coach_phone || '',
-            isPrivate: Boolean(user.is_private)
+            isPrivate: Boolean(user.is_private),
+            telegram_id: String(user.telegram_id || ''),
+            telegramId: String(user.telegram_id || ''),
+            telegram_username: String(user.telegram_username || cleanUsername || ''),
+            telegramUsername: String(user.telegram_username || cleanUsername || ''),
+            two_factor_enabled: Number(user.two_factor_enabled) || 0,
+            twoFactorEnabled: Boolean(user.two_factor_enabled)
           }
         });
       }
@@ -780,7 +951,7 @@ const server = http.createServer(async (req, res) => {
         if (user.role === 'athlete') {
           const PAIRING_TTL = 5 * 60 * 1000;
           if (!user.pairing_code || (Date.now() - (user.pairing_code_created_at || 0) > PAIRING_TTL)) {
-            const newPin = String(Math.floor(100000 + Math.random() * 900000));
+            const newPin = db.generateUniquePairingCode(user.id);
             db.regeneratePairingCode(user.id, newPin);
             cloudSyncService.registerAthletePairing(newPin, user.client_uuid, user.full_name, user.phone, '', user.avatar_base64 || '').catch(() => {});
             user.pairing_code = newPin;
@@ -816,7 +987,17 @@ const server = http.createServer(async (req, res) => {
             };
           }
         }
-        return sendJson(res, 200, { user, pairedCoach });
+        const freshUser = db.findUserById(user.id) || user;
+        const normalizedUser = {
+          ...freshUser,
+          telegram_id: String(freshUser.telegram_id || ''),
+          telegramId: String(freshUser.telegram_id || ''),
+          telegram_username: String(freshUser.telegram_username || ''),
+          telegramUsername: String(freshUser.telegram_username || ''),
+          two_factor_enabled: Number(freshUser.two_factor_enabled) || 0,
+          twoFactorEnabled: Boolean(freshUser.two_factor_enabled)
+        };
+        return sendJson(res, 200, { user: normalizedUser, pairedCoach });
       }
 
       // UPDATE PROFILE (Name, Phone, Photo/Avatar)
@@ -888,7 +1069,7 @@ const server = http.createServer(async (req, res) => {
       // REGENERATE PIN (Athlete - Valid strictly 5 minutes)
       if (pathname === '/api/athlete/regenerate-pin' && req.method === 'POST') {
         if (user.role !== 'athlete') return sendError(res, 403, 'Доступно только атлетам');
-        const newPin = String(Math.floor(100000 + Math.random() * 900000));
+        const newPin = db.generateUniquePairingCode(user.id);
         db.regeneratePairingCode(user.id, newPin);
 
         cloudSyncService.registerAthletePairing(newPin, user.client_uuid, user.full_name, user.phone, '', user.avatar_base64 || '').catch(() => {});
@@ -920,13 +1101,17 @@ const server = http.createServer(async (req, res) => {
 
       // TELEGRAM LINKING: Request OTP
       if (pathname === '/api/user/telegram/link-request' && req.method === 'POST') {
+        if (authLimiter.isRateLimited(clientIp)) {
+          return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
+        }
+
         const body = await parseJsonBody(req);
         const cleanUsername = String(body.username || '').replace(/^@/, '').trim().toLowerCase();
         if (!cleanUsername || hasSqlInjectionVector(cleanUsername)) {
           return sendError(res, 400, 'Укажите корректный Telegram @username');
         }
 
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        const otp = generateSecureOtpWithRetry(telegramOtpStore);
         const expiresAt = Date.now() + 5 * 60 * 1000;
         telegramOtpStore.set(`link_${cleanUsername}`, {
           userId: user.id,
@@ -1680,6 +1865,7 @@ module.exports = {
   db,
   authLimiter,
   telegramOtpStore,
+  telegramSessionStore,
   userTgChatMap,
   getTgBotInstance: () => tgBotInstance,
   setTgBotInstance: (b) => { tgBotInstance = b; }

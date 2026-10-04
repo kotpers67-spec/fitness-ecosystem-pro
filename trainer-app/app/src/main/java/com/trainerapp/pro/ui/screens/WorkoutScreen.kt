@@ -1,5 +1,6 @@
 package com.trainerapp.pro.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -195,6 +196,9 @@ fun WorkoutScreen(
                     )
                 }
             }
+
+            // Athlete Restrictions / Injuries Banner (Swiss Warning Styling)
+            AthleteRestrictionsBanner(notes = activeClient?.notes)
 
             // 2. Горизонтальная лента плиток упражнений (Max 8 плиток, строго по эскизу 2)
             Text(
@@ -426,6 +430,7 @@ fun WorkoutScreen(
     if (showAddExerciseDialog) {
         AddExerciseToSessionDialog(
             exercises = exercises,
+            athleteNotes = activeClient?.notes,
             onDismiss = { showAddExerciseDialog = false },
             onSelect = { exerciseId ->
                 viewModel.addExerciseToSession(exerciseId)
@@ -659,6 +664,7 @@ fun SetRowItem(
 @Composable
 fun AddExerciseToSessionDialog(
     exercises: List<ExerciseEntity>,
+    athleteNotes: String? = null,
     onDismiss: () -> Unit,
     onSelect: (Long) -> Unit,
     onViewStats: (Long) -> Unit
@@ -677,7 +683,38 @@ fun AddExerciseToSessionDialog(
         onDismissRequest = onDismiss,
         title = { Text("Добавить упражнение", fontWeight = FontWeight.Bold) },
         text = {
-            Column(modifier = Modifier.fillMaxWidth().height(420.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().height(440.dp)) {
+                if (!athleteNotes.isNullOrBlank()) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF231C13),
+                        border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Ограничения: $athleteNotes",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFF59E0B),
+                                maxLines = 2
+                            )
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -737,4 +774,91 @@ fun AddExerciseToSessionDialog(
             TextButton(onClick = onDismiss) { Text("Отмена") }
         }
     )
+}
+
+/**
+ * Athlete Restrictions / Injuries warning banner with Swiss Clean styling.
+ * Displays athlete health contraindications prominently with high contrast and clean typography.
+ * Gracefully hides if notes/restrictions are absent or blank.
+ */
+@Composable
+fun AthleteRestrictionsBanner(
+    notes: String?,
+    modifier: Modifier = Modifier
+) {
+    if (notes.isNullOrBlank()) return
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF231C13)
+        ),
+        border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.7f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFF59E0B).copy(alpha = 0.22f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = "ОГРАНИЧЕНИЯ / ТРАВМЫ",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.8.sp,
+                            color = Color(0xFFF59E0B)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "ПРОТИВОПОКАЗАНИЯ",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFF59E0B).copy(alpha = 0.8f),
+                    letterSpacing = 0.5.sp
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = notes.trim(),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFFDFDFD),
+                lineHeight = 18.sp
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                text = "Учитывайте противопоказания при подборе упражнений и рабочих весов",
+                fontSize = 10.sp,
+                color = Color(0xFFD4A373)
+            )
+        }
+    }
 }

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trainerapp.pro.ui.MainViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun TrainerAuthScreen(viewModel: MainViewModel) {
@@ -47,6 +48,11 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
     var otpInput by remember { mutableStateOf("") }
     var otpError by remember { mutableStateOf<String?>(null) }
     var otpTimerSeconds by remember { mutableIntStateOf(300) }
+    val scope = rememberCoroutineScope()
+    var isLoggingIn by remember { mutableStateOf(false) }
+    var isVerifyingOtp by remember { mutableStateOf(false) }
+    var isCheckingApproval by remember { mutableStateOf(false) }
+    var approvalCheckNotice by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(show2FaDialog) {
         if (show2FaDialog) {
@@ -266,18 +272,37 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(20.dp))
 
                     Button(
+                        enabled = !isLoggingIn,
                         onClick = {
                             errorMessage = null
                             if (isLoginMode) {
                                 if (username.isBlank() || password.isBlank()) {
                                     errorMessage = "Введите логин и пароль"
                                 } else {
-                                    val validCreds = viewModel.checkCredentials(username, password)
-                                    if (!validCreds) {
-                                        errorMessage = "Неверный логин или пароль"
-                                    } else if (!viewModel.isApproved) {
-                                        errorMessage = "⏳ Аккаунт тренера находится на рассмотрении (до 72 часов). Свяжитесь с владельцами: @SantiLA213 или @Spirit5449"
-                                    } else {
+                                    scope.launch {
+                                        isLoggingIn = true
+                                        val validCreds = viewModel.checkCredentials(username, password)
+                                        if (!validCreds) {
+                                            errorMessage = "Неверный логин или пароль"
+                                            isLoggingIn = false
+                                            return@launch
+                                        }
+
+                                        // Remote approval check if not yet approved locally
+                                        if (!viewModel.isApproved) {
+                                            val approved = viewModel.checkRemoteApprovalStatus(username, password)
+                                            if (approved) {
+                                                viewModel.isApproved = true
+                                            }
+                                        }
+
+                                        if (!viewModel.isApproved) {
+                                            errorMessage = "⏳ Аккаунт тренера находится на рассмотрении (до 72 часов). Свяжитесь с владельцами: @SantiLA213 или @Spirit5449"
+                                            showPendingApprovalDialog = true
+                                            isLoggingIn = false
+                                            return@launch
+                                        }
+
                                         if (viewModel.is2FaEnabled) {
                                             show2FaDialog = true
                                             otpInput = ""
@@ -286,6 +311,7 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                                         } else {
                                             viewModel.completeLogin()
                                         }
+                                        isLoggingIn = false
                                     }
                                 }
                             } else {
@@ -316,10 +342,18 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                             contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
-                        Text(
-                            text = if (isLoginMode) "Войти" else "Зарегистрироваться",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
+                        if (isLoggingIn) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text(
+                                text = if (isLoginMode) "Войти" else "Зарегистрироваться",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
                     }
                 }
             }
@@ -421,22 +455,35 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
             },
             confirmButton = {
                 Button(
+                    enabled = !isVerifyingOtp,
                     onClick = {
                         if (otpTimerSeconds <= 0) {
                             otpError = "Срок действия кода истёк (5 минут)"
                         } else if (otpInput.length != 6) {
                             otpError = "Введите ровно 6 цифр"
                         } else {
-                            val ok = viewModel.verify2FaOtp(otpInput)
-                            if (ok) {
-                                show2FaDialog = false
-                            } else {
-                                otpError = "Неверный код подтверждения"
+                            scope.launch {
+                                isVerifyingOtp = true
+                                val ok = viewModel.verify2FaOtpRemote(otpInput, username)
+                                isVerifyingOtp = false
+                                if (ok) {
+                                    show2FaDialog = false
+                                } else {
+                                    otpError = "Неверный код подтверждения"
+                                }
                             }
                         }
                     }
                 ) {
-                    Text("Подтвердить")
+                    if (isVerifyingOtp) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Подтвердить")
+                    }
                 }
             },
             dismissButton = {
@@ -480,6 +527,42 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2AABEE))
                     ) {
                         Text("💬 Написать @Spirit5449", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        enabled = !isCheckingApproval,
+                        onClick = {
+                            scope.launch {
+                                isCheckingApproval = true
+                                val approved = viewModel.checkRemoteApprovalStatus(username, password)
+                                isCheckingApproval = false
+                                if (approved) {
+                                    approvalCheckNotice = "✅ Аккаунт подтвержден! Теперь вы можете войти."
+                                    showPendingApprovalDialog = false
+                                    isLoginMode = true
+                                    errorMessage = null
+                                } else {
+                                    approvalCheckNotice = "Заявка всё ещё на рассмотрении (до 72 часов)."
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        if (isCheckingApproval) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text("🔄 Проверить статус одобрения", fontWeight = FontWeight.Bold)
+                    }
+
+                    if (approvalCheckNotice != null) {
+                        Text(
+                            text = approvalCheckNotice ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             },

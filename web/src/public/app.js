@@ -94,6 +94,13 @@
     regPhone: document.getElementById('reg-phone'),
     btnTelegramAuth: document.getElementById('btn-telegram-auth'),
     dialogTelegramAuth: document.getElementById('dialog-telegram-auth'),
+    tgStepOneclick: document.getElementById('tg-step-oneclick'),
+    btnTgOneclickOpen: document.getElementById('btn-tg-oneclick-open'),
+    tgOneclickStatusText: document.getElementById('tg-oneclick-status-text'),
+    tgOneclickQrContainer: document.getElementById('tg-oneclick-qr-container'),
+    tgOneclickQrSvg: document.getElementById('tg-oneclick-qr-svg'),
+    btnToggleTgManualCode: document.getElementById('btn-toggle-tg-manual-code'),
+    btnTgBackToOneclick: document.getElementById('btn-tg-back-to-oneclick'),
     tgStepRequest: document.getElementById('tg-step-request'),
     tgStepVerify: document.getElementById('tg-step-verify'),
     tgStepProfile: document.getElementById('tg-step-profile'),
@@ -1185,10 +1192,26 @@
     } catch (_) {}
   }
 
+  function normalizeUser(u) {
+    if (!u) return u;
+    const tgUsername = u.telegram_username || u.telegramUsername || (u.username && u.username.startsWith('tg_') ? u.username.replace(/^tg_/, '') : '');
+    const tgId = u.telegram_id || u.telegramId || '';
+    const is2Fa = Boolean(u.two_factor_enabled === 1 || u.two_factor_enabled === true || u.twoFactorEnabled);
+    u.telegram_username = tgUsername;
+    u.telegramUsername = tgUsername;
+    u.telegram_id = tgId;
+    u.telegramId = tgId;
+    u.two_factor_enabled = is2Fa ? 1 : 0;
+    u.twoFactorEnabled = is2Fa;
+    return u;
+  }
+
   function renderTelegramAnd2FAStatus(role) {
     if (!state.user) return;
-    const isTgLinked = Boolean(state.user.telegram_username || state.user.telegram_id || (state.user.username && state.user.username.startsWith('tg_')));
-    const tgUsername = state.user.telegram_username || (state.user.username.startsWith('tg_') ? state.user.username.replace(/^tg_/, '') : '');
+    normalizeUser(state.user);
+    const tgUsername = state.user.telegram_username;
+    const tgId = state.user.telegram_id;
+    const isTgLinked = Boolean(tgUsername || tgId || (state.user.username && state.user.username.startsWith('tg_')));
 
     const statusEl = role === 'athlete' ? el.athleteTgStatus : el.trainerTgStatus;
     const toggleEl = role === 'athlete' ? el.athlete2faToggle : el.trainer2faToggle;
@@ -1196,7 +1219,7 @@
 
     if (statusEl) {
       if (isTgLinked) {
-        statusEl.textContent = `@${tgUsername || 'привязан'}`;
+        statusEl.textContent = tgUsername ? `@${tgUsername}` : (tgId ? `ID: ${tgId}` : 'Привязан');
         statusEl.classList.add('linked');
       } else {
         statusEl.textContent = 'Не привязан';
@@ -1205,12 +1228,13 @@
     }
 
     if (btnLink) {
-      btnLink.textContent = isTgLinked ? '✓ Telegram привязан' : '✈ Привязать Telegram';
-      btnLink.disabled = isTgLinked;
+      btnLink.textContent = isTgLinked ? '🔄 Сменить Telegram' : '✈ Привязать Telegram';
+      btnLink.disabled = false;
     }
 
     if (toggleEl) {
-      toggleEl.checked = Boolean(state.user.two_factor_enabled || state.user.twoFactorEnabled);
+      toggleEl.checked = Boolean(state.user.two_factor_enabled);
+      toggleEl.disabled = !isTgLinked;
     }
   }
 
@@ -1717,6 +1741,28 @@
           if (res.deepLink) {
             window.open(res.deepLink, '_blank');
             showToast('Открываем Telegram бота... Нажмите START для привязки', 'info');
+
+            // Automatic polling while user is in Telegram
+            if (state.linkPollingInterval) clearInterval(state.linkPollingInterval);
+            let pollAttempts = 0;
+            state.linkPollingInterval = setInterval(async () => {
+              pollAttempts++;
+              if (pollAttempts > 60 || !state.token) {
+                clearInterval(state.linkPollingInterval);
+                return;
+              }
+              try {
+                const check = await api('/api/me');
+                if (check && check.user && (check.user.telegram_id || check.user.telegram_username)) {
+                  clearInterval(state.linkPollingInterval);
+                  state.user = normalizeUser(check.user);
+                  el.dialogLinkTelegram?.close();
+                  if (state.user.role === 'athlete') renderAthleteProfile();
+                  else renderTrainerSettings();
+                  showToast('✅ Telegram успешно привязан!', 'success');
+                }
+              } catch (_) {}
+            }, 2000);
           } else if (res.token) {
             showToast(`Токен: ${res.token}. Отправьте в бота: /link ${res.token}`, 'info');
           }
@@ -1814,9 +1860,13 @@
     if (el.athlete2faToggle) el.athlete2faToggle.onchange = () => handle2faToggle(el.athlete2faToggle);
     if (el.trainer2faToggle) el.trainer2faToggle.onchange = () => handle2faToggle(el.trainer2faToggle);
 
-    // Register Form Submit
     el.formRegister.onsubmit = async (e) => {
       e.preventDefault();
+      if (state.isRegistering) return;
+      state.isRegistering = true;
+      const btnSubmit = document.getElementById('btn-submit-register');
+      if (btnSubmit) btnSubmit.disabled = true;
+
       const username = el.regUsername.value.trim();
       const fullName = el.regFullname.value.trim();
       const phone = el.regPhone.value.trim();
@@ -1861,19 +1911,52 @@
         saveAuthToken(data.token);
         setupAppForRole(data.user.role);
         showToast('Аккаунт атлета успешно создан!', 'success');
-      } catch {}
+      } catch {} finally {
+        state.isRegistering = false;
+        if (btnSubmit) btnSubmit.disabled = false;
+      }
     };
 
-    // Telegram 3-Step OTP Authentication Flow
+    // Telegram 1-Click & 3-Step OTP Authentication Flow
     function resetTgAuthModal() {
       if (state.tgTimerInterval) {
         clearInterval(state.tgTimerInterval);
         state.tgTimerInterval = null;
       }
-      if (el.tgStepRequest) el.tgStepRequest.style.display = 'block';
+      if (state.tgSessionPollInterval) {
+        clearInterval(state.tgSessionPollInterval);
+        state.tgSessionPollInterval = null;
+      }
+      if (el.tgStepOneclick) el.tgStepOneclick.style.display = 'block';
+      if (el.tgStepRequest) el.tgStepRequest.style.display = 'none';
       if (el.tgStepVerify) el.tgStepVerify.style.display = 'none';
       if (el.tgStepProfile) el.tgStepProfile.style.display = 'none';
       if (el.tgInputCode) el.tgInputCode.value = '';
+      if (el.tgOneclickStatusText) el.tgOneclickStatusText.textContent = 'Ожидание перехода в Telegram...';
+    }
+
+    function startOneClickPolling(sessionId) {
+      if (state.tgSessionPollInterval) clearInterval(state.tgSessionPollInterval);
+      state.tgSessionPollInterval = setInterval(async () => {
+        try {
+          const res = await api(`/api/auth/telegram/session-status?sessionId=${encodeURIComponent(sessionId)}`);
+          if (res.status === 'AUTHORIZED' && res.token) {
+            clearInterval(state.tgSessionPollInterval);
+            state.tgSessionPollInterval = null;
+            state.token = res.token;
+            state.user = res.user;
+            saveAuthToken(res.token);
+            resetTgAuthModal();
+            el.dialogTelegramAuth?.close();
+            setupAppForRole(res.user.role);
+            showToast(`Вход выполнен в 1 клик: ${res.user.fullName || res.user.username}!`, 'success');
+          } else if (res.status === 'EXPIRED') {
+            clearInterval(state.tgSessionPollInterval);
+            state.tgSessionPollInterval = null;
+            if (el.tgOneclickStatusText) el.tgOneclickStatusText.textContent = 'Срок действия сессии истёк. Нажмите «Открыть Telegram» заново.';
+          }
+        } catch (_) {}
+      }, 1000);
     }
 
     function startTgTimer(durationSeconds = 300) {
@@ -1901,10 +1984,10 @@
       state.tgTimerInterval = setInterval(updateBadge, 1000);
     }
 
-    // Telegram Fast Auth Button
+    // Telegram Fast Auth Button (1-Click Primary Flow)
     if (el.btnTelegramAuth) {
       el.btnTelegramAuth.onclick = async () => {
-        // Mini App auto-login if running inside Telegram
+        // Mini App auto-login if running inside Telegram WebApp
         if (window.Telegram?.WebApp?.initData) {
           showToast('Авторизация через Telegram Mini App...', 'info');
           try {
@@ -1921,12 +2004,53 @@
           } catch (_) {}
         }
 
-        // Open 3-step OTP dialog
+        // Initialize 1-click session
         resetTgAuthModal();
         if (el.dialogTelegramAuth) {
           el.dialogTelegramAuth.showModal();
-          el.tgInputUsername?.focus();
         }
+
+        try {
+          const res = await api('/api/auth/telegram/session-init', { method: 'POST' });
+          if (res.sessionId && res.botUrl) {
+            state.tgSessionId = res.sessionId;
+            if (el.btnTgOneclickOpen) {
+              el.btnTgOneclickOpen.href = res.botUrl;
+              el.btnTgOneclickOpen.onclick = (e) => {
+                // Ensure link opens in telegram app/browser
+                window.open(res.botUrl, '_blank');
+              };
+            }
+            if (res.qrSvg && el.tgOneclickQrSvg && el.tgOneclickQrContainer) {
+              el.tgOneclickQrSvg.innerHTML = res.qrSvg;
+              el.tgOneclickQrContainer.style.display = 'block';
+            }
+            startOneClickPolling(res.sessionId);
+          }
+        } catch (_) {
+          showToast('Не удалось инициализировать сессию входа. Используйте ручной ввод.', 'error');
+        }
+      };
+    }
+
+    // Toggle between 1-click and manual code entry
+    if (el.btnToggleTgManualCode) {
+      el.btnToggleTgManualCode.onclick = () => {
+        if (state.tgSessionPollInterval) {
+          clearInterval(state.tgSessionPollInterval);
+          state.tgSessionPollInterval = null;
+        }
+        if (el.tgStepOneclick) el.tgStepOneclick.style.display = 'none';
+        if (el.tgStepRequest) el.tgStepRequest.style.display = 'block';
+        el.tgInputUsername?.focus();
+      };
+    }
+
+    if (el.btnTgBackToOneclick) {
+      el.btnTgBackToOneclick.onclick = () => {
+        if (el.tgStepRequest) el.tgStepRequest.style.display = 'none';
+        if (el.tgStepOneclick) el.tgStepOneclick.style.display = 'block';
+        if (state.tgSessionId) startOneClickPolling(state.tgSessionId);
       };
     }
 
@@ -2532,6 +2656,20 @@
     if (el.btnLogoutHeader) el.btnLogoutHeader.onclick = () => logout(true);
     if (el.btnLogoutAthlete) el.btnLogoutAthlete.onclick = () => logout(true);
     if (el.btnLogoutTrainer) el.btnLogoutTrainer.onclick = () => logout(true);
+
+    // Auto-refresh profile and 2FA status when returning from Telegram bot
+    window.addEventListener('focus', async () => {
+      if (state.token && state.user) {
+        try {
+          const fresh = await api('/api/me');
+          if (fresh && fresh.user) {
+            state.user = normalizeUser(fresh.user);
+            if (state.user.role === 'athlete') renderAthleteProfile();
+            else renderTrainerSettings();
+          }
+        } catch (_) {}
+      }
+    });
 
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {

@@ -1,9 +1,10 @@
+process.env.NODE_ENV = 'test';
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
-const { server, db, userTgChatMap } = require('../src/server');
-const { handleLinkToken, send2FAOtp, createOwnersKeyboard, OWNER_LINKS } = require('../src/bot');
+const { server, db, telegramSessionStore, userTgChatMap } = require('../src/server');
+const { handleLinkToken, send2FAOtp, createOwnersKeyboard, setupBotHandlers, OWNER_LINKS } = require('../src/bot');
 
 let baseUrl;
 let athleteToken = null;
@@ -86,8 +87,14 @@ describe('PIN 5-Min TTL & Telegram 2FA Authentication Test Suite', () => {
     trainerId = trRes.body.user.id;
   });
 
-  after(() => {
-    if (localServer) localServer.close();
+  after(async () => {
+    if (localServer) {
+      await new Promise(res => localServer.close(res));
+    }
+    if (db && typeof db.close === 'function') {
+      db.close();
+    }
+    setTimeout(() => process.exit(0), 100);
   });
 
   it('1. Pairing PIN has valid 5-min creation timestamp', async () => {
@@ -388,5 +395,58 @@ describe('PIN 5-Min TTL & Telegram 2FA Authentication Test Suite', () => {
     assert.equal(conflictAttempt.success, false);
     assert.equal(conflictAttempt.reason, 'already_linked_to_other');
     assert.ok(conflictMsg.includes('уже привязан к аккаунту'));
+  });
+
+  it('14. Seamless 1-Click Telegram Login: session-init and bot auth flow', async () => {
+    // 1. Initialize 1-click session
+    const initRes = await request('POST', '/api/auth/telegram/session-init');
+    assert.equal(initRes.statusCode, 200);
+    assert.ok(initRes.body.sessionId);
+    assert.ok(initRes.body.sessionId.startsWith('auth_'));
+    assert.ok(initRes.body.botUrl.includes(initRes.body.sessionId));
+
+    // 2. Poll initial status -> PENDING
+    const pollPending = await request('GET', `/api/auth/telegram/session-status?sessionId=${initRes.body.sessionId}`);
+    assert.equal(pollPending.statusCode, 200);
+    assert.equal(pollPending.body.status, 'PENDING');
+
+    // 3. Simulate bot receiving /start auth_<sessionId>
+    let botReplyText = '';
+    const commands = new Map();
+    const mockBot = {
+      command: (cmd, handler) => { commands.set(cmd, handler); },
+      hears: () => {},
+      on: () => {},
+      catch: () => {}
+    };
+    setupBotHandlers(mockBot, { db, telegramOtpStore: new Map(), telegramSessionStore, userTgChatMap, cloudSyncService: null });
+
+    const oneClickTgId = 991000000 + Math.floor(Math.random() * 99999);
+    const mockStartCtx = {
+      from: {
+        id: oneClickTgId,
+        username: 'oneclick_hero_' + Date.now(),
+        first_name: 'ОдинКлик',
+        last_name: 'Атлет'
+      },
+      chat: { id: oneClickTgId },
+      match: initRes.body.sessionId,
+      reply: async (msg) => { botReplyText = msg; }
+    };
+
+    await commands.get('start')(mockStartCtx);
+    assert.ok(botReplyText.includes('Вход в Fitness Ecosystem Pro выполнен в 1 клик'));
+
+    // 4. Poll status -> AUTHORIZED
+    const pollAuth = await request('GET', `/api/auth/telegram/session-status?sessionId=${initRes.body.sessionId}`);
+    assert.equal(pollAuth.statusCode, 200);
+    assert.equal(pollAuth.body.status, 'AUTHORIZED');
+    assert.ok(pollAuth.body.token);
+    assert.equal(pollAuth.body.user.fullName, 'ОдинКлик Атлет');
+
+    // 5. Subsequent poll -> EXPIRED (single-use consumption)
+    const pollConsumed = await request('GET', `/api/auth/telegram/session-status?sessionId=${initRes.body.sessionId}`);
+    assert.equal(pollConsumed.statusCode, 200);
+    assert.equal(pollConsumed.body.status, 'EXPIRED');
   });
 });
