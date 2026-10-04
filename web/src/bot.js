@@ -53,7 +53,7 @@ async function handleLinkToken(ctx, token, db, userTgChatMap) {
   const existing = db.findUserByTelegramId(tgId);
   if (existing && existing.id !== linkRecord.user_id) {
     await ctx.reply(
-      `⚠️ Этот Telegram аккаунт уже привязан к профилю <b>${existing.username}</b>.\n` +
+      `⚠️ Этот Telegram уже привязан к аккаунту <b>${existing.username}</b>.\n` +
       `Сначала отвяжите его в настройках того профиля.`,
       { parse_mode: 'HTML', reply_markup: createOwnersKeyboard() }
     );

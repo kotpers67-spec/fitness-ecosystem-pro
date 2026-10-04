@@ -50,10 +50,14 @@ const MIME_TYPES = {
 };
 
 function sendJson(res, statusCode, data) {
-  res.writeHead(statusCode, {
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     ...SECURITY_HEADERS
-  });
+  };
+  if (data && data.token) {
+    headers['Set-Cookie'] = `fit_token=${data.token}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  }
+  res.writeHead(statusCode, headers);
   res.end(JSON.stringify(data));
 }
 
@@ -82,11 +86,14 @@ function parseJsonBody(req) {
 }
 
 function getAuthUser(req) {
+  let token = null;
   const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7).trim();
+  } else if (req.headers['cookie']) {
+    const match = req.headers['cookie'].match(/(?:^|;\s*)fit_token=([^;]+)/);
+    if (match) token = match[1];
   }
-  const token = authHeader.slice(7).trim();
   if (!token) return null;
   return db.getUserByToken(token);
 }
@@ -114,10 +121,11 @@ const server = http.createServer(async (req, res) => {
       // REGISTER
       if (pathname === '/api/register' && req.method === 'POST') {
         const body = await parseJsonBody(req);
-        const { username, password, role, fullName, phone, avatarBase64 } = body;
+        const { username, password, role, fullName, phone, avatarBase64, telegram } = body;
         const cleanUsername = String(username || '').trim();
         const cleanFullName = String(fullName || '').trim();
         const cleanPhone = phone ? String(phone).trim() : '';
+        const cleanTelegram = telegram ? String(telegram).trim() : '';
 
         // Anti-Injection & Strict Validation
         if (!cleanUsername || !password || !role || !cleanFullName) {
@@ -156,7 +164,15 @@ const server = http.createServer(async (req, res) => {
         const isApproved = (role === 'trainer' && requireTrainerApproval) ? 0 : 1;
         const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode, clientUuid, avatarBase64 || '', isApproved);
 
-        if (role === 'trainer' && requireTrainerApproval) {
+        if (role === 'trainer') {
+          if (cleanTelegram) {
+            const tgHandle = cleanTelegram.replace(/^@/, '').toLowerCase();
+            db.linkTelegram(userId, 'tg_' + tgHandle, tgHandle);
+          }
+
+          const createdUser = db.findUserById(userId);
+          const internalUsername = createdUser ? createdUser.username : cleanUsername;
+
           // Send notification to owner/admin via Telegram
           if (tgBotInstance) {
             for (const [uName, cId] of userTgChatMap.entries()) {
@@ -165,8 +181,9 @@ const server = http.createServer(async (req, res) => {
                   cId,
                   `🔔 <b>НОВАЯ ЗАЯВКА НА АККАУНТ ТРЕНЕРА!</b>\n\n` +
                   `👤 <b>ФИО:</b> ${escapedFullName}\n` +
-                  `🏷 <b>Логин:</b> ${cleanUsername}\n` +
-                  `📞 <b>Телефон:</b> ${escapedPhone || 'Не указан'}\n\n` +
+                  `🏷 <b>Логин:</b> ${internalUsername}\n` +
+                  `📞 <b>Телефон:</b> ${escapedPhone || 'Не указан'}\n` +
+                  `✈ <b>Telegram:</b> ${cleanTelegram || 'Не указан'}\n\n` +
                   `Для подтверждения отправьте команду:\n<code>/approve_${userId}</code>`,
                   { parse_mode: 'HTML' }
                 );
@@ -174,11 +191,13 @@ const server = http.createServer(async (req, res) => {
             }
           }
 
-          return sendJson(res, 201, {
-            success: true,
-            pendingApproval: true,
-            message: 'Ваша заявка на создание аккаунта тренера принята. Если в течение 72 часов аккаунт не будет создан, обратитесь к владельцу в Telegram: @SantiLA213 или @Spirit5449'
-          });
+          if (requireTrainerApproval) {
+            return sendJson(res, 201, {
+              success: true,
+              pendingApproval: true,
+              message: '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.'
+            });
+          }
         }
 
         const token = generateToken();
@@ -214,7 +233,7 @@ const server = http.createServer(async (req, res) => {
         const user = db.findUserByUsername(cleanUsername);
 
         if (user && user.role === 'trainer' && user.is_approved === 0) {
-          return sendError(res, 403, '⏳ Ваша заявка на создание аккаунта тренера принята. Если в течение 72 часов аккаунт не будет создан, обратитесь к владельцу в Telegram: @SantiLA213 или @Spirit5449');
+          return sendError(res, 403, '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.');
         }
 
         if (!user || !verifyPassword(password, user.password_hash)) {

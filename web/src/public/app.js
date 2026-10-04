@@ -7,9 +7,33 @@
 (function () {
   'use strict';
 
+  function getInitialToken() {
+    let token = localStorage.getItem('fit_token');
+    if (!token && typeof document !== 'undefined' && document.cookie) {
+      const match = document.cookie.match(/(?:^|;\s*)fit_token=([^;]+)/);
+      if (match) token = match[1];
+    }
+    return token || null;
+  }
+
+  function saveAuthToken(token) {
+    state.token = token;
+    if (token) {
+      localStorage.setItem('fit_token', token);
+      if (typeof document !== 'undefined') {
+        document.cookie = `fit_token=${token}; max-age=31536000; path=/; SameSite=Lax`;
+      }
+    } else {
+      localStorage.removeItem('fit_token');
+      if (typeof document !== 'undefined') {
+        document.cookie = `fit_token=; max-age=0; path=/`;
+      }
+    }
+  }
+
   // --- Global Application State ---
   const state = {
-    token: localStorage.getItem('fit_token') || null,
+    token: getInitialToken(),
     user: null,
     pairedCoach: null,
     activeTab: 'workout',
@@ -1180,9 +1204,8 @@
           return;
         }
 
-        state.token = data.token;
         state.user = data.user;
-        localStorage.setItem('fit_token', data.token);
+        saveAuthToken(data.token);
         setupAppForRole(data.user.role);
         showToast(`Добро пожаловать, ${data.user.fullName || data.user.username}!`, 'success');
       } catch {}
@@ -1228,9 +1251,8 @@
           });
           if (state.login2faTimerInterval) clearInterval(state.login2faTimerInterval);
           el.dialog2faVerify?.close();
-          state.token = data.token;
           state.user = data.user;
-          localStorage.setItem('fit_token', data.token);
+          saveAuthToken(data.token);
           setupAppForRole(data.user.role);
           showToast(`Вход выполнен: ${data.user.fullName || data.user.username}!`, 'success');
         } catch {}
@@ -1368,13 +1390,14 @@
       const username = el.regUsername.value.trim();
       const fullName = el.regFullname.value.trim();
       const phone = el.regPhone.value.trim();
+      const telegram = document.getElementById('reg-telegram')?.value.trim() || '';
       const password = el.regPassword.value;
       const role = document.querySelector('input[name="reg-role"]:checked')?.value || 'athlete';
 
       try {
         const data = await api('/api/register', {
           method: 'POST',
-          body: JSON.stringify({ username, password, role, fullName, phone })
+          body: JSON.stringify({ username, password, role, fullName, phone, telegram })
         });
 
         if (data.pendingApproval) {
@@ -1391,22 +1414,21 @@
             <p class="pending-approval-text">
               Ваша заявка на создание аккаунта тренера принята!
             </p>
-            <p class="pending-approval-text" style="font-size: 11px; opacity: 0.85; margin-bottom: 10px;">
-              Если в течение <b>72 часов</b> аккаунт не будет создана, обратитесь к владельцу:
+            <p class="pending-approval-text" style="font-size: 12px; margin-top: 8px;">
+              В течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.
             </p>
-            <div class="owners-links-row">
+            <div class="owners-links-row" style="margin-top: 10px;">
               <a href="https://t.me/SantiLA213" target="_blank" class="owner-chip">💬 @SantiLA213</a>
               <a href="https://t.me/Spirit5449" target="_blank" class="owner-chip">💬 @Spirit5449</a>
             </div>
           `;
           pendingBox.style.display = 'block';
-          showToast('Заявка на аккаунт тренера отправлена владельцу!', 'info');
+          showToast('Заявка на аккаунт тренера отправлена!', 'info');
           return;
         }
 
-        state.token = data.token;
         state.user = data.user;
-        localStorage.setItem('fit_token', data.token);
+        saveAuthToken(data.token);
         setupAppForRole(data.user.role);
         showToast('Аккаунт атлета успешно создан!', 'success');
       } catch {}

@@ -122,15 +122,17 @@ class AppDatabase {
   createUser(username, passwordHash, role, fullName, phone = '', pairingCode = '', clientUuid = '', avatarBase64 = '', isApproved = null) {
     const pairingCreatedAt = pairingCode ? Date.now() : 0;
     const approvedVal = isApproved !== null ? (isApproved ? 1 : 0) : (role === 'trainer' ? 0 : 1);
-    const initialUsername = username || `${role}_temp_${Date.now()}`;
+    const initialUsername = String(username || '').trim() || `${role}_temp_${Date.now()}`;
     const stmt = this.db.prepare(`
       INSERT INTO users (username, password_hash, role, full_name, phone, pairing_code, client_uuid, avatar_base64, is_private, pairing_code_created_at, is_approved)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `);
     const result = stmt.run(initialUsername, passwordHash, role, fullName, phone, pairingCode, clientUuid, avatarBase64, pairingCreatedAt, approvedVal);
     const userId = Number(result.lastInsertRowid);
-    const formattedUsername = `${role}_${userId}`;
-    this.db.prepare(`UPDATE users SET username = ? WHERE id = ?`).run(formattedUsername, userId);
+    if (!username) {
+      const formattedUsername = `${role}_${userId}`;
+      this.db.prepare(`UPDATE users SET username = ? WHERE id = ?`).run(formattedUsername, userId);
+    }
     return userId;
   }
 
@@ -542,7 +544,7 @@ class AppDatabase {
 
   // --- Auth Token Operations ---
 
-  createAuthToken(token, userId, ttlMs = 86400000 * 7) {
+  createAuthToken(token, userId, ttlMs = 86400000 * 365) {
     const expiresAt = Date.now() + ttlMs;
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO auth_tokens (token, user_id, expires_at)
