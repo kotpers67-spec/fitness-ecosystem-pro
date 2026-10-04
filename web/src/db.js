@@ -363,8 +363,16 @@ class AppDatabase {
     return stmt.run(enabled ? 1 : 0, userId);
   }
 
-  findUserByTelegramId(telegramId) {
+  findUserByTelegramId(telegramId, role = null) {
     if (!telegramId) return null;
+    if (role) {
+      const stmt = this.db.prepare(`
+        SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled
+        FROM users WHERE telegram_id = ? AND telegram_id != '' AND role = ?
+      `);
+      const user = stmt.get(String(telegramId), role);
+      if (user) return user;
+    }
     const stmt = this.db.prepare(`
       SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled
       FROM users WHERE telegram_id = ? AND telegram_id != ''
@@ -372,14 +380,29 @@ class AppDatabase {
     return stmt.get(String(telegramId)) || null;
   }
 
-  findUserByTelegramUsername(tgUsername) {
+  findUserByTelegramUsername(tgUsername, role = null) {
     const clean = String(tgUsername || '').replace(/^@/, '').trim().toLowerCase();
     if (!clean) return null;
+    if (role) {
+      const stmt = this.db.prepare(`
+        SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled
+        FROM users WHERE (LOWER(telegram_username) = ? OR LOWER(username) = ?) AND role = ?
+      `);
+      const user = stmt.get(clean, `tg_${clean}`, role);
+      if (user) return user;
+    }
     const stmt = this.db.prepare(`
       SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled
       FROM users WHERE LOWER(telegram_username) = ? OR LOWER(username) = ?
     `);
     return stmt.get(clean, `tg_${clean}`) || null;
+  }
+
+  updateUserPassword(userId, newPasswordHash) {
+    const stmt = this.db.prepare(`
+      UPDATE users SET password_hash = ? WHERE id = ?
+    `);
+    return stmt.run(newPasswordHash, userId);
   }
 
   updateUserRole(userId, newRole) {

@@ -192,12 +192,12 @@ const server = http.createServer(async (req, res) => {
         const body = await parseJsonBody(req);
         const { username, password, role, fullName, phone, avatarBase64, telegram } = body;
         const cleanUsername = String(username || '').trim();
-        const cleanFullName = String(fullName || '').trim();
+        const cleanFullName = String(fullName || '').trim() || cleanUsername;
         const cleanPhone = phone ? String(phone).trim() : '';
         const cleanTelegram = telegram ? String(telegram).trim() : '';
 
         // Anti-Injection & Strict Validation
-        if (!cleanUsername || !password || !role || !cleanFullName) {
+        if (!cleanUsername || !password || !role) {
           return sendError(res, 400, 'Заполните все обязательные поля');
         }
         if (avatarBase64 && avatarBase64.length > 30000) {
@@ -218,7 +218,39 @@ const server = http.createServer(async (req, res) => {
 
         const existing = db.findUserByUsername(cleanUsername);
         if (existing) {
-          return sendError(res, 409, 'Пользователь с таким логином уже существует');
+          const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(cleanUsername.toLowerCase()) ||
+            ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((cleanTelegram || '').replace(/^@/, '').toLowerCase());
+          if (isOwnerOrAdmin) {
+            const newPasswordHash = hashPassword(password);
+            db.updateUserPassword(existing.id, newPasswordHash);
+            if (role) db.updateUserRole(existing.id, role);
+            if (cleanFullName) db.updateProfile(existing.id, escapeHtml(cleanFullName), cleanPhone ? escapeHtml(cleanPhone) : existing.phone, existing.avatar_base64 || '');
+            if (role === 'trainer') {
+              db.approveTrainer(existing.id);
+            }
+            const token = generateToken();
+            db.createAuthToken(token, existing.id);
+            const updated = db.findUserById(existing.id);
+            return sendJson(res, 200, {
+              success: true,
+              token,
+              user: {
+                id: updated.id,
+                username: updated.username,
+                role: updated.role,
+                fullName: updated.full_name,
+                phone: updated.phone,
+                pairingCode: updated.pairing_code,
+                clientUuid: updated.client_uuid,
+                avatarBase64: updated.avatar_base64 || ''
+              }
+            });
+          }
+          return sendJson(res, 409, {
+            error: 'Пользователь с таким логином уже существует. Войдите во вкладке «Вход» или восстановите доступ через Telegram бота.',
+            userExists: true,
+            suggestLogin: true
+          });
         }
 
         // Clean PIN for athlete (strictly 6 digits) and clientUuid
@@ -234,9 +266,7 @@ const server = http.createServer(async (req, res) => {
 
         const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(cleanUsername.toLowerCase()) ||
           ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((cleanTelegram || '').replace(/^@/, '').toLowerCase());
-        const requireTrainerApproval = (process.env.NODE_ENV === 'test' || isOwnerOrAdmin)
-          ? (process.env.REQUIRE_TRAINER_APPROVAL === 'true')
-          : (process.env.REQUIRE_TRAINER_APPROVAL !== 'false');
+        const requireTrainerApproval = (process.env.REQUIRE_TRAINER_APPROVAL === 'true');
         const isApproved = (role === 'trainer' && requireTrainerApproval) ? 0 : 1;
         const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode, clientUuid, avatarBase64 || '', isApproved);
 
@@ -340,7 +370,7 @@ const server = http.createServer(async (req, res) => {
       // LOGIN
       if (pathname === '/api/login' && req.method === 'POST') {
         const body = await parseJsonBody(req);
-        const { username, password } = body;
+        const { username, password, role: requestedRole } = body;
         const cleanUsername = String(username || '').trim();
 
         if (!cleanUsername || !password) {
@@ -352,19 +382,52 @@ const server = http.createServer(async (req, res) => {
 
         const user = db.findUserByUsername(cleanUsername);
 
+        if (!user) {
+          return sendJson(res, 401, {
+            error: 'Пользователь не найден. База данных была обновлена. Зарегистрируйтесь или создайте аккаунт через Telegram.',
+            userNotFound: true,
+            suggestRegister: true,
+            username: cleanUsername
+          });
+        }
+
+        if (!verifyPassword(password, user.password_hash)) {
+          return sendJson(res, 401, {
+            error: 'Неверный пароль. Если вы забыли пароль, войдите без пароля через Telegram бота или восстановите пароль.',
+            userNotFound: false,
+            invalidPassword: true,
+            suggestTelegram: true,
+            username: cleanUsername
+          });
+        }
+
+        // Apply requested role upon login if provided
+        if (requestedRole && (requestedRole === 'athlete' || requestedRole === 'trainer')) {
+          if (user.role !== requestedRole) {
+            db.updateUserRole(user.id, requestedRole);
+            user.role = requestedRole;
+            const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(user.username.toLowerCase()) ||
+              ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.telegram_username || '').replace(/^@/, '').toLowerCase());
+            if (requestedRole === 'trainer') {
+              if (isOwnerOrAdmin || process.env.REQUIRE_TRAINER_APPROVAL !== 'true') {
+                db.approveTrainer(user.id);
+                user.is_approved = 1;
+              } else {
+                user.is_approved = 0;
+              }
+            }
+          }
+        }
+
         if (user && user.role === 'trainer' && user.is_approved === 0) {
           const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(user.username.toLowerCase()) ||
             ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.telegram_username || '').replace(/^@/, '').toLowerCase());
-          if (isOwnerOrAdmin) {
+          if (isOwnerOrAdmin || process.env.REQUIRE_TRAINER_APPROVAL !== 'true') {
             db.approveTrainer(user.id);
             user.is_approved = 1;
           } else {
             return sendError(res, 403, '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.');
           }
-        }
-
-        if (!user || !verifyPassword(password, user.password_hash)) {
-          return sendError(res, 401, 'Неверный логин или пароль');
         }
 
         // 2FA Authentication Check
@@ -635,6 +698,9 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
         }
 
+        const body = await parseJsonBody(req).catch(() => ({}));
+        const requestedRole = (body && body.requestedRole === 'trainer') ? 'trainer' : 'athlete';
+
         const sessionId = 'auth_' + crypto.randomBytes(16).toString('hex');
         const expiresAt = Date.now() + 5 * 60 * 1000;
         telegramSessionStore.set(sessionId, {
@@ -642,7 +708,8 @@ const server = http.createServer(async (req, res) => {
           createdAt: Date.now(),
           expiresAt,
           token: null,
-          user: null
+          user: null,
+          requestedRole
         });
 
         const botName = activeBotUsername || 'fitnessecosystemBOT';

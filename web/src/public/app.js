@@ -1622,27 +1622,30 @@
       el.formLogin.style.display = 'none';
     };
 
-    // Role selector card toggles
-    document.querySelectorAll('.role-card').forEach(card => {
-      card.onclick = () => {
-        document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-        const radio = card.querySelector('input[type="radio"]');
-        if (radio) radio.checked = true;
-      };
+    // Role selector card toggles (scope within their form / group)
+    document.querySelectorAll('.role-selector-cards').forEach(container => {
+      container.querySelectorAll('.role-card').forEach(card => {
+        card.onclick = () => {
+          container.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          const radio = card.querySelector('input[type="radio"]');
+          if (radio) radio.checked = true;
+        };
+      });
     });
 
-    // Login Form Submit (with 2FA support)
+    // Login Form Submit (with role and 2FA support)
     el.formLogin.onsubmit = async (e) => {
       e.preventDefault();
       const username = el.loginUsername.value.trim();
       const password = el.loginPassword.value;
+      const role = document.querySelector('input[name="login-role"]:checked')?.value || 'athlete';
       if (!username || !password) return;
 
       try {
         const data = await api('/api/login', {
           method: 'POST',
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username, password, role })
         });
 
         if (data.require2FA) {
