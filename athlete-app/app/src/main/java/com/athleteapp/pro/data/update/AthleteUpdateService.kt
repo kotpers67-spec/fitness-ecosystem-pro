@@ -179,48 +179,59 @@ class AthleteUpdateService(private val context: Context) {
     }
 
     suspend fun downloadApkDirectly(downloadUrl: String): File? = withContext(Dispatchers.IO) {
-        try {
-            val targetFile = File(context.cacheDir, "AthletePro_Update.apk")
-            if (targetFile.exists()) targetFile.delete()
+        val candidateUrls = mutableListOf<String>()
+        if (downloadUrl.isNotBlank()) candidateUrls.add(downloadUrl)
+        candidateUrls.add("https://fitness-ecosystem-pro.onrender.com/releases/athlete-pro-v2.0.1.apk")
+        candidateUrls.add("https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v2.0.1/athlete-pro-v2.0.1.apk")
 
-            var currentUrl = downloadUrl
-            var redirects = 0
-            var conn: HttpURLConnection? = null
+        val targetFile = File(context.cacheDir, "AthletePro_Update.apk")
 
-            while (redirects < 8) {
-                val url = URL(currentUrl)
-                conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 15000
-                conn.readTimeout = 15000
-                conn.instanceFollowRedirects = true
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
+        for (candidate in candidateUrls.distinct()) {
+            try {
+                if (targetFile.exists()) targetFile.delete()
 
-                val code = conn.responseCode
-                if (code in 300..308) {
-                    val loc = conn.getHeaderField("Location") ?: break
-                    currentUrl = loc
-                    redirects++
-                    continue
+                var currentUrl = candidate
+                var redirects = 0
+                var conn: HttpURLConnection? = null
+
+                while (redirects < 10) {
+                    val url = URL(currentUrl)
+                    conn = url.openConnection() as HttpURLConnection
+                    conn.connectTimeout = 20000
+                    conn.readTimeout = 120000
+                    conn.instanceFollowRedirects = true
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; AthletePro)")
+
+                    val code = conn.responseCode
+                    if (code in 300..308) {
+                        val loc = conn.getHeaderField("Location") ?: break
+                        currentUrl = loc
+                        redirects++
+                        continue
+                    }
+                    break
                 }
-                break
-            }
 
-            if (conn != null && conn.responseCode in 200..299) {
-                conn.inputStream.use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        input.copyTo(output)
+                if (conn != null && conn.responseCode in 200..299) {
+                    conn.inputStream.use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            val buffer = ByteArray(32 * 1024)
+                            var read: Int
+                            while (input.read(buffer).also { read = it } != -1) {
+                                output.write(buffer, 0, read)
+                            }
+                            output.flush()
+                        }
+                    }
+                    if (targetFile.length() > 2000000L && isValidZipApk(targetFile)) {
+                        return@withContext targetFile
+                    } else {
+                        targetFile.delete()
                     }
                 }
-                if (targetFile.length() > 2000000L && isValidZipApk(targetFile)) {
-                    return@withContext targetFile
-                } else {
-                    targetFile.delete()
-                }
-            }
-            null
-        } catch (_: Exception) {
-            null
+            } catch (_: Exception) {}
         }
+        null
     }
 
     fun isValidZipApk(file: File): Boolean {
@@ -244,11 +255,20 @@ class AthleteUpdateService(private val context: Context) {
                     launchApkInstallation(apkFile)
                 }
             } else {
+                // Background download manager fallback (no browser redirect)
                 try {
-                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+                    if (dm != null) {
+                        val request = DownloadManager.Request(Uri.parse(downloadUrl)).apply {
+                            setTitle("Обновление Athlete Pro")
+                            setDescription("Фоновая загрузка APK...")
+                            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                            setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "AthletePro_Update.apk")
+                            setAllowedOverMetered(true)
+                            setAllowedOverRoaming(true)
+                        }
+                        dm.enqueue(request)
                     }
-                    context.startActivity(browserIntent)
                 } catch (_: Exception) {}
             }
         }

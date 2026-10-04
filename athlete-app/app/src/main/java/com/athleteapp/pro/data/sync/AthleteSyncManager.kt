@@ -79,19 +79,26 @@ class AthleteSyncManager(private val dao: AthleteDao) {
 
             var importedWorkoutsCount = 0
 
-            // Update profile name if locally empty and coach specified a name
-            if (payload.clientName.isNotBlank()) {
-                val currentProfile = dao.getProfile().firstOrNull() ?: AthleteProfileEntity()
-                val updatedUuid = if (payload.clientUuid.isNotBlank()) payload.clientUuid else currentProfile.clientUuid
-                val targetName = if (currentProfile.fullName.isNotBlank()) currentProfile.fullName else payload.clientName
-                dao.saveProfile(
-                    currentProfile.copy(
-                        fullName = targetName,
-                        athleteIdInCoachBase = payload.athleteId,
-                        clientUuid = updatedUuid
-                    )
+            // Update profile fields (FIO, phone, restrictions, PIN, avatar) from cloud payload
+            val currentProfile = dao.getProfile().firstOrNull() ?: AthleteProfileEntity()
+            val updatedUuid = if (payload.clientUuid.isNotBlank()) payload.clientUuid else currentProfile.clientUuid
+            val targetName = if (payload.clientName.isNotBlank() && currentProfile.fullName.isBlank()) payload.clientName else if (payload.clientName.isNotBlank()) payload.clientName else currentProfile.fullName
+            val targetPhone = if (payload.phone.isNotBlank()) payload.phone else currentProfile.phone
+            val targetRestrictions = if (payload.restrictions.isNotBlank()) payload.restrictions else currentProfile.restrictions
+            val targetPin = if (payload.pairingCode.length == 6) payload.pairingCode else currentProfile.pairingPin
+            val targetAvatar = if (!payload.avatarBase64.isNullOrBlank()) payload.avatarBase64 else currentProfile.avatarBase64
+
+            dao.saveProfile(
+                currentProfile.copy(
+                    fullName = targetName,
+                    phone = targetPhone,
+                    restrictions = targetRestrictions,
+                    pairingPin = targetPin,
+                    avatarBase64 = targetAvatar,
+                    athleteIdInCoachBase = payload.athleteId,
+                    clientUuid = updatedUuid
                 )
-            }
+            )
 
             // Import anthropometry if present
             if (payload.anthropometry.isNotEmpty()) {

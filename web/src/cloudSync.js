@@ -928,6 +928,7 @@ class CloudSyncService {
       let newName = athleteUser.full_name;
       let newPhone = athleteUser.phone;
       let newAvatar = athleteUser.avatar_base64;
+      let newRestrictions = athleteUser.restrictions || '';
 
       if (cloudName && (athleteUser.full_name === 'Миша' || athleteUser.full_name === 'Telegram Атлет' || athleteUser.full_name.startsWith('tg_') || athleteUser.full_name !== cloudName)) {
         newName = cloudName;
@@ -941,18 +942,22 @@ class CloudSyncService {
         newAvatar = cloudAvatar;
         updateProfileNeeded = true;
       }
+      if (cloudRestrictions && athleteUser.restrictions !== cloudRestrictions) {
+        newRestrictions = cloudRestrictions;
+        updateProfileNeeded = true;
+      }
 
       if (updateProfileNeeded && typeof resolvedDb.updateProfile === 'function') {
-        resolvedDb.updateProfile(athleteUser.id, newName, newPhone, newAvatar, cloudRestrictions || athleteUser.restrictions, cloudUuid || athleteUser.client_uuid);
+        resolvedDb.updateProfile(athleteUser.id, newName, newPhone, newAvatar, newRestrictions, cloudUuid || athleteUser.client_uuid);
         athleteUser.full_name = newName;
         athleteUser.phone = newPhone;
         athleteUser.avatar_base64 = newAvatar;
-        if (cloudRestrictions) athleteUser.restrictions = cloudRestrictions;
+        athleteUser.restrictions = newRestrictions;
         if (cloudUuid) athleteUser.client_uuid = cloudUuid;
         synced = true;
       }
 
-      if (cloudRestrictions && !athleteUser.restrictions && typeof resolvedDb.updateAthleteRestrictions === 'function') {
+      if (cloudRestrictions && athleteUser.restrictions !== cloudRestrictions && typeof resolvedDb.updateAthleteRestrictions === 'function') {
         resolvedDb.updateAthleteRestrictions(athleteUser.id, cloudRestrictions);
         athleteUser.restrictions = cloudRestrictions;
         synced = true;

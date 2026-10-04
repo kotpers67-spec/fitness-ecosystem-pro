@@ -57,34 +57,54 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                     val parsed = JsonParser.parseString(cloudJson).asJsonObject
                     rootObj = parsed
 
-                    // Check pairing node for status confirmation
-                    if (parsed.has("pairing") && cleanPin.isNotBlank()) {
+                    // Check pairing node for unified PIN parity & status confirmation
+                    if (parsed.has("pairing")) {
                         val pairingObj = parsed.getAsJsonObject("pairing")
-                        if (pairingObj.has(cleanPin)) {
-                            val pinEntry = pairingObj.getAsJsonObject(cleanPin)
-                            val status = if (pinEntry.has("status")) pinEntry.get("status").asString else ""
-                            val coachName = if (pinEntry.has("coachName") && pinEntry.get("coachName").asString.isNotBlank()) pinEntry.get("coachName").asString else "Тренер"
-                            val coachPhone = if (pinEntry.has("coachPhone")) pinEntry.get("coachPhone").asString else ""
-                            val coachB64 = if (pinEntry.has("coachAvatarBase64")) pinEntry.get("coachAvatarBase64").asString else null
+                        var activePin = cleanPin
+                        var matchedPinEntry: JsonObject? = if (cleanPin.isNotBlank() && pairingObj.has(cleanPin)) pairingObj.getAsJsonObject(cleanPin) else null
 
+                        if (matchedPinEntry == null) {
+                            for (entry in pairingObj.entrySet()) {
+                                if (entry.value.isJsonObject) {
+                                    val obj = entry.value.asJsonObject
+                                    if (obj.has("clientUuid") && obj.get("clientUuid").asString == clientUuid) {
+                                        activePin = entry.key
+                                        matchedPinEntry = obj
+                                        break
+                                    }
+                                }
+                            }
+                        }
+
+                        if (matchedPinEntry != null) {
+                            val status = if (matchedPinEntry.has("status")) matchedPinEntry.get("status").asString else ""
+                            val coachName = if (matchedPinEntry.has("coachName") && matchedPinEntry.get("coachName").asString.isNotBlank()) matchedPinEntry.get("coachName").asString else "Тренер"
+                            val coachPhone = if (matchedPinEntry.has("coachPhone")) matchedPinEntry.get("coachPhone").asString else ""
+                            val coachB64 = if (matchedPinEntry.has("coachAvatarBase64")) matchedPinEntry.get("coachAvatarBase64").asString else null
+                            val restrictionsFromCloud = if (matchedPinEntry.has("restrictions")) matchedPinEntry.get("restrictions").asString else ""
+                            val phoneFromCloud = if (matchedPinEntry.has("phone")) matchedPinEntry.get("phone").asString else ""
+
+                            val up = dao.getProfile().firstOrNull() ?: profile
                             if (status.equals("PAIRED", ignoreCase = true)) {
-                                val up = dao.getProfile().firstOrNull() ?: profile
                                 dao.saveProfile(up.copy(
                                     isPairedWithCoach = true,
                                     pairedCoachName = coachName,
                                     pairedCoachPhone = coachPhone,
-                                    pairedCoachAvatarBase64 = coachB64
+                                    pairedCoachAvatarBase64 = coachB64,
+                                    pairingPin = if (activePin.length == 6) activePin else up.pairingPin,
+                                    restrictions = if (restrictionsFromCloud.isNotBlank()) restrictionsFromCloud else up.restrictions,
+                                    phone = if (phoneFromCloud.isNotBlank()) phoneFromCloud else up.phone
                                 ))
                             } else if (status.equals("UNPAIRED", ignoreCase = true) || status.equals("PENDING", ignoreCase = true)) {
-                                if (profile.isPairedWithCoach) {
-                                    val up = dao.getProfile().firstOrNull() ?: profile
-                                    dao.saveProfile(up.copy(
-                                        isPairedWithCoach = false,
-                                        pairedCoachName = "",
-                                        pairedCoachPhone = "",
-                                        pairedCoachAvatarBase64 = null
-                                    ))
-                                }
+                                dao.saveProfile(up.copy(
+                                    isPairedWithCoach = false,
+                                    pairedCoachName = "",
+                                    pairedCoachPhone = "",
+                                    pairedCoachAvatarBase64 = null,
+                                    pairingPin = if (activePin.length == 6) activePin else up.pairingPin,
+                                    restrictions = if (restrictionsFromCloud.isNotBlank()) restrictionsFromCloud else up.restrictions,
+                                    phone = if (phoneFromCloud.isNotBlank()) phoneFromCloud else up.phone
+                                ))
                             }
                         }
                     }
@@ -189,7 +209,10 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
             val myPayload = AthleteSyncPayload(
                 clientUuid = clientUuid,
                 athleteId = athleteId,
+                pairingCode = cleanPin,
                 clientName = currentProfile.fullName.ifBlank { "Атлет" },
+                phone = currentProfile.phone,
+                restrictions = currentProfile.restrictions,
                 avatarBase64 = currentProfile.avatarBase64,
                 syncTimestamp = System.currentTimeMillis(),
                 assignedWorkouts = syncSessions,

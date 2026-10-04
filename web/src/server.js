@@ -460,6 +460,32 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
+        if (user.role === 'athlete' && cloudSyncService) {
+          try {
+            await cloudSyncService.syncAthleteFromCloud(user, db);
+            const refetched = db.findUserById(user.id);
+            if (refetched) {
+              user.full_name = refetched.full_name;
+              user.phone = refetched.phone;
+              user.avatar_base64 = refetched.avatar_base64;
+              user.client_uuid = refetched.client_uuid;
+              user.pairing_code = refetched.pairing_code;
+              user.pairing_code_created_at = refetched.pairing_code_created_at;
+              user.restrictions = refetched.restrictions;
+            }
+          } catch (_) {}
+        } else if (user.role === 'trainer' && cloudSyncService) {
+          try {
+            await cloudSyncService.syncTrainerFromCloud(user, db);
+            const refetched = db.findUserById(user.id);
+            if (refetched) {
+              user.full_name = refetched.full_name;
+              user.phone = refetched.phone;
+              user.avatar_base64 = refetched.avatar_base64;
+            }
+          } catch (_) {}
+        }
+
         const token = generateToken();
         db.createAuthToken(token, user.id);
 
@@ -476,6 +502,7 @@ const server = http.createServer(async (req, res) => {
             pairingCode: user.pairing_code,
             pairingCodeCreatedAt: user.pairing_code_created_at || 0,
             clientUuid: user.client_uuid || '',
+            restrictions: user.restrictions || '',
             coachName: user.coach_name || '',
             coachPhone: user.coach_phone || '',
             isPrivate: Boolean(user.is_private),
@@ -521,9 +548,25 @@ const server = http.createServer(async (req, res) => {
         }
 
         telegramOtpStore.delete(`2fa_${uid}`);
-        const user = db.findUserById(uid);
+        let user = db.findUserById(uid);
         if (!user) {
           return sendError(res, 404, 'Пользователь не найден');
+        }
+
+        if (user.role === 'athlete' && cloudSyncService) {
+          try {
+            await cloudSyncService.syncAthleteFromCloud(user, db);
+            const refetched = db.findUserById(user.id);
+            if (refetched) {
+              user.full_name = refetched.full_name;
+              user.phone = refetched.phone;
+              user.avatar_base64 = refetched.avatar_base64;
+              user.client_uuid = refetched.client_uuid;
+              user.pairing_code = refetched.pairing_code;
+              user.pairing_code_created_at = refetched.pairing_code_created_at;
+              user.restrictions = refetched.restrictions;
+            }
+          } catch (_) {}
         }
 
         const token = generateToken();
@@ -542,6 +585,7 @@ const server = http.createServer(async (req, res) => {
             pairingCode: user.pairing_code,
             pairingCodeCreatedAt: user.pairing_code_created_at || 0,
             clientUuid: user.client_uuid || '',
+            restrictions: user.restrictions || '',
             coachName: user.coach_name || '',
             coachPhone: user.coach_phone || '',
             isPrivate: Boolean(user.is_private),
@@ -921,6 +965,33 @@ const server = http.createServer(async (req, res) => {
             db.linkTelegram(user.id, user.telegram_id || '', cleanUsername);
             user.telegram_username = cleanUsername;
           }
+
+          if (user.role === 'athlete' && cloudSyncService) {
+            try {
+              await cloudSyncService.syncAthleteFromCloud(user, db);
+              const refetched = db.findUserById(user.id);
+              if (refetched) {
+                user.full_name = refetched.full_name;
+                user.phone = refetched.phone;
+                user.avatar_base64 = refetched.avatar_base64;
+                user.client_uuid = refetched.client_uuid;
+                user.pairing_code = refetched.pairing_code;
+                user.pairing_code_created_at = refetched.pairing_code_created_at;
+                user.restrictions = refetched.restrictions;
+              }
+            } catch (_) {}
+          } else if (user.role === 'trainer' && cloudSyncService) {
+            try {
+              await cloudSyncService.syncTrainerFromCloud(user, db);
+              const refetched = db.findUserById(user.id);
+              if (refetched) {
+                user.full_name = refetched.full_name;
+                user.phone = refetched.phone;
+                user.avatar_base64 = refetched.avatar_base64;
+              }
+            } catch (_) {}
+          }
+
           const token = generateToken();
           db.createAuthToken(token, user.id);
           return sendJson(res, 200, {
@@ -936,6 +1007,7 @@ const server = http.createServer(async (req, res) => {
               avatarBase64: user.avatar_base64 || '',
               pairingCode: user.pairing_code,
               clientUuid: user.client_uuid || '',
+              restrictions: user.restrictions || '',
               coachName: user.coach_name || '',
               coachPhone: user.coach_phone || '',
               isPrivate: Boolean(user.is_private),

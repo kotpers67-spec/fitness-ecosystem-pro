@@ -136,9 +136,6 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                     val elapsedSec = ((now - created).coerceAtLeast(0L) / 1000L).toInt()
                     val remaining = (300 - elapsedSec).coerceAtLeast(0)
                     _pinSecondsRemaining.value = remaining
-                    if (remaining <= 0) {
-                        regeneratePairingPin()
-                    }
                 }
                 delay(1000L)
             }
@@ -720,12 +717,25 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                 val remoteProfile = remoteAuthManager.fetchCurrentProfile(token)
                 if (remoteProfile != null) {
                     val freshProf = dao.getProfile().firstOrNull() ?: prof
+                    var savedPath = freshProf.avatarPath
+                    if (remoteProfile.avatarBase64.isNotBlank() && remoteProfile.avatarBase64 != freshProf.avatarBase64) {
+                        try {
+                            val cleanB64 = remoteProfile.avatarBase64.substringAfter("base64,")
+                            val bytes = android.util.Base64.decode(cleanB64, android.util.Base64.DEFAULT)
+                            val avatarFile = java.io.File(getApplication<Application>().filesDir, "athlete_avatar.jpg")
+                            avatarFile.writeBytes(bytes)
+                            savedPath = avatarFile.absolutePath
+                        } catch (_: Exception) {}
+                    }
                     val updatedProf = freshProf.copy(
                         clientUuid = remoteProfile.clientUuid.ifBlank { freshProf.clientUuid },
                         fullName = remoteProfile.fullName.ifBlank { freshProf.fullName },
                         phone = remoteProfile.phone.ifBlank { freshProf.phone },
                         restrictions = remoteProfile.restrictions.ifBlank { freshProf.restrictions },
-                        avatarBase64 = if (remoteProfile.avatarBase64.isNotBlank()) remoteProfile.avatarBase64 else freshProf.avatarBase64
+                        pairingPin = if (remoteProfile.pairingCode.length == 6) remoteProfile.pairingCode else freshProf.pairingPin,
+                        avatarBase64 = if (remoteProfile.avatarBase64.isNotBlank()) remoteProfile.avatarBase64 else freshProf.avatarBase64,
+                        avatarPath = savedPath,
+                        photoUri = savedPath
                     )
                     if (updatedProf != freshProf) {
                         dao.saveProfile(updatedProf)

@@ -3,8 +3,11 @@ package com.athleteapp.pro.data.sync.model
 data class AthleteSyncPayload(
     val clientUuid: String = "",
     val athleteId: Long = 1,
+    val pairingCode: String = "",
     val syncTimestamp: Long = System.currentTimeMillis(),
     val clientName: String = "",
+    val phone: String = "",
+    val restrictions: String = "",
     val avatarBase64: String? = null,
     val assignedWorkouts: List<SyncWorkoutSession> = emptyList(),
     val anthropometry: List<SyncAnthropometry> = emptyList()
