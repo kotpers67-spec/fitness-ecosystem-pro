@@ -413,6 +413,16 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
       const token = generateToken();
       db.createAuthToken(token, user.id);
 
+      // If user is a trainer, sync trainer profile and clients from cloud immediately
+      if (user.role === 'trainer' && cloudSyncService && typeof cloudSyncService.syncTrainerFromCloud === 'function') {
+        try {
+          await cloudSyncService.syncTrainerFromCloud(user, db);
+          user = db.findUserById(user.id) || user;
+        } catch (err) {
+          console.warn('[Bot] Trainer cloud sync notice on login:', err.message);
+        }
+      }
+
       session.status = 'AUTHORIZED';
       session.token = token;
       session.user = {

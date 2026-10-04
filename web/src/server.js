@@ -1171,6 +1171,12 @@ const server = http.createServer(async (req, res) => {
               avatar_base64: ''
             };
           }
+        } else if (user.role === 'trainer') {
+          try {
+            await cloudSyncService.syncTrainerFromCloud(user, db);
+          } catch (err) {
+            console.warn('[Server] Trainer cloud sync notice in /api/me:', err.message);
+          }
         }
         const freshUser = db.findUserById(user.id) || user;
         const normalizedUser = {
@@ -1419,7 +1425,16 @@ const server = http.createServer(async (req, res) => {
         }
 
         db.linkTelegram(user.id, matchedTgId || '', matchedUsername || '');
-        const updated = db.findUserById(user.id);
+        let updated = db.findUserById(user.id);
+
+        if (updated && updated.role === 'trainer' && cloudSyncService) {
+          try {
+            await cloudSyncService.syncTrainerFromCloud(updated, db);
+            updated = db.findUserById(user.id) || updated;
+          } catch (err) {
+            console.warn('[Server] Cloud sync on link-by-bot-code notice:', err.message);
+          }
+        }
 
         if (tgBotInstance && matchedTgId) {
           try {
@@ -1580,6 +1595,11 @@ const server = http.createServer(async (req, res) => {
       // TRAINER: GET CLIENTS
       if (pathname === '/api/trainer/clients' && req.method === 'GET') {
         if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
+        try {
+          await cloudSyncService.syncTrainerFromCloud(user, db);
+        } catch (err) {
+          console.warn('[Server] Trainer cloud sync notice in /api/trainer/clients:', err.message);
+        }
         const rawClients = db.getTrainerClients(user.id);
         const seenIds = new Set();
         const seenUuids = new Set();
@@ -2032,6 +2052,15 @@ const server = http.createServer(async (req, res) => {
               }
             }
           } else if (user.role === 'trainer') {
+            // First run full trainer profile and client pairing sync from cloud
+            try {
+              const trainerSyncRes = await cloudSyncService.syncTrainerFromCloud(user, db);
+              if (trainerSyncRes.syncedProfile) result.syncedItems.push('trainer_profile');
+              if (trainerSyncRes.syncedClients > 0) result.syncedItems.push(`synced_${trainerSyncRes.syncedClients}_clients`);
+            } catch (err) {
+              console.warn('[Server] Trainer sync from cloud warning:', err.message);
+            }
+
             // For trainer: iterate over clients, check cloud updates for their workouts and avatars
             const clients = db.getTrainerClients(user.id);
             const cloudData = await cloudSyncService.fetchCloudData(true);

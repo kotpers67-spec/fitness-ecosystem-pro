@@ -680,6 +680,170 @@ class CloudSyncService {
     }
     return await this.pushCloudData(cloud);
   }
+
+  /**
+   * Bi-directional Cloud Sync for Trainers:
+   * Syncs trainer profile (avatar, phone, full_name) and all paired clients from Google Drive cloud.
+   */
+  async syncTrainerFromCloud(trainerUser, db = null) {
+    const resolvedDb = db || this.db;
+    if (!trainerUser || !resolvedDb) return { syncedProfile: false, syncedClients: 0 };
+
+    const cloud = await this.fetchCloudData(true);
+    let syncedProfile = false;
+    let syncedClients = 0;
+
+    const trainerFullName = String(trainerUser.full_name || trainerUser.fullName || '').trim().toLowerCase();
+    const trainerPhone = String(trainerUser.phone || '').replace(/\D/g, '');
+    const trainerTgUser = String(trainerUser.telegram_username || '').replace(/^@/, '').trim().toLowerCase();
+    const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(trainerTgUser) ||
+      ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(String(trainerUser.username || '').toLowerCase());
+
+    let foundCoachName = '';
+    let foundCoachPhone = '';
+    let foundCoachAvatar = '';
+
+    // Collect all candidate client entries paired with this coach
+    const pairedClientsFromCloud = [];
+
+    // Helper to evaluate if a cloud entry matches this trainer
+    const matchesTrainer = (coachName = '', coachPh = '') => {
+      const cleanEntryCoachName = String(coachName || '').trim().toLowerCase();
+      const cleanEntryCoachPhone = String(coachPh || '').replace(/\D/g, '');
+
+      if (cleanEntryCoachPhone && trainerPhone && (cleanEntryCoachPhone === trainerPhone || cleanEntryCoachPhone.slice(-10) === trainerPhone.slice(-10))) {
+        return true;
+      }
+      if (cleanEntryCoachName && trainerFullName && (cleanEntryCoachName === trainerFullName || cleanEntryCoachName.includes(trainerFullName) || trainerFullName.includes(cleanEntryCoachName))) {
+        return true;
+      }
+      // If user is the primary ecosystem owner and coachName is set
+      if (isOwnerOrAdmin && cleanEntryCoachName.length > 0) {
+        return true;
+      }
+      return false;
+    };
+
+    // 1. Inspect cloud.clients
+    if (cloud.clients && typeof cloud.clients === 'object') {
+      for (const [uuid, c] of Object.entries(cloud.clients)) {
+        if (!c) continue;
+        if (c.coachName || c.coachPhone || c.coachAvatarBase64) {
+          if (matchesTrainer(c.coachName, c.coachPhone)) {
+            if (!foundCoachName && c.coachName) foundCoachName = c.coachName;
+            if (!foundCoachPhone && c.coachPhone) foundCoachPhone = c.coachPhone;
+            if (!foundCoachAvatar && c.coachAvatarBase64) foundCoachAvatar = c.coachAvatarBase64;
+            pairedClientsFromCloud.push({
+              clientUuid: uuid,
+              clientName: c.clientName || 'Атлет',
+              phone: c.phone || '',
+              avatarBase64: c.avatarBase64 || '',
+              restrictions: c.restrictions || '',
+              workouts: c.assignedWorkouts || []
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Inspect cloud.pairing
+    if (cloud.pairing && typeof cloud.pairing === 'object') {
+      for (const [pin, p] of Object.entries(cloud.pairing)) {
+        if (!p) continue;
+        if (p.coachName || p.coachPhone || p.coachAvatarBase64) {
+          if (matchesTrainer(p.coachName, p.coachPhone)) {
+            if (!foundCoachName && p.coachName) foundCoachName = p.coachName;
+            if (!foundCoachPhone && p.coachPhone) foundCoachPhone = p.coachPhone;
+            if (!foundCoachAvatar && p.coachAvatarBase64) foundCoachAvatar = p.coachAvatarBase64;
+            if (p.clientUuid && !pairedClientsFromCloud.some(item => item.clientUuid === p.clientUuid)) {
+              pairedClientsFromCloud.push({
+                clientUuid: p.clientUuid,
+                clientName: p.clientName || 'Атлет',
+                phone: p.phone || '',
+                avatarBase64: p.avatarBase64 || '',
+                restrictions: p.restrictions || '',
+                pairingCode: p.pin || pin
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Update Trainer Profile if missing locally
+    let updatedName = trainerUser.full_name;
+    let updatedPhone = trainerUser.phone;
+    let updatedAvatar = trainerUser.avatar_base64;
+    let needProfileUpdate = false;
+
+    if ((!updatedPhone || updatedPhone.length < 5) && foundCoachPhone) {
+      updatedPhone = foundCoachPhone;
+      needProfileUpdate = true;
+    }
+    if ((!updatedAvatar || updatedAvatar.length < 50) && foundCoachAvatar) {
+      updatedAvatar = foundCoachAvatar;
+      needProfileUpdate = true;
+    }
+    if ((!updatedName || updatedName.startsWith('tg_') || updatedName === 'Telegram Атлет' || updatedName === 'Тренер') && foundCoachName) {
+      updatedName = foundCoachName;
+      needProfileUpdate = true;
+    }
+
+    if (needProfileUpdate && typeof resolvedDb.updateProfile === 'function') {
+      resolvedDb.updateProfile(trainerUser.id, updatedName, updatedPhone, updatedAvatar);
+      trainerUser.full_name = updatedName;
+      trainerUser.phone = updatedPhone;
+      trainerUser.avatar_base64 = updatedAvatar;
+      syncedProfile = true;
+    }
+
+    // 4. Link all paired clients to trainer_clients in local SQLite
+    for (const c of pairedClientsFromCloud) {
+      let athlete = null;
+      if (c.clientUuid && typeof resolvedDb.findUserByClientUuid === 'function') {
+        athlete = resolvedDb.findUserByClientUuid(c.clientUuid);
+      }
+      if (!athlete && c.phone && typeof resolvedDb.findUserByPhone === 'function') {
+        athlete = resolvedDb.findUserByPhone(c.phone);
+      }
+
+      // If athlete doesn't exist locally, create them as an athlete user
+      if (!athlete) {
+        const username = `ath_cloud_${c.clientUuid.slice(0, 8)}_${Date.now()}`;
+        const passHash = crypto.createHash('sha256').update(crypto.randomBytes(16)).digest('hex');
+        const newId = resolvedDb.createUser(
+          username,
+          passHash,
+          'athlete',
+          c.clientName || 'Атлет',
+          c.phone || '',
+          c.pairingCode || '',
+          c.clientUuid,
+          c.avatarBase64 || '',
+          1
+        );
+        athlete = resolvedDb.findUserById(newId);
+      } else {
+        // Update athlete profile info if newer from cloud
+        if (c.avatarBase64 && (!athlete.avatar_base64 || athlete.avatar_base64.length < 50)) {
+          resolvedDb.updateProfile(athlete.id, athlete.full_name, athlete.phone, c.avatarBase64);
+        }
+        if (c.restrictions && !athlete.restrictions) {
+          resolvedDb.updateAthleteRestrictions(athlete.id, c.restrictions);
+        }
+      }
+
+      if (athlete) {
+        if (!resolvedDb.isAthletePairedToTrainer(trainerUser.id, athlete.id)) {
+          resolvedDb.pairTrainerAndAthlete(trainerUser.id, athlete.id);
+          syncedClients++;
+        }
+        resolvedDb.updateCoachInfo(athlete.id, updatedName, updatedPhone);
+      }
+    }
+
+    return { syncedProfile, syncedClients };
+  }
 }
 
 const cloudSyncService = new CloudSyncService();
