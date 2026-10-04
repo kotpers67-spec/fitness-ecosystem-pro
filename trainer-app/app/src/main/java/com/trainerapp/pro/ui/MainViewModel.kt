@@ -470,7 +470,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 }
-                delay(45000L)
+                delay(15000L)
             }
         }
         viewModelScope.launch {
@@ -576,6 +576,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     rpe = null
                 )
             )
+            syncActiveClientWithGoogleDrive()
         }
     }
 
@@ -610,15 +611,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             _currentSession.value = updatedSess
                         }
                     }
-                    syncActiveClientWithGoogleDrive()
                 }
             }
+            syncActiveClientWithGoogleDrive()
         }
     }
 
     fun deleteSet(set: WorkoutSetEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deleteSet(set)
+            syncActiveClientWithGoogleDrive()
         }
     }
 

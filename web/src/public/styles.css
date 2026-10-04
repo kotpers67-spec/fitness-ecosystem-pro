@@ -1714,3 +1714,120 @@ input:checked + .slider:before {
   display: block;
   border-radius: 6px;
 }
+
+/* Floating Rest Timer Banner */
+.rest-timer-banner {
+  position: fixed;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 480px;
+  background: rgba(18, 18, 18, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-lime);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  z-index: 99;
+  animation: slideUp 0.25s ease-out;
+}
+
+.rest-timer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rest-timer-icon {
+  font-size: 20px;
+}
+
+.rest-timer-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.rest-timer-digits {
+  font-size: 18px;
+  font-weight: 900;
+  font-family: monospace;
+  color: var(--accent-lime);
+}
+
+.rest-timer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rest-timer-btn {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+
+.rest-timer-btn:hover {
+  border-color: var(--accent-lime);
+  color: var(--accent-lime);
+}
+
+.rest-timer-btn.btn-cancel {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: transparent;
+}
+
+.rest-timer-btn.btn-cancel:hover {
+  color: var(--accent-rose);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Set inline inputs */
+.set-inputs-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.set-input-mini {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 6px;
+  width: 58px;
+  text-align: center;
+}
+
+.set-input-mini:focus {
+  border-color: var(--accent-lime);
+  outline: none;
+}
+

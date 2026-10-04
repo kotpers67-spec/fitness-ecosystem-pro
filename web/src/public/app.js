@@ -52,7 +52,10 @@
     linkTgTimerInterval: null,
     athleteSelectedExercise: null,
     trainerSelectedExercise: null,
-    deferredInstallPrompt: null
+    deferredInstallPrompt: null,
+    restTimerSeconds: 0,
+    restTimerTotal: 90,
+    restTimerInterval: null
   };
 
   // --- DOM Elements ---
@@ -260,7 +263,13 @@
     btnOpenDownloadModal: document.getElementById('btn-open-download-modal'),
     dialogDownloadApp: document.getElementById('dialog-download-app'),
     btnCloseDownloadDialog: document.getElementById('btn-close-download-dialog'),
-    btnTriggerPwaInstallDialog: document.getElementById('btn-trigger-pwa-install-dialog')
+    btnTriggerPwaInstallDialog: document.getElementById('btn-trigger-pwa-install-dialog'),
+
+    // Floating Rest Timer
+    restTimerBanner: document.getElementById('rest-timer-banner'),
+    restTimerDigits: document.getElementById('rest-timer-digits'),
+    btnTimerAdd30: document.getElementById('btn-timer-add-30'),
+    btnTimerCancel: document.getElementById('btn-timer-cancel')
   };
 
   // --- API Client Helper ---
@@ -599,6 +608,65 @@
     }
   }
 
+  // --- Rest Timer Engine (Athlete Pro Parity) ---
+  function startRestTimer(durationSeconds = 90) {
+    stopRestTimer();
+    state.restTimerSeconds = Math.max(1, durationSeconds);
+    state.restTimerTotal = state.restTimerSeconds;
+
+    if (el.restTimerBanner) {
+      el.restTimerBanner.style.display = 'flex';
+      updateRestTimerDisplay();
+    }
+
+    state.restTimerInterval = setInterval(() => {
+      state.restTimerSeconds--;
+      updateRestTimerDisplay();
+
+      if (state.restTimerSeconds <= 0) {
+        stopRestTimer();
+        showToast('⏰ Время отдыха окончено! Начинайте подход.', 'success');
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.4);
+        } catch (_) {}
+      }
+    }, 1000);
+  }
+
+  function addRestTimerSeconds(seconds = 30) {
+    state.restTimerSeconds += seconds;
+    state.restTimerTotal = Math.max(state.restTimerTotal, state.restTimerSeconds);
+    updateRestTimerDisplay();
+    showToast(`+${seconds} сек к отдыху`, 'info');
+  }
+
+  function stopRestTimer() {
+    if (state.restTimerInterval) {
+      clearInterval(state.restTimerInterval);
+      state.restTimerInterval = null;
+    }
+    state.restTimerSeconds = 0;
+    if (el.restTimerBanner) {
+      el.restTimerBanner.style.display = 'none';
+    }
+  }
+
+  function updateRestTimerDisplay() {
+    if (!el.restTimerDigits) return;
+    const m = Math.floor(state.restTimerSeconds / 60).toString().padStart(2, '0');
+    const s = (state.restTimerSeconds % 60).toString().padStart(2, '0');
+    el.restTimerDigits.textContent = `${m}:${s}`;
+  }
+
   function renderAthleteWorkoutMatrix() {
     el.athleteWorkoutMatrix.innerHTML = '';
     if (state.athleteSets.length === 0) {
@@ -629,12 +697,16 @@
         setsHtml += `
           <div class="set-row">
             <span class="set-num">${idx + 1}</span>
-            <span class="set-weight-reps">${set.weight_kg} кг × ${set.reps} повт</span>
-            <span class="set-rpe-badge">RPE ${set.rpe || 8}</span>
+            <div class="set-inputs-row">
+              <input type="number" step="0.5" min="0" class="set-input-mini input-set-weight" data-id="${set.id}" value="${set.weight_kg}" title="Вес (кг)">
+              <span style="color:var(--text-muted);font-size:11px;">кг ×</span>
+              <input type="number" step="1" min="1" class="set-input-mini input-set-reps" data-id="${set.id}" value="${set.reps}" title="Повторения">
+              <span style="color:var(--text-muted);font-size:11px;">повт</span>
+            </div>
             <button class="set-check-btn ${isComp ? 'completed' : ''}" data-id="${set.id}" title="Отметить выполнение">
               ${isComp ? '✓' : ''}
             </button>
-            <button class="set-delete-btn" data-id="${set.id}" title="Удалить">✕</button>
+            <button class="set-delete-btn" data-id="${set.id}" title="Удалить подход">✕</button>
           </div>
         `;
       });
@@ -647,15 +719,37 @@
         <div class="sets-table">${setsHtml}</div>
       `;
 
-      // Set toggle handler
+      // Set input change handler (weight / reps auto-save)
+      card.querySelectorAll('.input-set-weight, .input-set-reps').forEach(inp => {
+        inp.onchange = async () => {
+          const setId = inp.dataset.id;
+          const row = inp.closest('.set-row');
+          const weightKg = parseFloat(row.querySelector('.input-set-weight').value) || 0;
+          const reps = parseInt(row.querySelector('.input-set-reps').value, 10) || 1;
+          try {
+            await api('/api/workout/set', {
+              method: 'PUT',
+              body: JSON.stringify({ setId, weightKg, reps })
+            });
+            showToast('Подход обновлен', 'info');
+          } catch (err) {
+            showToast('Ошибка сохранения', 'error');
+          }
+        };
+      });
+
+      // Set toggle handler + trigger rest timer on completion
       card.querySelectorAll('.set-check-btn').forEach(btn => {
         btn.onclick = async () => {
           const setId = btn.dataset.id;
           try {
-            await api('/api/workout/set/toggle', {
+            const res = await api('/api/workout/set/toggle', {
               method: 'POST',
               body: JSON.stringify({ setId })
             });
+            if (res && res.isCompleted) {
+              startRestTimer(90); // 90 seconds default coach rest timer
+            }
             loadAthleteWorkoutSets();
           } catch {}
         };
@@ -1481,9 +1575,14 @@
         setsHtml += `
           <div class="set-row">
             <span class="set-num">${idx + 1}</span>
-            <span class="set-weight-reps">${set.weight_kg} кг × ${set.reps} повт</span>
+            <div class="set-inputs-row">
+              <input type="number" step="0.5" min="0" class="set-input-mini input-trainer-set-weight" data-id="${set.id}" value="${set.weight_kg}" title="Вес (кг)">
+              <span style="color:var(--text-muted);font-size:11px;">кг ×</span>
+              <input type="number" step="1" min="1" class="set-input-mini input-trainer-set-reps" data-id="${set.id}" value="${set.reps}" title="Повторения">
+              <span style="color:var(--text-muted);font-size:11px;">повт</span>
+            </div>
             <span class="status-pill ${isComp ? 'done' : 'pending'}">${isComp ? 'Сделано' : 'Назначено'}</span>
-            <button class="set-delete-btn" data-id="${set.id}" title="Удалить">✕</button>
+            <button class="set-delete-btn" data-id="${set.id}" title="Удалить подход">✕</button>
           </div>
         `;
       });
@@ -1495,6 +1594,25 @@
         </div>
         <div class="sets-table">${setsHtml}</div>
       `;
+
+      // Trainer set input change handler (auto-save)
+      card.querySelectorAll('.input-trainer-set-weight, .input-trainer-set-reps').forEach(inp => {
+        inp.onchange = async () => {
+          const setId = inp.dataset.id;
+          const row = inp.closest('.set-row');
+          const weightKg = parseFloat(row.querySelector('.input-trainer-set-weight').value) || 0;
+          const reps = parseInt(row.querySelector('.input-trainer-set-reps').value, 10) || 1;
+          try {
+            await api('/api/workout/set', {
+              method: 'PUT',
+              body: JSON.stringify({ setId, weightKg, reps })
+            });
+            showToast('Подход обновлен', 'info');
+          } catch (err) {
+            showToast('Ошибка сохранения', 'error');
+          }
+        };
+      });
 
       card.querySelectorAll('.set-delete-btn').forEach(btn => {
         btn.onclick = async () => {
@@ -2754,6 +2872,19 @@
     if (el.btnSyncHeader) el.btnSyncHeader.onclick = triggerCloudSync;
     if (el.btnSyncAthlete) el.btnSyncAthlete.onclick = triggerCloudSync;
     if (el.btnSyncTrainer) el.btnSyncTrainer.onclick = triggerCloudSync;
+
+    // Rest Timer Action Buttons
+    if (el.btnTimerAdd30) el.btnTimerAdd30.onclick = () => addRestTimerSeconds(30);
+    if (el.btnTimerCancel) el.btnTimerCancel.onclick = () => stopRestTimer();
+
+    // Auto-sync on tab switch
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (state.token) {
+          triggerCloudSync().catch(() => {});
+        }
+      });
+    });
 
     // Logout Action Handlers
     if (el.btnLogoutHeader) el.btnLogoutHeader.onclick = () => logout(true);

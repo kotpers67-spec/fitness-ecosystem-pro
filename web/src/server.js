@@ -1670,6 +1670,42 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, setId, isCompleted });
       }
 
+      // WORKOUT: UPDATE SET (Weight, Reps, RPE)
+      if (pathname === '/api/workout/set' && req.method === 'PUT') {
+        const body = await parseJsonBody(req);
+        const setId = Number(body.setId);
+        if (!setId) {
+          return sendError(res, 400, 'Укажите setId');
+        }
+        const targetSet = db.getWorkoutSetById(setId);
+        if (!targetSet) {
+          return sendError(res, 404, 'Подход не найден');
+        }
+        if (user.role === 'athlete' && targetSet.athlete_id !== user.id) {
+          return sendError(res, 403, 'Доступ запрещен');
+        }
+
+        const weight = Math.max(0, Number(body.weightKg) || 0);
+        const reps = Math.max(1, Number(body.reps) || 1);
+        const rpe = Math.min(10, Math.max(1, Number(body.rpe) || 8.0));
+
+        db.updateWorkoutSet(setId, weight, reps, rpe);
+
+        // Sync to Google Drive cloud
+        const athlete = db.findUserById(targetSet.athlete_id);
+        if (athlete && athlete.client_uuid) {
+          const targetDate = targetSet.workout_date || new Date().toISOString().slice(0, 10);
+          const { session, sets } = db.getWorkoutSessionWithSets(athlete.id, targetDate);
+          try {
+            await cloudSyncService.syncWorkoutSessionToCloud(athlete.client_uuid, athlete.full_name, targetDate, session, sets);
+          } catch (err) {
+            console.warn('[Server] Cloud sync update set error:', err.message);
+          }
+        }
+
+        return sendJson(res, 200, { success: true, setId, weightKg: weight, reps, rpe });
+      }
+
       // WORKOUT: DELETE SET
       if (pathname === '/api/workout/set' && req.method === 'DELETE') {
         let setId = Number(reqUrl.searchParams.get('setId'));

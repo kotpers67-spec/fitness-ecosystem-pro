@@ -642,6 +642,16 @@ class AppDatabase {
     return this.getWorkoutSetById(setId);
   }
 
+  updateWorkoutSet(setId, weightKg, reps, rpe = 8.0) {
+    const stmt = this.db.prepare(`
+      UPDATE workout_sets 
+      SET weight_kg = ?, reps = ?, rpe = ?, actual_weight_kg = ?, actual_reps = ?
+      WHERE id = ?
+    `);
+    stmt.run(weightKg, reps, rpe, weightKg, reps, setId);
+    return this.getWorkoutSetById(setId);
+  }
+
   deleteWorkoutSet(setId) {
     const stmt = this.db.prepare(`
       DELETE FROM workout_sets WHERE id = ?

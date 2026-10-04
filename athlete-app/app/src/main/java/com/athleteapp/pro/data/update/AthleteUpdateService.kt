@@ -97,7 +97,7 @@ class AthleteUpdateService(private val context: Context) {
             }
 
             // 2. Fallback static release configuration for kotpers67-spec
-            val fallbackVersion = "1.0.9"
+            val fallbackVersion = "1.0.10"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
                 AthleteUpdateCheckResult(

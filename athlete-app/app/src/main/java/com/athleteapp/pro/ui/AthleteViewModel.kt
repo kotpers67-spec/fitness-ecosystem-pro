@@ -353,7 +353,7 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 }
-                delay(45000L)
+                delay(15000L)
             }
         }
     }
