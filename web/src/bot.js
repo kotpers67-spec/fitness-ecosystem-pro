@@ -305,8 +305,57 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
       } else {
         if (!user.telegram_id && tgId) {
           db.linkTelegram(user.id, tgId, username || '');
-          user = db.findUserById(user.id);
         }
+
+        // Handle role switch for existing users based on selected requestedRole
+        if (requestedRole && requestedRole !== user.role) {
+          db.updateUserRole(user.id, requestedRole);
+          user.role = requestedRole;
+
+          if (requestedRole === 'trainer') {
+            const requireTrainerApproval = (process.env.REQUIRE_TRAINER_APPROVAL === 'true');
+            if (isOwnerOrAdmin || !requireTrainerApproval) {
+              db.approveTrainer(user.id);
+              user.is_approved = 1;
+            } else {
+              user.is_approved = 0;
+
+              // Notify admins about existing user requesting trainer role
+              const adminChatIds = new Set();
+              if (process.env.ADMIN_CHAT_ID) adminChatIds.add(String(process.env.ADMIN_CHAT_ID).trim());
+              ['santila213', 'spirit5449'].forEach(adminHandle => {
+                const cId = userTgChatMap?.get(adminHandle) || userTgChatMap?.get(adminHandle.toLowerCase());
+                if (cId) adminChatIds.add(String(cId));
+              });
+
+              for (const adminChatId of adminChatIds) {
+                try {
+                  await bot.api.sendMessage(
+                    adminChatId,
+                    `🔔 <b>ЗАПРОС НА ПЕРЕКЛЮЧЕНИЕ НА РОЛЬ ТРЕНЕРА!</b>\n\n` +
+                    `👤 <b>Имя:</b> ${escapeHtml(user.full_name || fullName)}\n` +
+                    `🏷 <b>Логин:</b> ${user.username}\n` +
+                    `✈ <b>Telegram:</b> @${username || tgId}\n\n` +
+                    `Нажмите кнопку ниже или отправьте:\n<code>/approve_${user.id}</code>`,
+                    {
+                      parse_mode: 'HTML',
+                      reply_markup: {
+                        inline_keyboard: [
+                          [{ text: `✅ Одобрить тренера #${user.id}`, callback_data: `approve_${user.id}` }]
+                        ]
+                      }
+                    }
+                  );
+                } catch (_) {}
+              }
+            }
+          } else if (requestedRole === 'athlete') {
+            // Switched back to athlete: ensure user is active athlete
+            user.is_approved = 1;
+          }
+        }
+
+        user = db.findUserById(user.id);
       }
 
       // Check if user is a pending trainer

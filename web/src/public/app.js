@@ -2368,17 +2368,29 @@
         const currentRole = document.querySelector('input[name="tg-auth-role"]:checked')?.value || 'athlete';
         initTgSessionForRole(currentRole);
 
-        // Listen for role changes in modal
-        document.querySelectorAll('input[name="tg-auth-role"]').forEach(radio => {
-          radio.onchange = () => {
-            document.querySelectorAll('[data-tg-role]').forEach(card => {
-              if (card.getAttribute('data-tg-role') === radio.value) {
-                card.classList.add('selected');
-              } else {
-                card.classList.remove('selected');
-              }
+        // Listen for role changes in modal (both radio input change and card click)
+        document.querySelectorAll('[data-tg-role]').forEach(card => {
+          card.onclick = (e) => {
+            const role = card.getAttribute('data-tg-role');
+            const radio = card.querySelector('input[type="radio"]');
+            if (radio && !radio.checked) {
+              radio.checked = true;
+            }
+            document.querySelectorAll('[data-tg-role]').forEach(c => {
+              c.classList.toggle('selected', c.getAttribute('data-tg-role') === role);
             });
-            initTgSessionForRole(radio.value);
+            initTgSessionForRole(role);
+          };
+        });
+
+        document.querySelectorAll('input[name="tg-auth-role"]').forEach(radio => {
+          radio.onchange = (e) => {
+            e.stopPropagation();
+            const role = radio.value;
+            document.querySelectorAll('[data-tg-role]').forEach(card => {
+              card.classList.toggle('selected', card.getAttribute('data-tg-role') === role);
+            });
+            initTgSessionForRole(role);
           };
         });
       };
