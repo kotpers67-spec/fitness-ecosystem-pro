@@ -43,7 +43,7 @@ data class UpdateCheckResult(
 class UpdateService(private val context: Context) {
 
     private val gson = Gson()
-    private val repoOwner = "santiyastudio-lgtm"
+    private val repoOwner = "kotpers67-spec"
     private val repoName = "fitness-ecosystem-pro"
 
     fun getCurrentVersionName(): String {

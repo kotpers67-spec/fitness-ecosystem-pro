@@ -43,6 +43,39 @@
     <!-- Main Content Area (Scrollable viewport) -->
     <main class="app-main-viewport">
 
+      <!-- PWA Install & Native App Download Banner (Android, iOS & APK) -->
+      <div id="pwa-install-banner" class="app-install-banner" style="display: none;">
+        <div class="install-banner-left">
+          <div class="banner-icon-badge">📱</div>
+          <div>
+            <div class="banner-title">Установите Fitness Pro</div>
+            <div class="banner-desc">Быстрый доступ с экрана «Домой» и офлайн-режим</div>
+          </div>
+        </div>
+        <div class="banner-actions">
+          <button type="button" id="btn-pwa-install" class="app-btn btn-primary banner-btn">
+            Установить
+          </button>
+          <button type="button" id="btn-pwa-dismiss" class="icon-btn-dismiss" title="Закрыть">✕</button>
+        </div>
+      </div>
+
+      <!-- Native Mobile Apps Download Card (Athlete Pro & Trainer Pro APK) -->
+      <div id="native-download-banner" class="app-install-banner native-banner">
+        <div class="install-banner-left">
+          <div class="banner-icon-badge" style="background: rgba(200, 255, 0, 0.15); color: var(--accent-lime);">⚡</div>
+          <div>
+            <div class="banner-title">Скачать мобильное приложение</div>
+            <div class="banner-desc">Официальные APK для Android с полной синхронизацией</div>
+          </div>
+        </div>
+        <div class="banner-actions">
+          <button type="button" id="btn-open-download-modal" class="app-btn btn-secondary banner-btn">
+            Скачать
+          </button>
+        </div>
+      </div>
+
       <!-- ================= 1. AUTH SCREEN ================= -->
       <section id="screen-auth" class="screen-container">
         <div class="auth-hero">
@@ -220,19 +253,95 @@
         </div>
       </section>
 
-      <!-- Athlete Screen 2: ПРОГРЕСС (History) -->
+      <!-- Athlete Screen 2: ПРОГРЕСС (History & Graphs) -->
       <section id="screen-athlete-history" class="screen-container" style="display: none;">
         <h2 class="screen-heading">ПРОГРЕСС И ИСТОРИЯ</h2>
 
-        <div class="app-card">
-          <label class="field-label">Выберите упражнение</label>
-          <select id="athlete-history-exercise-select" class="app-input app-select">
-            <option value="">Все упражнения</option>
-          </select>
+        <!-- 1. Body Weight Progress Card + Chart (График веса тела если заполнено) -->
+        <div class="app-card" id="card-athlete-bodyweight">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">⚖️</span>
+              <div class="card-title" style="margin: 0;">ВЕС ТЕЛА</div>
+            </div>
+            <button type="button" class="app-btn btn-secondary" id="btn-open-add-weight" style="font-size: 11px; padding: 4px 10px;">
+              + Внести вес
+            </button>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin: 12px 0 8px;">
+            <div>
+              <div class="field-label" style="margin-bottom: 2px;">Текущий вес</div>
+              <div class="tabular-nums" id="athlete-current-weight-val" style="font-size: 22px; font-weight: 900; color: var(--accent-lime);">—</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="field-label" style="margin-bottom: 2px;">Старт</div>
+              <div class="tabular-nums" id="athlete-start-weight-val" style="font-size: 16px; font-weight: 700; color: var(--text-secondary);">—</div>
+            </div>
+          </div>
+
+          <!-- Weight Canvas Chart Container -->
+          <div class="chart-container-box" id="athlete-weight-chart-box">
+            <canvas id="athlete-weight-canvas" width="400" height="150" class="progress-canvas"></canvas>
+            <div class="chart-empty-state" id="athlete-weight-empty" style="display: none;">
+              Внесите минимум 2 замера веса для построения графика
+            </div>
+          </div>
         </div>
 
-        <div class="history-list" id="athlete-history-list">
-          <!-- Rendered dynamically -->
+        <!-- 2. Exercise Strength Curve Card + 3 Scales (Вес, Подходы, Повторения) -->
+        <div class="app-card" id="card-athlete-exercise-progress">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <span style="font-size: 18px;">📈</span>
+            <div class="card-title" style="margin: 0;">ПРОГРЕСС В УПРАЖНЕНИИ</div>
+          </div>
+
+          <label class="field-label">Выберите упражнение</label>
+          <select id="athlete-history-exercise-select" class="app-input app-select" style="margin-bottom: 12px;">
+            <option value="">Выберите упражнение для графика...</option>
+          </select>
+
+          <!-- 3-Scale Summary Badges (3 шкалы) -->
+          <div class="progress-scales-bar" id="athlete-scales-bar">
+            <div class="scale-badge scale-weight">
+              <span class="scale-dot dot-weight"></span>
+              <span class="scale-label">Вес:</span>
+              <span class="scale-val tabular-nums" id="scale-max-weight">— кг</span>
+            </div>
+            <div class="scale-badge scale-sets">
+              <span class="scale-dot dot-sets"></span>
+              <span class="scale-label">Подходы:</span>
+              <span class="scale-val tabular-nums" id="scale-total-sets">—</span>
+            </div>
+            <div class="scale-badge scale-reps">
+              <span class="scale-dot dot-reps"></span>
+              <span class="scale-label">Повторы:</span>
+              <span class="scale-val tabular-nums" id="scale-avg-reps">—</span>
+            </div>
+          </div>
+
+          <!-- Multi-Scale Interactive Canvas Chart -->
+          <div class="chart-container-box" style="margin-top: 10px;">
+            <canvas id="athlete-exercise-canvas" width="400" height="190" class="progress-canvas"></canvas>
+            <div class="chart-empty-state" id="athlete-exercise-chart-empty" style="display: none;">
+              Выберите упражнение с историей для отображения графика
+            </div>
+          </div>
+
+          <!-- Chart Legend (3 шкалы) -->
+          <div class="chart-legend-row">
+            <div class="legend-item"><span class="legend-line line-weight"></span> Рабочий вес (кг)</div>
+            <div class="legend-item"><span class="legend-line line-sets"></span> Подходы (кол-во)</div>
+            <div class="legend-item"><span class="legend-line line-reps"></span> Повторения</div>
+          </div>
+        </div>
+
+        <!-- 3. History Entries List -->
+        <div class="app-card">
+          <div class="card-title" style="margin-bottom: 8px;">ИСТОРИЯ ПОДХОДОВ</div>
+          <div class="history-list" id="athlete-history-list">
+            <!-- Rendered dynamically -->
+          </div>
         </div>
       </section>
 
@@ -543,15 +652,88 @@
       <section id="screen-trainer-history" class="screen-container" style="display: none;">
         <h2 class="screen-heading">ИСТОРИЯ И ПРОГРЕСС</h2>
 
-        <div class="app-card">
-          <label class="field-label">Упражнение</label>
-          <select id="trainer-history-exercise-select" class="app-input app-select">
-            <option value="">Все упражнения</option>
-          </select>
+        <!-- Trainer Client Weight Progress -->
+        <div class="app-card" id="card-trainer-client-bodyweight">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">⚖️</span>
+              <div class="card-title" style="margin: 0;">ВЕС ТЕЛА ПОДОПЕЧНОГО</div>
+            </div>
+            <button type="button" class="app-btn btn-secondary" id="btn-trainer-add-weight" style="font-size: 11px; padding: 4px 10px;">
+              + Внести вес
+            </button>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin: 12px 0 8px;">
+            <div>
+              <div class="field-label" style="margin-bottom: 2px;">Текущий вес</div>
+              <div class="tabular-nums" id="trainer-current-weight-val" style="font-size: 22px; font-weight: 900; color: var(--accent-lime);">—</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="field-label" style="margin-bottom: 2px;">Старт</div>
+              <div class="tabular-nums" id="trainer-start-weight-val" style="font-size: 16px; font-weight: 700; color: var(--text-secondary);">—</div>
+            </div>
+          </div>
+
+          <div class="chart-container-box">
+            <canvas id="trainer-weight-canvas" width="400" height="150" class="progress-canvas"></canvas>
+            <div class="chart-empty-state" id="trainer-weight-empty" style="display: none;">
+              Нет замеров веса для выбранного подопечного
+            </div>
+          </div>
         </div>
 
-        <div class="history-list" id="trainer-history-list">
-          <!-- Rendered dynamically -->
+        <!-- Trainer Client Exercise Progress with 3 Scales -->
+        <div class="app-card" id="card-trainer-exercise-progress">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <span style="font-size: 18px;">📈</span>
+            <div class="card-title" style="margin: 0;">ПРОГРЕСС В УПРАЖНЕНИИ</div>
+          </div>
+
+          <label class="field-label">Упражнение</label>
+          <select id="trainer-history-exercise-select" class="app-input app-select" style="margin-bottom: 12px;">
+            <option value="">Все упражнения</option>
+          </select>
+
+          <!-- 3-Scale Summary Badges -->
+          <div class="progress-scales-bar">
+            <div class="scale-badge scale-weight">
+              <span class="scale-dot dot-weight"></span>
+              <span class="scale-label">Вес:</span>
+              <span class="scale-val tabular-nums" id="trainer-scale-max-weight">— кг</span>
+            </div>
+            <div class="scale-badge scale-sets">
+              <span class="scale-dot dot-sets"></span>
+              <span class="scale-label">Подходы:</span>
+              <span class="scale-val tabular-nums" id="trainer-scale-total-sets">—</span>
+            </div>
+            <div class="scale-badge scale-reps">
+              <span class="scale-dot dot-reps"></span>
+              <span class="scale-label">Повторы:</span>
+              <span class="scale-val tabular-nums" id="trainer-scale-avg-reps">—</span>
+            </div>
+          </div>
+
+          <div class="chart-container-box" style="margin-top: 10px;">
+            <canvas id="trainer-exercise-canvas" width="400" height="190" class="progress-canvas"></canvas>
+            <div class="chart-empty-state" id="trainer-exercise-chart-empty" style="display: none;">
+              Выберите упражнение для отображения графика
+            </div>
+          </div>
+
+          <!-- Chart Legend (3 шкалы) -->
+          <div class="chart-legend-row">
+            <div class="legend-item"><span class="legend-line line-weight"></span> Рабочий вес (кг)</div>
+            <div class="legend-item"><span class="legend-line line-sets"></span> Подходы (кол-во)</div>
+            <div class="legend-item"><span class="legend-line line-reps"></span> Повторения</div>
+          </div>
+        </div>
+
+        <div class="app-card">
+          <div class="card-title" style="margin-bottom: 8px;">ИСТОРИЯ ПОДХОДОВ</div>
+          <div class="history-list" id="trainer-history-list">
+            <!-- Rendered dynamically -->
+          </div>
         </div>
       </section>
 
@@ -777,6 +959,86 @@
                 <button type="submit" class="app-btn btn-primary" id="btn-submit-link-tg-confirm">Привязать</button>
               </div>
             </form>
+          </div>
+        </div>
+      </dialog>
+
+      <!-- DIALOG: Внести замер веса тела (Weight / Anthropometry Dialog) -->
+      <dialog id="dialog-add-weight" class="app-dialog">
+        <div class="dialog-content">
+          <div class="dialog-header">
+            <h3 class="dialog-title">Новый замер веса тела</h3>
+            <button type="button" class="dialog-close-btn" id="btn-close-weight-dialog">✕</button>
+          </div>
+          <p class="card-desc">Внесите текущий вес тела для отслеживания динамики на графике</p>
+          <form id="form-add-weight">
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="field-label">Дата замера</label>
+              <input type="date" id="input-weight-date" class="app-input" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label class="field-label">Вес тела (кг) *</label>
+              <input type="number" step="0.1" min="20" max="350" id="input-weight-value" class="app-input tabular-nums" placeholder="78.5" required>
+            </div>
+            <div class="dialog-actions">
+              <button type="button" class="app-btn btn-secondary" id="btn-cancel-weight-dialog">Отмена</button>
+              <button type="submit" class="app-btn btn-primary">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </dialog>
+
+      <!-- DIALOG: Скачать мобильные приложения (Android APK & iOS PWA Guide) -->
+      <dialog id="dialog-download-app" class="app-dialog">
+        <div class="dialog-content">
+          <div class="dialog-header">
+            <h3 class="dialog-title">Мобильные приложения</h3>
+            <button type="button" class="dialog-close-btn" id="btn-close-download-dialog">✕</button>
+          </div>
+          <p class="card-desc">Установите на смартфон официальное приложение с офлайн-доступом и мгновенной синхронизацией:</p>
+
+          <div class="download-cards-container">
+            <!-- Athlete Pro Card -->
+            <div class="download-apk-card">
+              <div class="apk-card-header">
+                <span class="apk-badge">АТЛЕТ</span>
+                <span class="apk-version">v1.0.6 (Latest)</span>
+              </div>
+              <h4 class="apk-title">Athlete Pro для Android</h4>
+              <p class="apk-desc">Дневник тренировок, замеры веса, QR/PIN привязка к тренеру и таблица рекордов.</p>
+              <a href="/releases/athlete-pro-v1.0.6.apk" class="app-btn btn-primary" download style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none;">
+                <span>⬇ Скачать Athlete Pro APK</span>
+              </a>
+            </div>
+
+            <!-- Trainer Pro Card -->
+            <div class="download-apk-card" style="margin-top: 12px;">
+              <div class="apk-card-header">
+                <span class="apk-badge" style="background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald);">ТРЕНЕР</span>
+                <span class="apk-version">v1.0.6 (Latest)</span>
+              </div>
+              <h4 class="apk-title">Trainer Pro для Android</h4>
+              <p class="apk-desc">Управление подопечными, назначение программ тренировок, сканер QR и Google Drive синхронизация.</p>
+              <a href="/releases/trainer-pro-v1.0.6.apk" class="app-btn btn-secondary" download style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none;">
+                <span>⬇ Скачать Trainer Pro APK</span>
+              </a>
+            </div>
+
+            <!-- iOS & Web App Guide Card -->
+            <div class="download-apk-card" style="margin-top: 12px; background: rgba(255, 255, 255, 0.03);">
+              <div class="apk-card-header">
+                <span class="apk-badge" style="background: rgba(255, 255, 255, 0.1); color: var(--text-primary);">IPHONE / ANDROID</span>
+                <span class="apk-version">PWA</span>
+              </div>
+              <h4 class="apk-title">Установка как Веб-приложение (PWA)</h4>
+              <p class="apk-desc">
+                • <b>iOS (Safari):</b> Нажмите кнопку «Поделиться» (иконка квадрата со стрелкой) ➔ выберите <b>«На экран "Домой"»</b>.<br>
+                • <b>Android (Chrome):</b> Нажмите меню (три точки) ➔ <b>«Установить приложение»</b>.
+              </p>
+              <button type="button" id="btn-trigger-pwa-install-dialog" class="app-btn btn-telegram" style="width: 100%;">
+                📲 Установить на это устройство
+              </button>
+            </div>
           </div>
         </div>
       </dialog>

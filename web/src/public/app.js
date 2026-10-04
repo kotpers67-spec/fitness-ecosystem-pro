@@ -49,7 +49,10 @@
     pinTimerInterval: null,
     pending2FAUserId: null,
     login2faTimerInterval: null,
-    linkTgTimerInterval: null
+    linkTgTimerInterval: null,
+    athleteSelectedExercise: null,
+    trainerSelectedExercise: null,
+    deferredInstallPrompt: null
   };
 
   // --- DOM Elements ---
@@ -205,7 +208,46 @@
     formLinkTgConfirm: document.getElementById('form-link-tg-confirm'),
     linkTgInputCode: document.getElementById('link-tg-input-code'),
     btnLinkTgBack: document.getElementById('btn-link-tg-back'),
-    btnLinkTgDeeplink: document.getElementById('btn-link-tg-deeplink')
+    btnLinkTgDeeplink: document.getElementById('btn-link-tg-deeplink'),
+
+    // Progress & 3-Scale Charts & Weight
+    athleteCurrentWeightVal: document.getElementById('athlete-current-weight-val'),
+    athleteStartWeightVal: document.getElementById('athlete-start-weight-val'),
+    athleteWeightCanvas: document.getElementById('athlete-weight-canvas'),
+    athleteWeightEmpty: document.getElementById('athlete-weight-empty'),
+    athleteExerciseCanvas: document.getElementById('athlete-exercise-canvas'),
+    athleteExerciseChartEmpty: document.getElementById('athlete-exercise-chart-empty'),
+    scaleMaxWeight: document.getElementById('scale-max-weight'),
+    scaleTotalSets: document.getElementById('scale-total-sets'),
+    scaleAvgReps: document.getElementById('scale-avg-reps'),
+    btnOpenAddWeight: document.getElementById('btn-open-add-weight'),
+    dialogAddWeight: document.getElementById('dialog-add-weight'),
+    btnCloseWeightDialog: document.getElementById('btn-close-weight-dialog'),
+    btnCancelWeightDialog: document.getElementById('btn-cancel-weight-dialog'),
+    formAddWeight: document.getElementById('form-add-weight'),
+    inputWeightDate: document.getElementById('input-weight-date'),
+    inputWeightValue: document.getElementById('input-weight-value'),
+
+    // Trainer Progress & Charts
+    trainerCurrentWeightVal: document.getElementById('trainer-current-weight-val'),
+    trainerStartWeightVal: document.getElementById('trainer-start-weight-val'),
+    trainerWeightCanvas: document.getElementById('trainer-weight-canvas'),
+    trainerWeightEmpty: document.getElementById('trainer-weight-empty'),
+    trainerExerciseCanvas: document.getElementById('trainer-exercise-canvas'),
+    trainerExerciseChartEmpty: document.getElementById('trainer-exercise-chart-empty'),
+    trainerScaleMaxWeight: document.getElementById('trainer-scale-max-weight'),
+    trainerScaleTotalSets: document.getElementById('trainer-scale-total-sets'),
+    trainerScaleAvgReps: document.getElementById('trainer-scale-avg-reps'),
+    btnTrainerAddWeight: document.getElementById('btn-trainer-add-weight'),
+
+    // PWA & Mobile App Download
+    pwaInstallBanner: document.getElementById('pwa-install-banner'),
+    btnPwaInstall: document.getElementById('btn-pwa-install'),
+    btnPwaDismiss: document.getElementById('btn-pwa-dismiss'),
+    btnOpenDownloadModal: document.getElementById('btn-open-download-modal'),
+    dialogDownloadApp: document.getElementById('dialog-download-app'),
+    btnCloseDownloadDialog: document.getElementById('btn-close-download-dialog'),
+    btnTriggerPwaInstallDialog: document.getElementById('btn-trigger-pwa-install-dialog')
   };
 
   // --- API Client Helper ---
@@ -617,24 +659,321 @@
     }
   }
 
-  // --- ATHLETE: Progress & History ---
+  // --- Chart Drawing Engine (Pure HTML5 Canvas / Jetpack Compose LineChart Parity) ---
+
+  /**
+   * Draw Body Weight Progress Line Chart
+   */
+  function drawWeightChart(canvas, emptyEl, historyData) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    if (!historyData || historyData.length < 2) {
+      if (emptyEl) emptyEl.style.display = 'block';
+      canvas.style.display = 'none';
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+    canvas.style.display = 'block';
+
+    const padding = { top: 25, bottom: 35, left: 45, right: 25 };
+    const chartW = width - padding.left - padding.right;
+    const chartH = height - padding.top - padding.bottom;
+
+    const weights = historyData.map(d => Number(d.weight_kg) || 0);
+    const minWeight = Math.floor(Math.min(...weights) - 1);
+    const maxWeight = Math.ceil(Math.max(...weights) + 1);
+    const range = Math.max(1, maxWeight - minWeight);
+
+    // Draw horizontal grid lines & labels
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#71717a';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+
+    for (let i = 0; i <= 3; i++) {
+      const y = padding.top + (chartH * (i / 3));
+      const val = (maxWeight - (range * (i / 3))).toFixed(1);
+
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.stroke();
+
+      ctx.fillText(`${val} кг`, padding.left - 6, y + 3);
+    }
+
+    // Coordinates of points
+    const stepX = chartW / (historyData.length - 1);
+    const points = historyData.map((d, idx) => {
+      const x = padding.left + (idx * stepX);
+      const y = padding.top + chartH - (((Number(d.weight_kg) - minWeight) / range) * chartH);
+      return { x, y, weight: d.weight_kg, date: d.date };
+    });
+
+    // Area Gradient Fill
+    const grad = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
+    grad.addColorStop(0, 'rgba(200, 255, 0, 0.25)');
+    grad.addColorStop(1, 'rgba(200, 255, 0, 0.0)');
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, height - padding.bottom);
+    points.forEach(pt => ctx.lineTo(pt.x, pt.y));
+    ctx.lineTo(points[points.length - 1].x, height - padding.bottom);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Smooth Line
+    ctx.beginPath();
+    ctx.strokeStyle = '#c8ff00';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    points.forEach((pt, idx) => {
+      if (idx === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.stroke();
+
+    // Data Circles & Date Labels
+    ctx.textAlign = 'center';
+    points.forEach((pt, idx) => {
+      ctx.fillStyle = '#c8ff00';
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0d0d0d';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Show dates for first, last, or every few points
+      if (idx === 0 || idx === points.length - 1 || idx % Math.ceil(points.length / 4) === 0) {
+        ctx.fillStyle = '#a1a1aa';
+        const shortDate = pt.date ? pt.date.slice(5) : '';
+        ctx.fillText(shortDate, pt.x, height - 10);
+      }
+    });
+  }
+
+  /**
+   * Draw Multi-Scale Exercise Progress Chart (3 Scales: Weight, Sets, Reps)
+   */
+  function drawExerciseMultiScaleChart(canvas, emptyEl, timelineData, scaleElements = {}) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    if (!timelineData || timelineData.length === 0) {
+      if (emptyEl) emptyEl.style.display = 'block';
+      canvas.style.display = 'none';
+      if (scaleElements.maxWeight) scaleElements.maxWeight.textContent = '— кг';
+      if (scaleElements.totalSets) scaleElements.totalSets.textContent = '—';
+      if (scaleElements.avgReps) scaleElements.avgReps.textContent = '—';
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+    canvas.style.display = 'block';
+
+    // Group timeline data by workout date
+    const byDate = new Map();
+    timelineData.forEach(s => {
+      const d = s.date || 'Дата';
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d).push(s);
+    });
+
+    const dates = Array.from(byDate.keys());
+    const dayStats = dates.map(d => {
+      const sets = byDate.get(d);
+      const maxW = Math.max(...sets.map(s => Number(s.weight_kg) || 0));
+      const totalSetsCount = sets.length;
+      const avgR = Math.round(sets.reduce((sum, s) => sum + (Number(s.reps) || 0), 0) / totalSetsCount);
+      return { date: d, maxWeight: maxW, setsCount: totalSetsCount, avgReps: avgR };
+    });
+
+    // Compute Summary Values for 3 Scales Badges
+    const overallMaxWeight = Math.max(...dayStats.map(s => s.maxWeight));
+    const overallTotalSets = timelineData.length;
+    const overallAvgReps = Math.round(timelineData.reduce((sum, s) => sum + (Number(s.reps) || 0), 0) / (timelineData.length || 1));
+
+    if (scaleElements.maxWeight) scaleElements.maxWeight.textContent = `${overallMaxWeight} кг`;
+    if (scaleElements.totalSets) scaleElements.totalSets.textContent = `${overallTotalSets} подх`;
+    if (scaleElements.avgReps) scaleElements.avgReps.textContent = `${overallAvgReps} повт`;
+
+    const padding = { top: 30, bottom: 40, left: 45, right: 25 };
+    const chartW = width - padding.left - padding.right;
+    const chartH = height - padding.top - padding.bottom;
+
+    // Scale 1: Weight (0 .. maxWeight + 10%)
+    const maxScaleWeight = Math.max(10, Math.ceil(overallMaxWeight * 1.15));
+    // Scale 2 & 3: Sets and Reps (0 .. maxReps + 2)
+    const maxRepVal = Math.max(10, Math.max(...dayStats.map(s => Math.max(s.setsCount, s.avgReps))) + 2);
+
+    // Draw horizontal grid lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#71717a';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+
+    for (let i = 0; i <= 3; i++) {
+      const y = padding.top + (chartH * (i / 3));
+      const wVal = Math.round(maxScaleWeight * (1 - i / 3));
+
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.stroke();
+
+      ctx.fillText(`${wVal} кг`, padding.left - 6, y + 3);
+    }
+
+    const n = dayStats.length;
+    const stepX = n > 1 ? chartW / (n - 1) : 0;
+
+    const pointsWeight = [];
+    const pointsSets = [];
+    const pointsReps = [];
+
+    dayStats.forEach((st, idx) => {
+      const x = n > 1 ? padding.left + (idx * stepX) : padding.left + (chartW / 2);
+      const yWeight = padding.top + chartH - ((st.maxWeight / maxScaleWeight) * chartH);
+      const ySets = padding.top + chartH - ((st.setsCount / maxRepVal) * chartH);
+      const yReps = padding.top + chartH - ((st.avgReps / maxRepVal) * chartH);
+
+      pointsWeight.push({ x, y: yWeight, val: st.maxWeight, date: st.date });
+      pointsSets.push({ x, y: ySets, val: st.setsCount, date: st.date });
+      pointsReps.push({ x, y: yReps, val: st.avgReps, date: st.date });
+    });
+
+    // Helper: Draw curve
+    function drawSeries(points, color, strokeW = 2.5) {
+      if (points.length === 0) return;
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = strokeW;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      points.forEach((pt, idx) => {
+        if (idx === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.stroke();
+
+      // Circles
+      ctx.fillStyle = color;
+      points.forEach(pt => {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0d0d0d';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+    }
+
+    // 1. Draw Sets Series (Cyan #38bdf8)
+    drawSeries(pointsSets, '#38bdf8', 2);
+    // 2. Draw Reps Series (Rose #f43f5e)
+    drawSeries(pointsReps, '#f43f5e', 2);
+    // 3. Draw Weight Series (Neon Lime #c8ff00)
+    drawSeries(pointsWeight, '#c8ff00', 3);
+
+    // Draw Date Axis Labels
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#a1a1aa';
+    pointsWeight.forEach((pt, idx) => {
+      if (idx === 0 || idx === pointsWeight.length - 1 || idx % Math.ceil(pointsWeight.length / 5) === 0) {
+        const shortDate = pt.date ? pt.date.slice(5) : '';
+        ctx.fillText(shortDate, pt.x, height - 12);
+      }
+    });
+  }
+
+  // --- ATHLETE: Progress & History (Charts & Logs) ---
   async function loadAthleteHistory() {
     try {
-      const data = await api(`/api/workout?date=${state.currentDate}`);
-      const recentSets = data.sets || [];
+      // 1. Load Body Weight History
+      loadAthleteWeightProgress();
 
-      const exSet = new Set();
-      recentSets.forEach(s => exSet.add(s.exercise_name));
+      // 2. Load Athlete Exercises List for Dropdown
+      const exRes = await api('/api/progress/exercises');
+      const exercises = exRes.exercises || [];
 
-      el.athleteHistorySelect.innerHTML = '<option value="">Все упражнения</option>';
-      exSet.forEach(name => {
+      el.athleteHistorySelect.innerHTML = '<option value="">Выберите упражнение для графика...</option>';
+      exercises.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name;
         opt.textContent = name;
         el.athleteHistorySelect.appendChild(opt);
       });
 
-      renderHistoryItems(recentSets);
+      // Select default exercise if available
+      if (exercises.length > 0) {
+        if (!state.athleteSelectedExercise || !exercises.includes(state.athleteSelectedExercise)) {
+          state.athleteSelectedExercise = exercises[0];
+        }
+        el.athleteHistorySelect.value = state.athleteSelectedExercise;
+        loadAthleteExerciseTimeline(state.athleteSelectedExercise);
+      } else {
+        drawExerciseMultiScaleChart(el.athleteExerciseCanvas, el.athleteExerciseChartEmpty, [], {
+          maxWeight: el.scaleMaxWeight,
+          totalSets: el.scaleTotalSets,
+          avgReps: el.scaleAvgReps
+        });
+      }
+
+      // 3. Load Recent Sets for table/history list
+      const data = await api(`/api/workout?date=${state.currentDate}`);
+      renderHistoryItems(data.sets || []);
+    } catch (err) {
+      console.warn('Failed loading athlete progress:', err);
+    }
+  }
+
+  async function loadAthleteWeightProgress() {
+    try {
+      const res = await api('/api/progress/anthropometry');
+      const history = res.history || [];
+
+      if (history.length > 0) {
+        const latest = history[history.length - 1];
+        const start = history[0];
+        el.athleteCurrentWeightVal.textContent = `${Number(latest.weight_kg).toFixed(1)} кг`;
+        el.athleteStartWeightVal.textContent = `${Number(start.weight_kg).toFixed(1)} кг`;
+      } else {
+        el.athleteCurrentWeightVal.textContent = '—';
+        el.athleteStartWeightVal.textContent = '—';
+      }
+
+      drawWeightChart(el.athleteWeightCanvas, el.athleteWeightEmpty, history);
+    } catch {}
+  }
+
+  async function loadAthleteExerciseTimeline(exerciseName) {
+    if (!exerciseName) {
+      drawExerciseMultiScaleChart(el.athleteExerciseCanvas, el.athleteExerciseChartEmpty, [], {
+        maxWeight: el.scaleMaxWeight,
+        totalSets: el.scaleTotalSets,
+        avgReps: el.scaleAvgReps
+      });
+      return;
+    }
+    try {
+      const res = await api(`/api/progress/exercise?exercise=${encodeURIComponent(exerciseName)}`);
+      const timeline = res.timeline || [];
+      drawExerciseMultiScaleChart(el.athleteExerciseCanvas, el.athleteExerciseChartEmpty, timeline, {
+        maxWeight: el.scaleMaxWeight,
+        totalSets: el.scaleTotalSets,
+        avgReps: el.scaleAvgReps
+      });
     } catch {}
   }
 
@@ -643,7 +982,7 @@
     if (sets.length === 0) {
       el.athleteHistoryList.innerHTML = `
         <div class="app-card" style="text-align: center; color: var(--text-muted); font-size: 13px;">
-          История тренировок пуста.
+          История тренировок за выбранную дату пуста.
         </div>
       `;
       return;
@@ -1075,7 +1414,7 @@
     }
   }
 
-  // --- TRAINER: History ---
+  // --- TRAINER: History & Charts ---
   async function loadTrainerHistory() {
     if (!state.activeClientId) {
       el.trainerHistoryList.innerHTML = `
@@ -1087,21 +1426,80 @@
     }
 
     try {
-      const data = await api(`/api/workout?athleteId=${state.activeClientId}&date=${state.trainerDate}`);
-      const recentSets = data.sets || [];
+      // 1. Client Weight Progress
+      loadTrainerClientWeightProgress();
 
-      const exSet = new Set();
-      recentSets.forEach(s => exSet.add(s.exercise_name));
+      // 2. Client Exercises Dropdown & Chart
+      const exRes = await api(`/api/progress/exercises?athleteId=${state.activeClientId}`);
+      const exercises = exRes.exercises || [];
 
-      el.trainerHistorySelect.innerHTML = '<option value="">Все упражнения</option>';
-      exSet.forEach(name => {
+      el.trainerHistorySelect.innerHTML = '<option value="">Выберите упражнение для графика...</option>';
+      exercises.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name;
         opt.textContent = name;
         el.trainerHistorySelect.appendChild(opt);
       });
 
-      renderTrainerHistoryItems(recentSets);
+      if (exercises.length > 0) {
+        if (!state.trainerSelectedExercise || !exercises.includes(state.trainerSelectedExercise)) {
+          state.trainerSelectedExercise = exercises[0];
+        }
+        el.trainerHistorySelect.value = state.trainerSelectedExercise;
+        loadTrainerExerciseTimeline(state.trainerSelectedExercise);
+      } else {
+        drawExerciseMultiScaleChart(el.trainerExerciseCanvas, el.trainerExerciseChartEmpty, [], {
+          maxWeight: el.trainerScaleMaxWeight,
+          totalSets: el.trainerScaleTotalSets,
+          avgReps: el.trainerScaleAvgReps
+        });
+      }
+
+      // 3. Client sets for table
+      const data = await api(`/api/workout?athleteId=${state.activeClientId}&date=${state.trainerDate}`);
+      renderTrainerHistoryItems(data.sets || []);
+    } catch (err) {
+      console.warn('Failed loading trainer client history:', err);
+    }
+  }
+
+  async function loadTrainerClientWeightProgress() {
+    if (!state.activeClientId) return;
+    try {
+      const res = await api(`/api/progress/anthropometry?athleteId=${state.activeClientId}`);
+      const history = res.history || [];
+
+      if (history.length > 0) {
+        const latest = history[history.length - 1];
+        const start = history[0];
+        if (el.trainerCurrentWeightVal) el.trainerCurrentWeightVal.textContent = `${Number(latest.weight_kg).toFixed(1)} кг`;
+        if (el.trainerStartWeightVal) el.trainerStartWeightVal.textContent = `${Number(start.weight_kg).toFixed(1)} кг`;
+      } else {
+        if (el.trainerCurrentWeightVal) el.trainerCurrentWeightVal.textContent = '—';
+        if (el.trainerStartWeightVal) el.trainerStartWeightVal.textContent = '—';
+      }
+
+      drawWeightChart(el.trainerWeightCanvas, el.trainerWeightEmpty, history);
+    } catch {}
+  }
+
+  async function loadTrainerExerciseTimeline(exerciseName) {
+    if (!state.activeClientId || !exerciseName) {
+      drawExerciseMultiScaleChart(el.trainerExerciseCanvas, el.trainerExerciseChartEmpty, [], {
+        maxWeight: el.trainerScaleMaxWeight,
+        totalSets: el.trainerScaleTotalSets,
+        avgReps: el.trainerScaleAvgReps
+      });
+      return;
+    }
+    try {
+      const res = await api(`/api/progress/exercise?athleteId=${state.activeClientId}&exercise=${encodeURIComponent(exerciseName)}`);
+      const timeline = res.timeline || [];
+      drawExerciseMultiScaleChart(el.trainerExerciseCanvas, el.trainerExerciseChartEmpty, timeline, {
+        maxWeight: el.trainerScaleMaxWeight,
+        totalSets: el.trainerScaleTotalSets,
+        avgReps: el.trainerScaleAvgReps
+      });
     } catch {}
   }
 
@@ -1110,7 +1508,7 @@
     if (sets.length === 0) {
       el.trainerHistoryList.innerHTML = `
         <div class="app-card" style="text-align: center; color: var(--text-muted); font-size: 13px;">
-          История тренировок подопечного пуста.
+          История тренировок подопечного за выбранную дату пуста.
         </div>
       `;
       return;
@@ -1911,6 +2309,159 @@
 
     // Refresh Leaderboard button
     el.btnRefreshLeaderboard.onclick = loadLeaderboard;
+
+    // --- Chart Exercise Select Change Handlers ---
+    if (el.athleteHistorySelect) {
+      el.athleteHistorySelect.onchange = (e) => {
+        state.athleteSelectedExercise = e.target.value;
+        loadAthleteExerciseTimeline(state.athleteSelectedExercise);
+      };
+    }
+    if (el.trainerHistorySelect) {
+      el.trainerHistorySelect.onchange = (e) => {
+        state.trainerSelectedExercise = e.target.value;
+        loadTrainerExerciseTimeline(state.trainerSelectedExercise);
+      };
+    }
+
+    // --- Body Weight Dialog (Athlete & Trainer) ---
+    function openWeightDialog() {
+      if (!el.dialogAddWeight) return;
+      if (el.inputWeightDate) el.inputWeightDate.value = new Date().toISOString().slice(0, 10);
+      if (el.inputWeightValue) el.inputWeightValue.value = '';
+      if (typeof el.dialogAddWeight.showModal === 'function') {
+        el.dialogAddWeight.showModal();
+      } else {
+        el.dialogAddWeight.style.display = 'block';
+      }
+    }
+
+    function closeWeightDialog() {
+      if (!el.dialogAddWeight) return;
+      if (typeof el.dialogAddWeight.close === 'function') {
+        el.dialogAddWeight.close();
+      } else {
+        el.dialogAddWeight.style.display = 'none';
+      }
+    }
+
+    if (el.btnOpenAddWeight) el.btnOpenAddWeight.onclick = openWeightDialog;
+    if (el.btnTrainerAddWeight) el.btnTrainerAddWeight.onclick = () => {
+      if (!state.activeClientId) {
+        showToast('Сначала выберите подопечного', 'error');
+        return;
+      }
+      openWeightDialog();
+    };
+    if (el.btnCloseWeightDialog) el.btnCloseWeightDialog.onclick = closeWeightDialog;
+    if (el.btnCancelWeightDialog) el.btnCancelWeightDialog.onclick = closeWeightDialog;
+
+    if (el.formAddWeight) {
+      el.formAddWeight.onsubmit = async (e) => {
+        e.preventDefault();
+        const weightKg = parseFloat(el.inputWeightValue.value);
+        const date = el.inputWeightDate.value || new Date().toISOString().slice(0, 10);
+        if (!weightKg || weightKg <= 0) {
+          showToast('Укажите корректный вес', 'error');
+          return;
+        }
+
+        try {
+          const body = { weightKg, date };
+          if (state.user?.role === 'trainer' && state.activeClientId) {
+            body.athleteId = state.activeClientId;
+          }
+          await api('/api/progress/anthropometry', {
+            method: 'POST',
+            body: JSON.stringify(body)
+          });
+          showToast('Замер веса сохранен', 'success');
+          closeWeightDialog();
+
+          if (state.user?.role === 'athlete') {
+            loadAthleteWeightProgress();
+          } else {
+            loadTrainerClientWeightProgress();
+          }
+        } catch (err) {
+          showToast(err.message || 'Ошибка сохранения замера', 'error');
+        }
+      };
+    }
+
+    // --- PWA Installation & APK Download Modals ---
+    function openDownloadDialog() {
+      if (!el.dialogDownloadApp) return;
+      if (typeof el.dialogDownloadApp.showModal === 'function') {
+        el.dialogDownloadApp.showModal();
+      } else {
+        el.dialogDownloadApp.style.display = 'block';
+      }
+    }
+
+    function closeDownloadDialog() {
+      if (!el.dialogDownloadApp) return;
+      if (typeof el.dialogDownloadApp.close === 'function') {
+        el.dialogDownloadApp.close();
+      } else {
+        el.dialogDownloadApp.style.display = 'none';
+      }
+    }
+
+    if (el.btnOpenDownloadModal) el.btnOpenDownloadModal.onclick = openDownloadDialog;
+    if (el.btnCloseDownloadDialog) el.btnCloseDownloadDialog.onclick = closeDownloadDialog;
+
+    // Trigger PWA Installation Prompt
+    async function triggerPwaInstall() {
+      if (state.deferredInstallPrompt) {
+        state.deferredInstallPrompt.prompt();
+        const { outcome } = await state.deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          showToast('Приложение Fitness Pro установлено!', 'success');
+        }
+        state.deferredInstallPrompt = null;
+        if (el.pwaInstallBanner) el.pwaInstallBanner.style.display = 'none';
+      } else {
+        // Fallback instructions for iOS Safari or Chrome when already installed/not supported
+        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIos) {
+          showToast('Нажмите «Поделиться» (□ с ↑) ➔ «На экран Домой»', 'info');
+        } else {
+          showToast('Для установки нажмите меню браузера (⋮) ➔ «Установить приложение»', 'info');
+        }
+      }
+    }
+
+    if (el.btnPwaInstall) el.btnPwaInstall.onclick = triggerPwaInstall;
+    if (el.btnTriggerPwaInstallDialog) el.btnTriggerPwaInstallDialog.onclick = triggerPwaInstall;
+    if (el.btnPwaDismiss) {
+      el.btnPwaDismiss.onclick = () => {
+        if (el.pwaInstallBanner) el.pwaInstallBanner.style.display = 'none';
+        localStorage.setItem('pwa_dismissed', 'true');
+      };
+    }
+
+    // Listen to browser PWA install event (Chrome, Edge, Samsung Internet, Android)
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      state.deferredInstallPrompt = e;
+      if (localStorage.getItem('pwa_dismissed') !== 'true') {
+        if (el.pwaInstallBanner) el.pwaInstallBanner.style.display = 'flex';
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      state.deferredInstallPrompt = null;
+      if (el.pwaInstallBanner) el.pwaInstallBanner.style.display = 'none';
+      showToast('Приложение Fitness Pro успешно установлено!', 'success');
+    });
+
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(err => {
+        console.warn('PWA ServiceWorker registration notice:', err);
+      });
+    }
   }
 
   // --- Date Math Helpers ---

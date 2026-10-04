@@ -41,7 +41,7 @@ data class AthleteUpdateCheckResult(
 class AthleteUpdateService(private val context: Context) {
 
     private val gson = Gson()
-    private val repoOwner = "santiyastudio-lgtm"
+    private val repoOwner = "kotpers67-spec"
     private val repoName = "fitness-ecosystem-pro"
 
     fun getCurrentVersionName(): String {
@@ -73,7 +73,7 @@ class AthleteUpdateService(private val context: Context) {
                         val updatesNode = root.getAsJsonObject("updates")
                         val remoteVersion = updatesNode.get("athleteVersion")?.asString?.removePrefix("v")?.trim() ?: ""
                         val downloadUrl = updatesNode.get("athleteUrl")?.asString
-                            ?: "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk"
+                            ?: "https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk"
                         val notes = updatesNode.get("notes")?.asString ?: "Обновление доступно в облаке"
 
                         if (remoteVersion.isNotBlank()) {
@@ -133,7 +133,7 @@ class AthleteUpdateService(private val context: Context) {
                     currentVersion = currentVersionName,
                     latestVersion = fallbackVersion,
                     releaseNotes = "Версия $fallbackVersion доступна в облаке",
-                    downloadUrl = "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk"
+                    downloadUrl = "https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk"
                 )
             )
         } catch (e: Exception) {
