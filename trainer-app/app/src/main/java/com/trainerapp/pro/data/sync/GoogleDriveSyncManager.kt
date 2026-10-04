@@ -118,11 +118,11 @@ class GoogleDriveSyncManager {
 
             if (!rootObj.has("updates")) {
                 val defaultUpdates = JsonObject().apply {
-                    addProperty("trainerVersion", "1.0.5")
-                    addProperty("trainerUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/trainer-pro-v1.0.5.apk")
-                    addProperty("athleteVersion", "1.0.5")
-                    addProperty("athleteUrl", "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/athlete-pro-v1.0.5.apk")
-                    addProperty("notes", "Версия 1.0.5: Карточка тренера, синхронизация фото, состязания и статистика упражнений.")
+                    addProperty("trainerVersion", "1.0.8")
+                    addProperty("trainerUrl", "https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v1.0.8/trainer-pro-v1.0.8.apk")
+                    addProperty("athleteVersion", "1.0.8")
+                    addProperty("athleteUrl", "https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v1.0.8/athlete-pro-v1.0.8.apk")
+                    addProperty("notes", "Версия 1.0.8: Прямая загрузка релизов, вход через @fitnessecosystemBOT и обновлённая синхронизация.")
                 }
                 rootObj.add("updates", defaultUpdates)
             }

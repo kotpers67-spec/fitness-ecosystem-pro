@@ -59,74 +59,46 @@ class UpdateService(private val context: Context) {
         try {
             val currentVersionName = getCurrentVersionName()
 
-            // 1. Приоритетно проверяем обновление через Google Диск (AES-256)
-            try {
-                val endpoint = com.trainerapp.pro.data.sync.CloudSecurityManager.getEndpointUrl()
-                val secretKey = com.trainerapp.pro.data.sync.CloudSecurityManager.getSecretKey()
-                val encodedKey = java.net.URLEncoder.encode(secretKey, "UTF-8")
-                val gDriveUrl = "$endpoint?key=$encodedKey"
+            // 1. Primary update check: Official GitHub Releases API
+            val apiEndpoints = listOf(
+                "https://api.github.com/repos/$repoOwner/$repoName/releases/latest",
+                "https://api.github.com/repos/$repoOwner/render-auth-bot/releases/latest"
+            )
 
-                val rawCloud = httpGet(gDriveUrl)
-                val decryptedJson = com.trainerapp.pro.data.sync.CloudSecurityManager.decryptPayload(rawCloud)
+            for (apiUrl in apiEndpoints) {
+                try {
+                    val url = URL(apiUrl)
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.setRequestProperty("Accept", "application/vnd.github+json")
+                    conn.setRequestProperty("User-Agent", "TrainerPro-App")
+                    conn.connectTimeout = 10000
+                    conn.readTimeout = 10000
 
-                if (decryptedJson.isNotBlank() && decryptedJson != "{}") {
-                    val root = com.google.gson.JsonParser.parseString(decryptedJson).asJsonObject
-                    if (root.has("updates")) {
-                        val updatesNode = root.getAsJsonObject("updates")
-                        val remoteVersion = updatesNode.get("trainerVersion")?.asString?.removePrefix("v")?.trim() ?: ""
-                        val downloadUrl = updatesNode.get("trainerUrl")?.asString
-                            ?: "https://github.com/santiyastudio-lgtm/fitness-ecosystem-pro/releases/download/v1.0.5/trainer-pro-v1.0.5.apk"
-                        val notes = updatesNode.get("notes")?.asString ?: "Новое обновление Trainer Pro 1.0.5 доступно в облаке"
+                    if (conn.responseCode == 200) {
+                        val json = conn.inputStream.bufferedReader().readText()
+                        val release = gson.fromJson(json, GitHubRelease::class.java)
+                        val cleanTag = release.tag_name.removePrefix("v").trim()
+                        val apkAsset = release.assets.find { it.name.contains("trainer", ignoreCase = true) && it.name.endsWith(".apk") }
+                            ?: release.assets.find { it.name.endsWith(".apk") }
 
-                        if (remoteVersion.isNotBlank()) {
-                            val isNewer = isVersionNewer(remoteVersion, currentVersionName)
-                            return@withContext Result.success(
-                                UpdateCheckResult(
-                                    isUpdateAvailable = isNewer,
-                                    currentVersion = currentVersionName,
-                                    latestVersion = remoteVersion,
-                                    releaseNotes = notes,
-                                    downloadUrl = downloadUrl
-                                )
+                        val downloadUrl = apkAsset?.browser_download_url
+                            ?: "https://github.com/$repoOwner/$repoName/releases/download/v$cleanTag/trainer-pro-v$cleanTag.apk"
+
+                        val isNewer = isVersionNewer(cleanTag, currentVersionName)
+                        return@withContext Result.success(
+                            UpdateCheckResult(
+                                isUpdateAvailable = isNewer,
+                                currentVersion = currentVersionName,
+                                latestVersion = cleanTag,
+                                releaseNotes = release.body ?: "Доступно официальное обновление Trainer Pro v$cleanTag",
+                                downloadUrl = downloadUrl
                             )
-                        }
+                        )
                     }
-                }
-            } catch (_: Exception) {
-                // Игнорируем ошибку обращения к Google Диску и переходим к резервным источникам
+                } catch (_: Exception) {}
             }
 
-            // 2. Резервный источник: GitHub API / По умолчанию актуальная версия v1.0.2
-            try {
-                val apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
-                val url = URL(apiUrl)
-                val conn = url.openConnection() as HttpURLConnection
-                conn.setRequestProperty("Accept", "application/vnd.github+json")
-                conn.setRequestProperty("User-Agent", "TrainerPro-App")
-                conn.connectTimeout = 15000
-                conn.readTimeout = 15000
-
-                if (conn.responseCode == 200) {
-                    val json = conn.inputStream.bufferedReader().readText()
-                    val release = gson.fromJson(json, GitHubRelease::class.java)
-                    val cleanTag = release.tag_name.removePrefix("v").trim()
-                    val apkAsset = release.assets.find { it.name.contains("trainer", ignoreCase = true) && it.name.endsWith(".apk") }
-                        ?: release.assets.find { it.name.endsWith(".apk") }
-
-                    val isNewer = isVersionNewer(cleanTag, currentVersionName)
-                    return@withContext Result.success(
-                        UpdateCheckResult(
-                            isUpdateAvailable = isNewer,
-                            currentVersion = currentVersionName,
-                            latestVersion = cleanTag,
-                            releaseNotes = release.body ?: "Новая версия доступна",
-                            downloadUrl = apkAsset?.browser_download_url
-                        )
-                    )
-                }
-            } catch (_: Exception) {}
-
-            // Резервный фолбэк для v1.0.8 release
+            // 2. Fallback static release configuration for kotpers67-spec
             val fallbackVersion = "1.0.8"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
@@ -134,8 +106,8 @@ class UpdateService(private val context: Context) {
                     isUpdateAvailable = isFallbackNewer,
                     currentVersion = currentVersionName,
                     latestVersion = fallbackVersion,
-                    releaseNotes = "Версия $fallbackVersion доступна",
-                    downloadUrl = "https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v1.0.8/trainer-pro-v1.0.8.apk"
+                    releaseNotes = "Официальный релиз Trainer Pro v$fallbackVersion доступен для загрузки.",
+                    downloadUrl = "https://github.com/$repoOwner/$repoName/releases/download/v$fallbackVersion/trainer-pro-v$fallbackVersion.apk"
                 )
             )
         } catch (e: Exception) {
