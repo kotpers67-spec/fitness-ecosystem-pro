@@ -5,12 +5,22 @@
  *           Owner Contact buttons (@SantiLA213, @Spirit5449), Trainer approval.
  */
 
-const { Bot, InlineKeyboard } = require('grammy');
+const { Bot, InlineKeyboard, Keyboard } = require('grammy');
 
 const OWNER_LINKS = {
   santi: 'https://t.me/SantiLA213',
   spirit: 'https://t.me/Spirit5449'
 };
+
+/**
+ * Creates persistent menu reply keyboard with main buttons
+ */
+function createMainMenuKeyboard() {
+  return new Keyboard()
+    .text('🔑 Код входа').text('🔗 Привязать аккаунт').row()
+    .text('💬 Связь с владельцами').text('❓ Справка')
+    .resized();
+}
 
 /**
  * Creates inline keyboard with links to project owners
@@ -30,7 +40,7 @@ async function handleLinkToken(ctx, token, db, userTgChatMap) {
   if (!cleanToken) {
     await ctx.reply(
       '❌ Не указан токен привязки. Запросите ссылку привязки в приложении.',
-      { parse_mode: 'HTML', reply_markup: createOwnersKeyboard() }
+      { parse_mode: 'HTML', reply_markup: createMainMenuKeyboard() }
     );
     return { success: false, reason: 'missing_token' };
   }
@@ -40,7 +50,7 @@ async function handleLinkToken(ctx, token, db, userTgChatMap) {
     await ctx.reply(
       '❌ Ссылка недействительна или срок действия (5 минут) истёк.\n' +
       'Запросите новую ссылку привязки в профиле приложения.',
-      { parse_mode: 'HTML', reply_markup: createOwnersKeyboard() }
+      { parse_mode: 'HTML', reply_markup: createMainMenuKeyboard() }
     );
     return { success: false, reason: 'expired_or_invalid' };
   }
@@ -55,7 +65,7 @@ async function handleLinkToken(ctx, token, db, userTgChatMap) {
     await ctx.reply(
       `⚠️ Этот Telegram уже привязан к аккаунту <b>${existing.username}</b>.\n` +
       `Сначала отвяжите его в настройках того профиля.`,
-      { parse_mode: 'HTML', reply_markup: createOwnersKeyboard() }
+      { parse_mode: 'HTML', reply_markup: createMainMenuKeyboard() }
     );
     return { success: false, reason: 'already_linked_to_other' };
   }
@@ -84,7 +94,7 @@ async function handleLinkToken(ctx, token, db, userTgChatMap) {
     `Все коды для входа будут приходить сюда в чат.`,
     {
       parse_mode: 'HTML',
-      reply_markup: createOwnersKeyboard()
+      reply_markup: createMainMenuKeyboard()
     }
   );
 
@@ -131,14 +141,10 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
       `🔐 Ваш одноразовый код для входа на сайт:\n\n` +
       `👉 <b>${code}</b> 👈\n\n` +
       `⏱ Код действует <b>5 минут</b>.\n\n` +
-      `📌 Доступные команды:\n` +
-      `• /code — Новый код входа\n` +
-      `• /link &lt;токен&gt; — Привязать Telegram к сайту\n` +
-      `• /contacts — Связь с создателями проекта\n` +
-      `• /help — Справка и безопасность`,
+      `Используйте кнопки меню ниже для быстрого управления:`,
       {
         parse_mode: 'HTML',
-        reply_markup: createOwnersKeyboard()
+        reply_markup: createMainMenuKeyboard()
       }
     );
   });
@@ -153,47 +159,15 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
         'Получить токен можно нажав кнопку «Привязать Telegram» в профиле приложения.',
         {
           parse_mode: 'HTML',
-          reply_markup: createOwnersKeyboard()
+          reply_markup: createMainMenuKeyboard()
         }
       );
     }
     await handleLinkToken(ctx, rawToken, db, userTgChatMap);
   });
 
-  // /contacts command: direct links to owners
-  bot.command('contacts', async (ctx) => {
-    await ctx.reply(
-      `🤝 <b>Связь с создателями Fitness Ecosystem Pro:</b>\n\n` +
-      `• <b>@SantiLA213</b> — Архитектура, продукты и партнерства\n` +
-      `• <b>@Spirit5449</b> — Backend, безопасность и мобильная разработка\n\n` +
-      `Нажмите на кнопку ниже, чтобы начать диалог в Telegram:`,
-      {
-        parse_mode: 'HTML',
-        reply_markup: createOwnersKeyboard()
-      }
-    );
-  });
-
-  // /help command
-  bot.command('help', async (ctx) => {
-    await ctx.reply(
-      `📖 <b>Справка и безопасность Fitness Ecosystem Pro:</b>\n\n` +
-      `• <b>/start</b> — Начать работу и получить код быстрого входа\n` +
-      `• <b>/code</b> — Сгенерировать свежий 6-значный одноразовый код\n` +
-      `• <b>/link &lt;токен&gt;</b> — Привязать этот Telegram к вашему аккаунту\n` +
-      `• <b>/contacts</b> — Контакты основателей (@SantiLA213, @Spirit5449)\n` +
-      `• <b>/help</b> — Данное справочное меню\n\n` +
-      `🔐 <b>Безопасность (Zero-Trust):</b>\n` +
-      `Все одноразовые пароли и коды привязки действуют строго <b>5 минут (300 секунд)</b> и являются одноразовыми.`,
-      {
-        parse_mode: 'HTML',
-        reply_markup: createOwnersKeyboard()
-      }
-    );
-  });
-
-  // /code and /login commands
-  bot.command(['code', 'login'], async (ctx) => {
+  // Button handler: 🔑 Код входа
+  bot.hears(['🔑 Код входа', '/code', '/login'], async (ctx) => {
     const username = ctx.from?.username ? ctx.from.username.replace(/^@/, '').toLowerCase() : null;
     const tgId = String(ctx.from?.id || '');
     const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -210,7 +184,50 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
       `⏱ Код действует <b>5 минут</b>.`,
       {
         parse_mode: 'HTML',
+        reply_markup: createMainMenuKeyboard()
+      }
+    );
+  });
+
+  // Button handler: 🔗 Привязать аккаунт
+  bot.hears(['🔗 Привязать аккаунт'], async (ctx) => {
+    await ctx.reply(
+      `🔗 <b>Привязка Telegram аккаунта</b>\n\n` +
+      `Для привязки аккаунта откройте сайт, перейдите в <b>Профиль</b> и нажмите <b>«Привязать Telegram»</b>.\n\n` +
+      `Или отправьте команду с токеном: <code>/link &lt;токен&gt;</code>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: createMainMenuKeyboard()
+      }
+    );
+  });
+
+  // Button handler: 💬 Связь с владельцами
+  bot.hears(['💬 Связь с владельцами', '/contacts'], async (ctx) => {
+    await ctx.reply(
+      `🤝 <b>Связь с создателями Fitness Ecosystem Pro:</b>\n\n` +
+      `• <b>@SantiLA213</b> — Архитектура, продукты и партнерства\n` +
+      `• <b>@Spirit5449</b> — Backend, безопасность и мобильная разработка\n\n` +
+      `Нажмите на кнопку ниже, чтобы начать диалог в Telegram:`,
+      {
+        parse_mode: 'HTML',
         reply_markup: createOwnersKeyboard()
+      }
+    );
+  });
+
+  // Button handler: ❓ Справка
+  bot.hears(['❓ Справка', '/help'], async (ctx) => {
+    await ctx.reply(
+      `📖 <b>Справка Fitness Ecosystem Pro:</b>\n\n` +
+      `• <b>🔑 Код входа</b> — Получить свежий 6-значный одноразовый код\n` +
+      `• <b>🔗 Привязать аккаунт</b> — Инструкция по привязке Telegram\n` +
+      `• <b>💬 Связь с владельцами</b> — Контакты основателей проекта\n\n` +
+      `🔐 <b>Безопасность (Zero-Trust):</b>\n` +
+      `Все одноразовые пароли и коды привязки действуют строго <b>5 минут (300 секунд)</b>.`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: createMainMenuKeyboard()
       }
     );
   });

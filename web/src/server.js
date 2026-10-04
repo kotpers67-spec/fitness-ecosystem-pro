@@ -686,6 +686,14 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/me' && req.method === 'GET') {
         let pairedCoach = null;
         if (user.role === 'athlete') {
+          const PAIRING_TTL = 5 * 60 * 1000;
+          if (!user.pairing_code || (Date.now() - (user.pairing_code_created_at || 0) > PAIRING_TTL)) {
+            const newPin = String(Math.floor(100000 + Math.random() * 900000));
+            db.regeneratePairingCode(user.id, newPin);
+            cloudSyncService.registerAthletePairing(newPin, user.client_uuid, user.full_name, user.phone).catch(() => {});
+            user.pairing_code = newPin;
+            user.pairing_code_created_at = Date.now();
+          }
           pairedCoach = db.getAthleteCoach(user.id);
           // Bi-directional Cloud Check: If not locally paired or user has pairingCode, check Google Drive
           if (!pairedCoach && user.pairing_code) {
