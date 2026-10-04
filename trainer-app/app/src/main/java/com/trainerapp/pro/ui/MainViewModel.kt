@@ -258,11 +258,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val parts = user.fullName.trim().split(" ", limit = 2)
         val firstName = parts.firstOrNull() ?: user.fullName.trim()
         val lastName = if (parts.size > 1) parts[1] else ""
-        prefs.edit()
+        val prefsEditor = prefs.edit()
             .putString("trainer_first_name", firstName)
             .putString("trainer_last_name", lastName)
             .putString("trainer_phone", user.phone.trim())
-            .apply()
+        
+        if (user.avatarBase64.isNotBlank()) {
+            prefsEditor.putString("trainer_avatar_base64", user.avatarBase64)
+            try {
+                val cleanB64 = user.avatarBase64.substringAfter("base64,")
+                val bytes = android.util.Base64.decode(cleanB64, android.util.Base64.DEFAULT)
+                val avatarFile = java.io.File(getApplication<Application>().filesDir, "trainer_avatar.jpg")
+                avatarFile.writeBytes(bytes)
+                prefsEditor.putString("trainer_photo_uri", avatarFile.absolutePath)
+            } catch (_: Exception) {}
+        }
+        prefsEditor.apply()
     }
 
     suspend fun remoteLogin(username: String, pass: String): com.trainerapp.pro.data.auth.TrainerRemoteAuthResult {

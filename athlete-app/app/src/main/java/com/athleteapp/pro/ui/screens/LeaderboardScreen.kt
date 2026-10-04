@@ -151,7 +151,7 @@ fun LeaderboardScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "$completedWorkouts трен. / ${String.format("%.0f", myTonnage)} кг",
+                            text = "$completedWorkouts трен.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.secondary
                         )
@@ -323,7 +323,7 @@ fun LeaderboardScreen(
                                             }
                                         }
                                         Text(
-                                            text = "${item.workoutsCount} тренировок • ${String.format("%.0f", item.tonnageKg)} кг тоннаж",
+                                            text = "${item.workoutsCount} тренировок",
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.secondary
                                         )

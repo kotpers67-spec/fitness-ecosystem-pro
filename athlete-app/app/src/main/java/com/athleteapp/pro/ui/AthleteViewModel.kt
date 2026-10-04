@@ -203,11 +203,27 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val current = profile.value ?: AthleteProfileEntity()
             val pin = if (user.pairingCode.isNotBlank()) user.pairingCode else if (current.pairingPin.length == 6) current.pairingPin else String.format(Locale.US, "%06d", Random().nextInt(1000000))
+            
+            var savedPath = current.avatarPath
+            val b64 = if (user.avatarBase64.isNotBlank()) user.avatarBase64 else current.avatarBase64
+            if (user.avatarBase64.isNotBlank()) {
+                try {
+                    val cleanB64 = user.avatarBase64.substringAfter("base64,")
+                    val bytes = android.util.Base64.decode(cleanB64, android.util.Base64.DEFAULT)
+                    val avatarFile = java.io.File(getApplication<Application>().filesDir, "athlete_avatar.jpg")
+                    avatarFile.writeBytes(bytes)
+                    savedPath = avatarFile.absolutePath
+                } catch (_: Exception) {}
+            }
+
             dao.saveProfile(
                 current.copy(
                     fullName = user.fullName.ifBlank { current.fullName },
                     phone = user.phone.ifBlank { current.phone },
-                    pairingPin = pin
+                    pairingPin = pin,
+                    avatarBase64 = b64,
+                    avatarPath = savedPath,
+                    photoUri = savedPath
                 )
             )
             autoSync()
@@ -452,6 +468,42 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                 rpe = rec.targetRpe
             )
             dao.insertSet(newSet)
+        }
+    }
+
+    fun createSelfExercise(name: String, muscleGroup: String, initialWeight: Double, initialReps: Int) {
+        viewModelScope.launch {
+            val session = _currentSession.value ?: return@launch
+            val cleanName = name.trim().ifBlank { "Упражнение" }
+            val group = muscleGroup.trim().ifBlank { "Общая" }
+            
+            // Check if exercise entity already exists or insert new
+            val existingEx = exercises.value.find { it.name.equals(cleanName, ignoreCase = true) }
+            val exId = existingEx?.id ?: dao.insertExercise(
+                AssignedExerciseEntity(
+                    name = cleanName,
+                    muscleGroup = group,
+                    defaultRestSeconds = 90
+                )
+            )
+
+            val maxOrder = _currentSets.value.map { it.exerciseOrder }.maxOrNull() ?: 0
+            val newSet = MyWorkoutSetEntity(
+                sessionId = session.id,
+                exerciseId = exId,
+                exerciseName = cleanName,
+                muscleGroup = group,
+                exerciseOrder = maxOrder + 1,
+                setNumber = 1,
+                targetWeightKg = initialWeight.coerceAtLeast(0.0),
+                targetReps = initialReps.coerceAtLeast(1),
+                actualWeightKg = initialWeight.coerceAtLeast(0.0),
+                actualReps = initialReps.coerceAtLeast(1),
+                isCompleted = false,
+                rpe = 8.0
+            )
+            dao.insertSet(newSet)
+            autoSync()
         }
     }
 

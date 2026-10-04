@@ -18,6 +18,7 @@ data class TrainerRemoteUserInfo(
     val telegramUsername: String = "",
     val isApproved: Boolean = false,
     val twoFactorEnabled: Boolean = false,
+    val avatarBase64: String = "",
     val token: String = ""
 )
 
@@ -44,6 +45,7 @@ sealed class TrainerRemoteAuthResult {
 
 sealed class TrainerTelegramSessionStatusResult {
     data class Authorized(val token: String, val user: TrainerRemoteUserInfo) : TrainerTelegramSessionStatusResult()
+    data class Require2Fa(val userId: Long, val message: String, val expiresInSeconds: Int) : TrainerTelegramSessionStatusResult()
     data class Pending(val message: String = "Ожидание авторизации...") : TrainerTelegramSessionStatusResult()
     data class Expired(val message: String = "Сессия истекла") : TrainerTelegramSessionStatusResult()
     data class Error(val message: String) : TrainerTelegramSessionStatusResult()
@@ -119,6 +121,8 @@ class TrainerRemoteAuthManager(
                         telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else "",
                         isApproved = true,
                         twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
+                        avatarBase64 = if (userObj.has("avatarBase64") && !userObj.get("avatarBase64").isJsonNull) userObj.get("avatarBase64").asString
+                            else if (userObj.has("avatar_base64") && !userObj.get("avatar_base64").isJsonNull) userObj.get("avatar_base64").asString else "",
                         token = token
                     )
                 } else {
@@ -569,12 +573,19 @@ class TrainerRemoteAuthManager(
                             telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else "",
                             isApproved = true,
                             twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
+                            avatarBase64 = if (userObj.has("avatarBase64") && !userObj.get("avatarBase64").isJsonNull) userObj.get("avatarBase64").asString
+                                else if (userObj.has("avatar_base64") && !userObj.get("avatar_base64").isJsonNull) userObj.get("avatar_base64").asString else "",
                             token = token
                         )
                     } else {
                         TrainerRemoteUserInfo(isApproved = true, token = token)
                     }
                     return@withContext TrainerTelegramSessionStatusResult.Authorized(token, user)
+                } else if (status == "REQUIRES_2FA") {
+                    val userId = if (json.has("userId")) json.get("userId").asLong else 0L
+                    val msg = if (json.has("message")) json.get("message").asString else "Включена 2FA: введите 6-значный код из Telegram"
+                    val exp = if (json.has("expiresInSeconds")) json.get("expiresInSeconds").asInt else 300
+                    return@withContext TrainerTelegramSessionStatusResult.Require2Fa(userId, msg, exp)
                 } else if (status == "EXPIRED") {
                     return@withContext TrainerTelegramSessionStatusResult.Expired()
                 } else {

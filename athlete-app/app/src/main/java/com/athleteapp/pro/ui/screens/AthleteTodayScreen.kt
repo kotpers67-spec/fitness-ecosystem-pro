@@ -55,6 +55,7 @@ fun AthleteTodayScreen(
     val isSelfAllowed = currentSession?.isSelfWorkoutAllowed == true
 
     val lang = settings?.language ?: "ru"
+    var showAddExerciseDialog by remember { mutableStateOf(false) }
 
     // Group sets by exercise
     val setsByExercise = remember(sets) {
@@ -215,6 +216,20 @@ fun AthleteTodayScreen(
 
 
 
+            if (isSelfAllowed) {
+                item {
+                    Button(
+                        onClick = { showAddExerciseDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("+ Добавить упражнение", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
             // 4. Exercise Matrix Cards
             if (setsByExercise.isEmpty()) {
                 item {
@@ -228,7 +243,7 @@ fun AthleteTodayScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "На сегодня тренер не назначил упражнений",
+                                text = if (isSelfAllowed) "Упражнений пока нет. Нажмите «+ Добавить упражнение» выше." else "На сегодня тренер не назначил упражнений",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -259,6 +274,80 @@ fun AthleteTodayScreen(
 
             item { Spacer(modifier = Modifier.height(32.dp)) }
         }
+    }
+
+    if (showAddExerciseDialog) {
+        var newExName by remember { mutableStateOf("") }
+        var newMuscleGroup by remember { mutableStateOf("Грудь") }
+        var newWeight by remember { mutableStateOf("60") }
+        var newReps by remember { mutableStateOf("10") }
+        val muscleGroups = listOf("Грудь", "Спина", "Ноги", "Плечи", "Руки", "Пресс/Кор", "Кардио")
+
+        AlertDialog(
+            onDismissRequest = { showAddExerciseDialog = false },
+            title = { Text("Добавить упражнение") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newExName,
+                        onValueChange = { newExName = it },
+                        label = { Text("Название упражнения") },
+                        placeholder = { Text("Например: Жим гантелей") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text("Группа мышц:", style = MaterialTheme.typography.labelSmall)
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(muscleGroups) { group ->
+                            FilterChip(
+                                selected = newMuscleGroup == group,
+                                onClick = { newMuscleGroup = group },
+                                label = { Text(group, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = newWeight,
+                            onValueChange = { newWeight = it },
+                            label = { Text("Вес (кг)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = newReps,
+                            onValueChange = { newReps = it },
+                            label = { Text("Повторы") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val w = newWeight.toDoubleOrNull() ?: 0.0
+                        val r = newReps.toIntOrNull() ?: 10
+                        if (newExName.isNotBlank()) {
+                            viewModel.createSelfExercise(newExName, newMuscleGroup, w, r)
+                            showAddExerciseDialog = false
+                        }
+                    }
+                ) {
+                    Text("Добавить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddExerciseDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }
 
@@ -308,7 +397,7 @@ fun AthleteExerciseCard(
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("+ Сет", style = MaterialTheme.typography.labelSmall)
+                        Text("+ Подход", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -431,6 +520,20 @@ fun AthleteSetRow(
                     contentDescription = "Отметить выполненным",
                     modifier = Modifier.size(24.dp)
                 )
+            }
+
+            if (isSelfAllowed) {
+                IconButton(
+                    onClick = { onDelete() },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Удалить подход",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }

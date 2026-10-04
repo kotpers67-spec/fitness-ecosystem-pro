@@ -907,15 +907,63 @@
     // 3. Draw Weight Series (Neon Lime #c8ff00)
     drawSeries(pointsWeight, '#c8ff00', 3);
 
+    // Draw Date and Weight text on dots
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 9px system-ui, sans-serif';
+    pointsWeight.forEach(pt => {
+      ctx.fillStyle = '#c8ff00';
+      ctx.fillText(`${pt.val} кг`, pt.x, Math.max(14, pt.y - 8));
+    });
+
     // Draw Date Axis Labels
     ctx.textAlign = 'center';
     ctx.fillStyle = '#a1a1aa';
+    ctx.font = '10px system-ui, sans-serif';
     pointsWeight.forEach((pt, idx) => {
       if (idx === 0 || idx === pointsWeight.length - 1 || idx % Math.ceil(pointsWeight.length / 5) === 0) {
         const shortDate = pt.date ? pt.date.slice(5) : '';
         ctx.fillText(shortDate, pt.x, height - 12);
       }
     });
+
+    // Interactive Click on Points to see detailed sets breakdown
+    canvas._pointClickData = dayStats.map((st, idx) => {
+      const pt = pointsWeight[idx];
+      const setsForDate = byDate.get(st.date) || [];
+      return {
+        x: pt.x,
+        y: pt.y,
+        date: st.date,
+        maxWeight: st.maxWeight,
+        setsCount: st.setsCount,
+        avgReps: st.avgReps,
+        sets: setsForDate
+      };
+    });
+
+    if (!canvas._hasClickBound) {
+      canvas._hasClickBound = true;
+      canvas.style.cursor = 'pointer';
+      canvas.addEventListener('click', (evt) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const clickX = (evt.clientX - rect.left) * scaleX;
+        const clickY = (evt.clientY - rect.top) * scaleY;
+
+        const dataPoints = canvas._pointClickData || [];
+        const found = dataPoints.find(pt => {
+          const dx = pt.x - clickX;
+          const dy = pt.y - clickY;
+          return Math.sqrt(dx * dx + dy * dy) <= 24;
+        });
+
+        if (found) {
+          const setDetails = found.sets.map((s, i) => `Подход ${i + 1}: ${s.weight_kg} кг × ${s.reps} повт`).join('\n');
+          showToast(`📅 ${found.date}\nМакс. вес: ${found.maxWeight} кг\nВсего подходов: ${found.setsCount}\n\n${setDetails}`, 'info');
+        }
+      });
+    }
   }
 
   // --- ATHLETE: Progress & History (Charts & Logs) ---
@@ -1084,7 +1132,7 @@
         <div class="rank-badge ${rankClass}">${rank}</div>
         <div class="athlete-meta">
           <div class="athlete-name-text">${displayName}</div>
-          <div class="athlete-stats-sub">${entry.workoutsCount || 0} трен · ${tonnageStr}</div>
+          <div class="athlete-stats-sub">${entry.workoutsCount || 0} трен</div>
         </div>
         <div class="athlete-points-pill tabular-nums">${entry.points || 0} pts</div>
       `;
@@ -2005,7 +2053,7 @@
             el.dialogTelegramAuth?.close();
             state.pending2FAUserId = res.userId;
             open2FALoginModal(res.expiresInSeconds || 300);
-            showToast(res.message || 'Включена 2FA: введите 6-значный код из Telegram', 'info');
+            showToast(res.message || 'Включена 2FA аутентификация: вход в 1 клик заблокирован политикой безопасности. Введите 6-значный код из Telegram', 'info');
           } else if (res.status === 'EXPIRED') {
             clearInterval(state.tgSessionPollInterval);
             state.tgSessionPollInterval = null;

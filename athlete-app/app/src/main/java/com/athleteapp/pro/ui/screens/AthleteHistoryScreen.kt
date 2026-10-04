@@ -23,6 +23,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +49,7 @@ fun AthleteHistoryScreen(
 
     val lang = settings?.language ?: "ru"
     var showWeightDialog by remember { mutableStateOf(false) }
+    var selectedPointData by remember { mutableStateOf<Triple<String, Double, List<AthleteSetHistory>>?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -227,7 +231,10 @@ fun AthleteHistoryScreen(
                                 data = exerciseHistory,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(140.dp)
+                                    .height(140.dp),
+                                onPointClick = { date, weight, sets ->
+                                    selectedPointData = Triple(date, weight, sets)
+                                }
                             )
                         } else {
                             Box(
@@ -250,6 +257,37 @@ fun AthleteHistoryScreen(
 
             item { Spacer(modifier = Modifier.height(32.dp)) }
         }
+    }
+
+    if (selectedPointData != null) {
+        val (date, maxW, sets) = selectedPointData!!
+        AlertDialog(
+            onDismissRequest = { selectedPointData = null },
+            title = {
+                Text("Детали тренировки: $date", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Максимальный вес: $maxW кг", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("Всего подходов: ${sets.size}", style = MaterialTheme.typography.bodyMedium)
+                    HorizontalDivider()
+                    sets.forEachIndexed { i, s ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Подход ${i + 1}:", fontWeight = FontWeight.Medium)
+                            Text("${s.weightKg} кг × ${s.reps} повт", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { selectedPointData = null }) {
+                    Text("Закрыть")
+                }
+            }
+        )
     }
 
     if (showWeightDialog) {
@@ -345,61 +383,119 @@ fun AthleteWeightLineChart(
 @Composable
 fun AthleteExerciseLineChart(
     data: List<AthleteSetHistory>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPointClick: (date: String, weight: Double, sets: List<AthleteSetHistory>) -> Unit = { _, _, _ -> }
 ) {
     val primaryColor = MaterialTheme.colorScheme.secondary
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val textStyle = androidx.compose.ui.text.TextStyle(
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
 
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val weights = data.map { it.weightKg }
-        val min = (weights.minOrNull() ?: 0.0) * 0.8
-        val max = (weights.maxOfOrNull { it } ?: 100.0) * 1.1
-        val range = (max - min).coerceAtLeast(1.0)
-
-        for (i in 0..3) {
-            val y = h * (i / 3f)
-            drawLine(
-                color = gridColor,
-                start = Offset(0f, y),
-                end = Offset(w, y),
-                strokeWidth = 1f
-            )
+    // Group sets by date
+    val setsByDate = remember(data) { data.groupBy { it.date } }
+    val dayPoints = remember(setsByDate) {
+        setsByDate.map { (date, sets) ->
+            val maxW = sets.maxOfOrNull { it.weightKg } ?: 0.0
+            Triple(date, maxW, sets)
         }
+    }
 
-        if (weights.size < 2) {
-            if (weights.isNotEmpty()) {
+    var pointOffsets by remember { mutableStateOf<List<Pair<Offset, Triple<String, Double, List<AthleteSetHistory>>>>>(emptyList()) }
+
+    Box(
+        modifier = modifier
+            .pointerInput(dayPoints) {
+                detectTapGestures { tapOffset ->
+                    val hit = pointOffsets.find { (offset, _) ->
+                        (offset - tapOffset).getDistance() <= 36f
+                    }
+                    if (hit != null) {
+                        val (_, info) = hit
+                        onPointClick(info.first, info.second, info.third)
+                    }
+                }
+            }
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val weights = dayPoints.map { it.second }
+            val min = (weights.minOrNull() ?: 0.0) * 0.8
+            val max = (weights.maxOfOrNull { it } ?: 100.0) * 1.15
+            val range = (max - min).coerceAtLeast(1.0)
+
+            for (i in 0..3) {
+                val y = h * (i / 3f)
+                drawLine(
+                    color = gridColor,
+                    start = Offset(0f, y),
+                    end = Offset(w, y),
+                    strokeWidth = 1f
+                )
+            }
+
+            if (weights.isEmpty()) return@Canvas
+
+            if (weights.size == 1) {
                 val y = h / 2f
-                drawCircle(color = primaryColor, radius = 5.dp.toPx(), center = Offset(w / 2, y))
-            }
-            return@Canvas
-        }
-
-        val path = Path()
-        val stepX = w / (weights.size - 1)
-
-        weights.forEachIndexed { index, weight ->
-            val x = index * stepX
-            val y = h - ((weight - min) / range * (h * 0.8f) + h * 0.1f).toFloat()
-
-            if (index == 0) {
-                path.moveTo(x, y)
-            } else {
-                path.lineTo(x, y)
+                val center = Offset(w / 2, y)
+                drawCircle(color = primaryColor, radius = 6.dp.toPx(), center = center)
+                pointOffsets = listOf(Pair(center, dayPoints.first()))
+                val weightText = "${dayPoints.first().second} кг (${dayPoints.first().first})"
+                drawText(
+                    textMeasurer = textMeasurer,
+                    text = weightText,
+                    topLeft = Offset(w / 2 - 40f, y - 24.dp.toPx()),
+                    style = textStyle
+                )
+                return@Canvas
             }
 
-            drawCircle(
+            val path = Path()
+            val stepX = w / (weights.size - 1)
+            val newOffsets = mutableListOf<Pair<Offset, Triple<String, Double, List<AthleteSetHistory>>>>()
+
+            weights.forEachIndexed { index, weight ->
+                val x = index * stepX
+                val y = h - ((weight - min) / range * (h * 0.75f) + h * 0.12f).toFloat()
+                val center = Offset(x, y)
+
+                if (index == 0) {
+                    path.moveTo(x, y)
+                } else {
+                    path.lineTo(x, y)
+                }
+
+                drawCircle(
+                    color = primaryColor,
+                    radius = 5.dp.toPx(),
+                    center = center
+                )
+
+                // Label with weight & date
+                val ptInfo = dayPoints[index]
+                val label = "${ptInfo.second} кг"
+                drawText(
+                    textMeasurer = textMeasurer,
+                    text = label,
+                    topLeft = Offset(x - 20f, (y - 20.dp.toPx()).coerceAtLeast(2f)),
+                    style = textStyle
+                )
+
+                newOffsets.add(Pair(center, ptInfo))
+            }
+
+            pointOffsets = newOffsets
+
+            drawPath(
+                path = path,
                 color = primaryColor,
-                radius = 4.dp.toPx(),
-                center = Offset(x, y)
+                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
             )
         }
-
-        drawPath(
-            path = path,
-            color = primaryColor,
-            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-        )
     }
 }

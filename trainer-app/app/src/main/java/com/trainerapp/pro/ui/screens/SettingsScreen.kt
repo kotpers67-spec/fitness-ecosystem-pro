@@ -16,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,6 +28,7 @@ import com.trainerapp.pro.data.local.entities.ClientEntity
 import com.trainerapp.pro.data.local.entities.ExerciseEntity
 import com.trainerapp.pro.data.update.UpdateCheckResult
 import com.trainerapp.pro.ui.MainViewModel
+import com.trainerapp.pro.ui.components.ClientAvatar
 import com.trainerapp.pro.ui.i18n.AppLanguage
 import com.trainerapp.pro.ui.i18n.AppStrings
 import com.trainerapp.pro.ui.theme.AppThemePreset
@@ -159,15 +162,70 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
+        var isPullSyncing by remember { mutableStateOf(false) }
+        var pullOffset by remember { mutableStateOf(0f) }
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            if (pullOffset > 120f && !isPullSyncing) {
+                                isPullSyncing = true
+                                scope.launch {
+                                    viewModel.syncActiveClientWithGoogleDrive()
+                                    kotlinx.coroutines.delay(1200L)
+                                    isPullSyncing = false
+                                    pullOffset = 0f
+                                }
+                            } else {
+                                pullOffset = 0f
+                            }
+                        },
+                        onDragCancel = { pullOffset = 0f },
+                        onVerticalDrag = { change, dragAmount ->
+                            if (dragAmount > 0 || pullOffset > 0f) {
+                                pullOffset = (pullOffset + dragAmount * 0.5f).coerceIn(0f, 200f)
+                                change.consume()
+                            }
+                        }
+                    )
+                }
         ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (pullOffset > 20f || isPullSyncing) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (isPullSyncing) "Синхронизация данных с облаком..." else "Потяните вниз для синхронизации",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
 
-            // 0. КАРТОЧКА И ПРОФИЛЬ ТРЕНЕРА
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+
+                    // 0. КАРТОЧКА И ПРОФИЛЬ ТРЕНЕРА
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -1046,6 +1104,8 @@ fun SettingsScreen(
             item { Spacer(Modifier.height(20.dp)) }
         }
     }
+}
+}
 
     // Exercise Add/Edit Dialog
     if (showAddExerciseDialog) {

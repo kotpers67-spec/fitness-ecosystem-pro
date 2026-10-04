@@ -317,7 +317,7 @@ fun WorkoutScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("СЕТ", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+                            Text("ПОДХОД", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(50.dp))
                             Text("ВЕС (КГ)", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             Spacer(Modifier.width(8.dp))
                             Text("ПОВТОРЫ", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))

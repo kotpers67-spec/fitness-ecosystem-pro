@@ -157,6 +157,14 @@ fun AthleteAuthScreen(viewModel: AthleteViewModel) {
                                     isPollingTgSession = false
                                     tgStatusText = null
                                     break
+                                } else if (status is TelegramSessionStatusResult.Require2Fa) {
+                                    errorMessage = "Включена 2FA аутентификация: вход в 1 клик заблокирован политикой безопасности. Введите 6-значный код из Telegram"
+                                    isPollingTgSession = false
+                                    tgStatusText = null
+                                    tgCodeStep = 2
+                                    tgCodeError = null
+                                    showTgCodeDialog = true
+                                    break
                                 } else if (status is TelegramSessionStatusResult.Expired) {
                                     errorMessage = "Срок действия сессии Telegram истёк"
                                     isPollingTgSession = false
