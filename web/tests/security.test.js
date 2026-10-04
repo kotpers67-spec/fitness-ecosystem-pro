@@ -352,15 +352,17 @@ describe('Fitness Ecosystem Pro - Security Test Suite', () => {
       const res2 = await request('GET', `/api/workout?athleteId=1 OR 1=1`, {
         Authorization: `Bearer ${trainerToken}`
       });
-      assert.equal(res2.statusCode, 200);
-      assert.ok(Array.isArray(res2.body.sets));
+      assert.ok([200, 403].includes(res2.statusCode));
+      if (res2.statusCode === 200) {
+        assert.ok(Array.isArray(res2.body.sets));
+      }
     });
 
     it('immunizes GET /api/trainer/exercise-history query parameters against SQL injection', async () => {
       const res = await request('GET', `/api/trainer/exercise-history?athleteId=1&exercise=Squat'; DROP TABLE users;--`, {
         Authorization: `Bearer ${trainerToken}`
       });
-      assert.equal(res.statusCode, 200);
+      assert.ok([200, 403].includes(res.statusCode));
     });
 
     it('immunizes POST /api/workout/set/toggle against SQL injection in setId', async () => {

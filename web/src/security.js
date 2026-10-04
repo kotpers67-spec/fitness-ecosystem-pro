@@ -56,9 +56,13 @@ function verifyPassword(password, storedHash) {
   return crypto.timingSafeEqual(targetBuffer, derivedBuffer);
 }
 
-// 4. Cryptographic Secure Token Generation
+// 4. Cryptographic Secure Token & PIN Generation
 function generateToken() {
   return crypto.randomBytes(32).toString('hex');
+}
+
+function generateSecurePin() {
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 // 5. Sliding-Window Rate Limiter
@@ -84,6 +88,18 @@ class RateLimiter {
     return false;
   }
 
+  cleanup() {
+    const now = Date.now();
+    for (const [key, timestamps] of this.requests.entries()) {
+      const recent = timestamps.filter(t => now - t < this.windowMs);
+      if (recent.length === 0) {
+        this.requests.delete(key);
+      } else {
+        this.requests.set(key, recent);
+      }
+    }
+  }
+
   reset() {
     this.requests.clear();
   }
@@ -106,6 +122,7 @@ module.exports = {
   hashPassword,
   verifyPassword,
   generateToken,
+  generateSecurePin,
   RateLimiter,
   SECURITY_HEADERS
 };

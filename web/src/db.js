@@ -5,14 +5,19 @@
 
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
+const { generateSecurePin } = require('./security');
 
 class AppDatabase {
   constructor(dbPath = path.join(__dirname, '..', 'fitness.sqlite')) {
     this.db = new DatabaseSync(dbPath);
-    try {
-      this.db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
-    } catch (_) {}
+    this.initDb();
     this.initTables();
+  }
+
+  initDb() {
+    try {
+      this.db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;");
+    } catch (_) {}
   }
 
   initTables() {
@@ -99,6 +104,9 @@ class AppDatabase {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
       );
+
+      CREATE INDEX IF NOT EXISTS idx_users_pairing_code ON users(pairing_code);
+      CREATE INDEX IF NOT EXISTS idx_workout_sets_session ON workout_sets(session_id);
     `);
 
     // Ensure backwards-compatible columns exist in existing tables
@@ -161,22 +169,47 @@ class AppDatabase {
   findUserByUsername(username) {
     const clean = String(username || '').trim();
     if (!clean) return null;
+    const cleanNoAt = clean.replace(/^@/, '');
+    const cleanDigits = clean.replace(/\D/g, '');
     const stmt = this.db.prepare(`
       SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
-      FROM users WHERE username = ? OR LOWER(username) = LOWER(?) OR LOWER(full_name) = LOWER(?) OR LOWER(telegram_username) = LOWER(?)
+      FROM users 
+      WHERE username = ? 
+         OR LOWER(username) = LOWER(?) 
+         OR LOWER(full_name) = LOWER(?) 
+         OR LOWER(telegram_username) = LOWER(?)
+         OR telegram_username = ?
+         OR (phone != '' AND phone = ?)
     `);
-    const cleanNoAt = clean.replace(/^@/, '');
-    let user = stmt.get(clean, clean, clean, cleanNoAt);
-    if (!user) {
-      const allStmt = this.db.prepare(`
-        SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
-        FROM users
-      `);
-      const all = allStmt.all();
-      const targetLower = clean.toLowerCase();
-      user = all.find(u => (u.username && u.username.toLowerCase() === targetLower) || (u.full_name && u.full_name.toLowerCase() === targetLower)) || null;
+    let user = stmt.get(clean, clean, clean, cleanNoAt, cleanNoAt, cleanDigits || clean);
+    if (!user && cleanDigits && cleanDigits.length >= 7) {
+      user = this.findUserByPhone(cleanDigits);
     }
     return user || null;
+  }
+
+  findUserByPhone(phone) {
+    const raw = String(phone || '').trim();
+    const digits = raw.replace(/\D/g, '');
+    if (!digits || digits.length < 7) return null;
+    const last10 = digits.slice(-10);
+    const stmt = this.db.prepare(`
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
+      FROM users
+      WHERE phone = ? OR phone LIKE ?
+    `);
+    return stmt.get(digits, `%${last10}`) || null;
+  }
+
+  findUserByFullName(fullName) {
+    const clean = String(fullName || '').trim().toLowerCase();
+    if (!clean) return null;
+    const stmt = this.db.prepare(`
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
+      FROM users
+      WHERE LOWER(full_name) = ?
+    `);
+    return stmt.get(clean) || null;
   }
 
   findUserById(id) {
@@ -203,6 +236,19 @@ class AppDatabase {
       FROM users WHERE pairing_code = ? AND role = 'athlete'
     `);
     return stmt.get(cleanCode) || null;
+  }
+
+  generateUniquePairingCode(currentUserId = null) {
+    const PAIRING_TTL = 5 * 60 * 1000;
+    const now = Date.now();
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const pin = generateSecurePin();
+      const existing = this.findUserByPairingCode(pin);
+      if (!existing) return pin;
+      if (currentUserId && existing.id === currentUserId) return pin;
+      if (now - (existing.pairing_code_created_at || 0) >= PAIRING_TTL) return pin;
+    }
+    return generateSecurePin();
   }
 
   updateProfile(userId, fullName, phone, avatarBase64 = null) {
@@ -341,6 +387,17 @@ class AppDatabase {
     `);
     stmt.run(trainerId, athleteId);
     return true;
+  }
+
+  isAthletePairedToTrainer(trainerId, athleteId) {
+    const tId = Number(trainerId);
+    const aId = Number(athleteId);
+    if (!tId || !aId) return false;
+    const stmt = this.db.prepare(`
+      SELECT 1 FROM trainer_clients WHERE trainer_id = ? AND athlete_id = ?
+    `);
+    const row = stmt.get(tId, aId);
+    return Boolean(row);
   }
 
   unpairTrainerAndAthlete(trainerId, athleteId) {
