@@ -448,6 +448,26 @@ class CloudSyncService {
       avatarBase64: item.avatarBase64
     }));
   }
+
+  async updateAthleteRestrictions(clientUuid, restrictions) {
+    if (!clientUuid) return false;
+    const cloud = await this.fetchCloudData(true);
+    if (!cloud.clients) cloud.clients = {};
+    if (!cloud.clients[clientUuid]) {
+      cloud.clients[clientUuid] = {
+        clientUuid,
+        clientName: 'Атлет',
+        phone: '',
+        syncTimestamp: Date.now(),
+        assignedWorkouts: [],
+        restrictions: restrictions || ''
+      };
+    } else {
+      cloud.clients[clientUuid].restrictions = restrictions || '';
+      cloud.clients[clientUuid].syncTimestamp = Date.now();
+    }
+    return await this.pushCloudData(cloud);
+  }
 }
 
 const cloudSyncService = new CloudSyncService();

@@ -180,7 +180,8 @@
     linkTgTimerDisplay: document.getElementById('link-tg-timer-display'),
     formLinkTgConfirm: document.getElementById('form-link-tg-confirm'),
     linkTgInputCode: document.getElementById('link-tg-input-code'),
-    btnLinkTgBack: document.getElementById('btn-link-tg-back')
+    btnLinkTgBack: document.getElementById('btn-link-tg-back'),
+    btnLinkTgDeeplink: document.getElementById('btn-link-tg-deeplink')
   };
 
   // --- API Client Helper ---
@@ -851,7 +852,7 @@
     }
 
     if (typeof window.generateQrSvg === 'function') {
-      const svg = window.generateQrSvg(pinCode, 180);
+      const svg = window.generateQrSvg(pinCode, { size: 200, color: '#000000', background: '#ffffff', margin: 2 });
       el.athleteQrContainer.innerHTML = svg;
     } else {
       el.athleteQrContainer.innerHTML = `<div style="font-size:24px;font-weight:900;color:var(--accent-lime);">${pinCode}</div>`;
@@ -927,15 +928,24 @@
   function selectTrainerClient(clientId) {
     state.activeClientId = Number(clientId);
     const client = state.clients.find(c => c.id === state.activeClientId);
+    const cardRestrictions = document.getElementById('card-trainer-restrictions');
+    const inputRestrictions = document.getElementById('input-athlete-restrictions');
+
     if (client) {
       el.trainerActiveClientName.textContent = client.full_name || client.username;
       if (client.avatar_base64 && el.trainerActiveClientAvatar) {
         el.trainerActiveClientAvatar.innerHTML = `<img src="${client.avatar_base64}" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;">`;
       }
       el.trainerWorkoutNotice.style.display = 'none';
+      if (cardRestrictions && inputRestrictions) {
+        cardRestrictions.style.display = 'block';
+        inputRestrictions.value = client.restrictions || '';
+      }
       populateTrainerClientDropdown();
       renderTrainerClientsList();
       showToast(`Выбран подопечный: ${client.full_name || client.username}`, 'info');
+    } else {
+      if (cardRestrictions) cardRestrictions.style.display = 'none';
     }
   }
 
@@ -1709,6 +1719,30 @@
         el.trainerInputReps.focus();
       } catch {}
     };
+
+    // Trainer Athlete Restrictions Form
+    const formRestrictions = document.getElementById('form-trainer-restrictions');
+    if (formRestrictions) {
+      formRestrictions.onsubmit = async (evt) => {
+        evt.preventDefault();
+        if (!state.activeClientId) {
+          showToast('Подопечный не выбран', 'error');
+          return;
+        }
+        const restrictions = document.getElementById('input-athlete-restrictions').value;
+        try {
+          await api('/api/trainer/athlete-restrictions', {
+            method: 'POST',
+            body: JSON.stringify({ athleteId: state.activeClientId, restrictions })
+          });
+          const client = state.clients.find(c => c.id === state.activeClientId);
+          if (client) client.restrictions = restrictions;
+          showToast('Ограничения и травмы атлета сохранены', 'success');
+        } catch (err) {
+          showToast(err.message || 'Ошибка сохранения', 'error');
+        }
+      };
+    }
 
     // Trainer Profile Photo Selection
     if (el.trainerAvatarInput) {

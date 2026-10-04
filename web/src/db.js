@@ -79,6 +79,14 @@ class AppDatabase {
         expires_at INTEGER NOT NULL,
         FOREIGN KEY(user_id) REFERENCES users(id)
       );
+
+      CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      );
     `);
 
     // Ensure backwards-compatible columns exist in existing tables
@@ -95,6 +103,7 @@ class AppDatabase {
     safeAddColumn('users', "telegram_username TEXT DEFAULT ''");
     safeAddColumn('users', "two_factor_enabled INTEGER DEFAULT 0");
     safeAddColumn('users', "is_approved INTEGER DEFAULT 1");
+    safeAddColumn('users', "restrictions TEXT DEFAULT ''");
 
     safeAddColumn('workout_sessions', "is_self_workout_allowed INTEGER DEFAULT 0");
     safeAddColumn('workout_sessions', "assigned_by_trainer_id INTEGER DEFAULT NULL");
@@ -113,12 +122,16 @@ class AppDatabase {
   createUser(username, passwordHash, role, fullName, phone = '', pairingCode = '', clientUuid = '', avatarBase64 = '', isApproved = null) {
     const pairingCreatedAt = pairingCode ? Date.now() : 0;
     const approvedVal = isApproved !== null ? (isApproved ? 1 : 0) : (role === 'trainer' ? 0 : 1);
+    const initialUsername = username || `${role}_temp_${Date.now()}`;
     const stmt = this.db.prepare(`
       INSERT INTO users (username, password_hash, role, full_name, phone, pairing_code, client_uuid, avatar_base64, is_private, pairing_code_created_at, is_approved)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `);
-    const result = stmt.run(username, passwordHash, role, fullName, phone, pairingCode, clientUuid, avatarBase64, pairingCreatedAt, approvedVal);
-    return Number(result.lastInsertRowid);
+    const result = stmt.run(initialUsername, passwordHash, role, fullName, phone, pairingCode, clientUuid, avatarBase64, pairingCreatedAt, approvedVal);
+    const userId = Number(result.lastInsertRowid);
+    const formattedUsername = `${role}_${userId}`;
+    this.db.prepare(`UPDATE users SET username = ? WHERE id = ?`).run(formattedUsername, userId);
+    return userId;
   }
 
   approveTrainer(userId) {
@@ -126,21 +139,28 @@ class AppDatabase {
     return stmt.run(userId);
   }
 
+  updateAthleteRestrictions(athleteId, restrictions) {
+    const stmt = this.db.prepare(`UPDATE users SET restrictions = ? WHERE id = ? AND role = 'athlete'`);
+    return stmt.run(restrictions, athleteId);
+  }
+
   findUserByUsername(username) {
     const clean = String(username || '').trim();
+    if (!clean) return null;
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at
-      FROM users WHERE username = ? OR LOWER(username) = LOWER(?)
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
+      FROM users WHERE username = ? OR LOWER(username) = LOWER(?) OR LOWER(full_name) = LOWER(?) OR LOWER(telegram_username) = LOWER(?)
     `);
-    let user = stmt.get(clean, clean);
+    const cleanNoAt = clean.replace(/^@/, '');
+    let user = stmt.get(clean, clean, clean, cleanNoAt);
     if (!user) {
       const allStmt = this.db.prepare(`
-        SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at
+        SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
         FROM users
       `);
       const all = allStmt.all();
       const targetLower = clean.toLowerCase();
-      user = all.find(u => u.username && u.username.toLowerCase() === targetLower) || null;
+      user = all.find(u => (u.username && u.username.toLowerCase() === targetLower) || (u.full_name && u.full_name.toLowerCase() === targetLower)) || null;
     }
     return user || null;
   }
@@ -215,10 +235,45 @@ class AppDatabase {
   }
 
   linkTelegram(userId, telegramId, telegramUsername) {
+    const cleanUsername = String(telegramUsername || '').replace(/^@/, '').trim().toLowerCase();
+    const cleanId = String(telegramId || '').trim();
     const stmt = this.db.prepare(`
       UPDATE users SET telegram_id = ?, telegram_username = ? WHERE id = ?
     `);
-    return stmt.run(String(telegramId || ''), String(telegramUsername || ''), userId);
+    return stmt.run(cleanId, cleanUsername, userId);
+  }
+
+  createLinkToken(userId, token, ttlMs = 300000) {
+    const cleanToken = String(token || '').trim();
+    const expiresAt = Date.now() + ttlMs;
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO telegram_link_tokens (token, user_id, expires_at)
+      VALUES (?, ?, ?)
+    `);
+    stmt.run(cleanToken, userId, expiresAt);
+    return { token: cleanToken, userId, expiresAt };
+  }
+
+  findLinkToken(token) {
+    const cleanToken = String(token || '').trim();
+    if (!cleanToken) return null;
+    const stmt = this.db.prepare(`
+      SELECT token, user_id, expires_at FROM telegram_link_tokens WHERE token = ?
+    `);
+    const row = stmt.get(cleanToken);
+    if (!row) return null;
+    if (Date.now() > row.expires_at) {
+      this.consumeLinkToken(cleanToken);
+      return null;
+    }
+    return row;
+  }
+
+  consumeLinkToken(token) {
+    const cleanToken = String(token || '').trim();
+    if (!cleanToken) return;
+    const stmt = this.db.prepare(`DELETE FROM telegram_link_tokens WHERE token = ?`);
+    stmt.run(cleanToken);
   }
 
   unlinkTelegram(userId) {
@@ -302,7 +357,7 @@ class AppDatabase {
 
   getTrainerClients(trainerId) {
     const stmt = this.db.prepare(`
-      SELECT u.id, u.username, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.pairing_code, tc.paired_at,
+      SELECT u.id, u.username, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.pairing_code, u.restrictions, tc.paired_at,
              (SELECT COUNT(*) FROM workout_sessions ws WHERE ws.athlete_id = u.id) as sessions_count,
              (SELECT COALESCE(SUM(s.weight_kg * s.reps), 0) FROM workout_sets s 
               JOIN workout_sessions ws ON s.session_id = ws.id 

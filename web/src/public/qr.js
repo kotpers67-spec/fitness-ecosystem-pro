@@ -305,13 +305,14 @@
     return matrix;
   }
 
-  function generateQrSvg(text, options = {}) {
+  function generateQrSvg(text, sizeOrOptions = {}) {
+    const opts = typeof sizeOrOptions === 'number' ? { size: sizeOrOptions } : (sizeOrOptions || {});
     const {
       size = 200,
-      color = '#ffffff',
-      background = 'transparent',
+      color = '#000000',
+      background = '#ffffff',
       margin = 2
-    } = options;
+    } = opts;
 
     const matrix = generateMatrix(String(text || ''));
     const moduleCount = matrix.length;
