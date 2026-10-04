@@ -1914,7 +1914,8 @@ const server = http.createServer(async (req, res) => {
           return fs.createReadStream(apkPath).pipe(res);
         } else {
           // Fallback: Redirect to GitHub Releases
-          const tag = fileName.includes('v1.0.6') ? 'v1.0.6' : 'v1.0.5';
+          const match = fileName.match(/v\d+\.\d+\.\d+/);
+          const tag = match ? match[0] : 'v1.0.10';
           res.writeHead(302, {
             'Location': `https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/${tag}/${fileName}`
           });

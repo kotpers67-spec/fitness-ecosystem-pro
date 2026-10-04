@@ -253,6 +253,106 @@ class AthleteRemoteAuthManager(
     }
 
     /**
+     * Request one-time 6-digit code via Telegram bot: POST /api/auth/telegram/request-otp
+     */
+    suspend fun requestTelegramOtp(username: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        val cleanUser = username.trim().removePrefix("@")
+        if (cleanUser.isBlank()) return@withContext Pair(false, "Укажите Telegram логин")
+
+        try {
+            val url = URL("$backendBaseUrl/api/auth/telegram/request-otp")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+
+            val payload = JsonObject().apply {
+                addProperty("username", cleanUser)
+            }
+            conn.outputStream.use { os ->
+                os.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
+            }
+
+            val code = conn.responseCode
+            val text = if (code in 200..299) conn.inputStream.bufferedReader().readText() else conn.errorStream?.bufferedReader()?.readText() ?: ""
+            val json = runCatching { JsonParser.parseString(text).asJsonObject }.getOrNull()
+
+            if (code == 200 && json != null && json.has("success") && json.get("success").asBoolean) {
+                val msg = if (json.has("message")) json.get("message").asString else "Код отправлен в Telegram"
+                return@withContext Pair(true, msg)
+            } else {
+                val errMsg = json?.get("error")?.asString ?: "Не удалось отправить код"
+                return@withContext Pair(false, errMsg)
+            }
+        } catch (e: Exception) {
+            return@withContext Pair(false, e.message ?: "Сетевая ошибка при запросе кода")
+        }
+    }
+
+    /**
+     * Verify one-time 6-digit code: POST /api/auth/telegram/verify-otp
+     */
+    suspend fun verifyTelegramOtp(username: String, otp: String): AthleteRemoteAuthResult = withContext(Dispatchers.IO) {
+        val cleanUser = username.trim().removePrefix("@")
+        val clean = cleanOtp(otp)
+        if (clean.length != 6) {
+            return@withContext AthleteRemoteAuthResult.Error("Код должен содержать ровно 6 цифр")
+        }
+
+        try {
+            val url = URL("$backendBaseUrl/api/auth/telegram/verify-otp")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+
+            val payload = JsonObject().apply {
+                addProperty("username", cleanUser)
+                addProperty("code", clean)
+            }
+            conn.outputStream.use { os ->
+                os.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
+            }
+
+            val code = conn.responseCode
+            val text = if (code in 200..299) conn.inputStream.bufferedReader().readText() else conn.errorStream?.bufferedReader()?.readText() ?: ""
+            val json = runCatching { JsonParser.parseString(text).asJsonObject }.getOrNull()
+
+            if (code == 200 && json != null) {
+                val token = if (json.has("token")) json.get("token").asString else ""
+                val userObj = json.getAsJsonObject("user")
+                val user = if (userObj != null) {
+                    AthleteRemoteUserInfo(
+                        id = if (userObj.has("id")) userObj.get("id").asLong else 0L,
+                        username = if (userObj.has("username")) userObj.get("username").asString else cleanUser,
+                        role = if (userObj.has("role")) userObj.get("role").asString else "athlete",
+                        fullName = if (userObj.has("fullName") && !userObj.get("fullName").isJsonNull) userObj.get("fullName").asString else "",
+                        phone = if (userObj.has("phone") && !userObj.get("phone").isJsonNull) userObj.get("phone").asString else "",
+                        pairingCode = if (userObj.has("pairingCode") && !userObj.get("pairingCode").isJsonNull) userObj.get("pairingCode").asString else "",
+                        telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else cleanUser,
+                        twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
+                        token = token
+                    )
+                } else {
+                    AthleteRemoteUserInfo(username = cleanUser, telegramUsername = cleanUser, token = token)
+                }
+                return@withContext AthleteRemoteAuthResult.Success(token, user)
+            } else {
+                val errMsg = json?.get("error")?.asString ?: "Неверный код из Telegram"
+                return@withContext AthleteRemoteAuthResult.Error(errMsg)
+            }
+        } catch (_: Exception) {
+            return@withContext AthleteRemoteAuthResult.OfflineFallback
+        }
+    }
+
+    /**
      * Initialize Telegram 1-Click login session via POST /api/auth/telegram/session-init
      */
     suspend fun initTelegramSession(): Pair<String, String>? = withContext(Dispatchers.IO) {
