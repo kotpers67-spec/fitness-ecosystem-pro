@@ -148,7 +148,8 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
       `👋 Привет, <b>${ctx.from?.first_name || 'атлет'}</b>!\n\n` +
       `Добро пожаловать в <b>Fitness Ecosystem Pro</b> — платформу для атлетов и персональных тренеров.\n\n` +
       `🔐 Ваш одноразовый код для входа на сайт:\n\n` +
-      `👉 <b>${code}</b> 👈\n\n` +
+      `👉 <code>${code}</code> 👈\n` +
+      `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
       `⏱ Код действует <b>5 минут</b>.\n\n` +
       `Используйте кнопки меню ниже для быстрого управления:`,
       {
@@ -196,7 +197,8 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
 
     await ctx.reply(
       `🔐 Ваш одноразовый код для входа на сайт:\n\n` +
-      `👉 <b>${code}</b> 👈\n\n` +
+      `👉 <code>${code}</code> 👈\n` +
+      `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
       `⏱ Код действует <b>5 минут</b>.`,
       {
         parse_mode: 'HTML',
@@ -294,7 +296,10 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
         telegramOtpStore.set(`id_${tgId}`, { code, expiresAt, attempts: 0 });
       }
       await ctx.reply(
-        `🔐 Ваш код для входа на сайт: <b>${code}</b> (действует 5 минут)`,
+        `🔐 Ваш код для входа на сайт:\n\n` +
+        `👉 <code>${code}</code> 👈\n` +
+        `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
+        `⏱ Действует <b>5 минут</b>.`,
         {
           parse_mode: 'HTML',
           reply_markup: createOwnersKeyboard()
@@ -313,7 +318,8 @@ async function send2FAOtp(bot, telegramId, otp) {
     await bot.api.sendMessage(
       telegramId,
       `🔐 <b>Код двухфакторной аутентификации (2FA):</b>\n\n` +
-      `👉 <b>${otp}</b> 👈\n\n` +
+      `👉 <code>${otp}</code> 👈\n` +
+      `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
       `⏱ Действует: <b>5 минут</b>.\n` +
       `Введите этот код в форму на сайте для подтверждения входа.\n` +
       `Никому не сообщайте этот код!`,
