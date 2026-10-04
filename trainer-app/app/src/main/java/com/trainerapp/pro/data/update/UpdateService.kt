@@ -59,7 +59,39 @@ class UpdateService(private val context: Context) {
         try {
             val currentVersionName = getCurrentVersionName()
 
-            // 1. Primary update check: Official GitHub Releases API
+            // 1. Primary: check our own server /api/version (always has the real latest)
+            try {
+                val url = URL("https://fitness-ecosystem-pro.onrender.com/api/version")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.setRequestProperty("Accept", "application/json")
+                conn.setRequestProperty("User-Agent", "TrainerPro-App")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+
+                if (conn.responseCode == 200) {
+                    val json = conn.inputStream.bufferedReader().readText()
+                    val parsed = gson.fromJson(json, com.google.gson.JsonObject::class.java)
+                    val trainerObj = parsed.getAsJsonObject("trainer")
+                    val latestVersion = trainerObj?.get("version")?.asString ?: parsed.get("latest")?.asString
+                    val downloadUrl = trainerObj?.get("url")?.asString
+                    val changelog = trainerObj?.get("changelog")?.asString ?: "Доступно обновление v$latestVersion"
+
+                    if (latestVersion != null && downloadUrl != null) {
+                        val isNewer = isVersionNewer(latestVersion, currentVersionName)
+                        return@withContext Result.success(
+                            UpdateCheckResult(
+                                isUpdateAvailable = isNewer,
+                                currentVersion = currentVersionName,
+                                latestVersion = latestVersion,
+                                releaseNotes = changelog,
+                                downloadUrl = downloadUrl
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
+
+            // 2. Secondary: Official GitHub Releases API
             val apiEndpoints = listOf(
                 "https://api.github.com/repos/$repoOwner/$repoName/releases/latest",
                 "https://api.github.com/repos/$repoOwner/render-auth-bot/releases/latest"
@@ -82,7 +114,7 @@ class UpdateService(private val context: Context) {
                             ?: release.assets.find { it.name.endsWith(".apk") }
 
                         val downloadUrl = apkAsset?.browser_download_url
-                            ?: "https://github.com/$repoOwner/$repoName/releases/download/v$cleanTag/trainer-pro-v$cleanTag.apk"
+                            ?: "https://fitness-ecosystem-pro.onrender.com/releases/trainer-pro-v$cleanTag.apk"
 
                         val isNewer = isVersionNewer(cleanTag, currentVersionName)
                         return@withContext Result.success(
@@ -98,7 +130,7 @@ class UpdateService(private val context: Context) {
                 } catch (_: Exception) {}
             }
 
-            // 2. Fallback static release configuration for kotpers67-spec
+            // 3. Static fallback
             val fallbackVersion = "2.0.0"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
@@ -107,7 +139,7 @@ class UpdateService(private val context: Context) {
                     currentVersion = currentVersionName,
                     latestVersion = fallbackVersion,
                     releaseNotes = "Официальный релиз Trainer Pro v$fallbackVersion доступен для загрузки.",
-                    downloadUrl = "https://github.com/$repoOwner/$repoName/releases/download/v$fallbackVersion/trainer-pro-v$fallbackVersion.apk"
+                    downloadUrl = "https://fitness-ecosystem-pro.onrender.com/releases/trainer-pro-v$fallbackVersion.apk"
                 )
             )
         } catch (e: Exception) {

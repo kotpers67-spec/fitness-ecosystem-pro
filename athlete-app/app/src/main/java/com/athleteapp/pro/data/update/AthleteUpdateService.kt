@@ -57,7 +57,44 @@ class AthleteUpdateService(private val context: Context) {
         try {
             val currentVersionName = getCurrentVersionName()
 
-            // 1. Primary update check: Official GitHub Releases API
+            // 1. Primary: check our own server /api/version (always has the real latest)
+            val serverEndpoints = listOf(
+                "https://fitness-ecosystem-pro.onrender.com/api/version",
+                "https://fitness-ecosystem-pro.onrender.com/api/version"
+            )
+            for (apiUrl in serverEndpoints) {
+                try {
+                    val url = URL(apiUrl)
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.setRequestProperty("Accept", "application/json")
+                    conn.setRequestProperty("User-Agent", "AthletePro-App")
+                    conn.connectTimeout = 10000
+                    conn.readTimeout = 10000
+
+                    if (conn.responseCode == 200) {
+                        val json = conn.inputStream.bufferedReader().readText()
+                        val parsed = gson.fromJson(json, com.google.gson.JsonObject::class.java)
+                        val athleteObj = parsed.getAsJsonObject("athlete")
+                        val latestVersion = athleteObj?.get("version")?.asString ?: parsed.get("latest")?.asString ?: continue
+                        val downloadUrl = athleteObj?.get("url")?.asString ?: continue
+                        val changelog = athleteObj?.get("changelog")?.asString ?: "Доступно обновление v$latestVersion"
+
+                        val isNewer = isVersionNewer(latestVersion, currentVersionName)
+                        return@withContext Result.success(
+                            AthleteUpdateCheckResult(
+                                isUpdateAvailable = isNewer,
+                                currentVersion = currentVersionName,
+                                latestVersion = latestVersion,
+                                releaseNotes = changelog,
+                                downloadUrl = downloadUrl
+                            )
+                        )
+                    }
+                } catch (_: Exception) {}
+                break
+            }
+
+            // 2. Secondary: Official GitHub Releases API
             val apiEndpoints = listOf(
                 "https://api.github.com/repos/$repoOwner/$repoName/releases/latest",
                 "https://api.github.com/repos/$repoOwner/render-auth-bot/releases/latest"
@@ -80,7 +117,7 @@ class AthleteUpdateService(private val context: Context) {
                             ?: release.assets?.find { it.name.endsWith(".apk") }
 
                         val downloadUrl = apkAsset?.browser_download_url
-                            ?: "https://github.com/$repoOwner/$repoName/releases/download/v$cleanTag/athlete-pro-v$cleanTag.apk"
+                            ?: "https://fitness-ecosystem-pro.onrender.com/releases/athlete-pro-v$cleanTag.apk"
 
                         val isNewer = isVersionNewer(cleanTag, currentVersionName)
                         return@withContext Result.success(
@@ -96,7 +133,7 @@ class AthleteUpdateService(private val context: Context) {
                 } catch (_: Exception) {}
             }
 
-            // 2. Fallback static release configuration for kotpers67-spec
+            // 3. Static fallback
             val fallbackVersion = "2.0.0"
             val isFallbackNewer = isVersionNewer(fallbackVersion, currentVersionName)
             Result.success(
@@ -105,7 +142,7 @@ class AthleteUpdateService(private val context: Context) {
                     currentVersion = currentVersionName,
                     latestVersion = fallbackVersion,
                     releaseNotes = "Официальный релиз Athlete Pro v$fallbackVersion доступен для загрузки.",
-                    downloadUrl = "https://github.com/$repoOwner/$repoName/releases/download/v$fallbackVersion/athlete-pro-v$fallbackVersion.apk"
+                    downloadUrl = "https://fitness-ecosystem-pro.onrender.com/releases/athlete-pro-v$fallbackVersion.apk"
                 )
             )
         } catch (e: Exception) {
