@@ -1453,11 +1453,15 @@
           el.tgStepRequest.style.display = 'none';
           el.tgStepVerify.style.display = 'block';
           startTgTimer(res.expiresInSeconds || 300);
-
-          if (res.debugCode) {
-            el.tgInputCode.value = res.debugCode;
-          }
+          el.tgInputCode.value = '';
           el.tgInputCode.focus();
+
+          const botHint = document.getElementById('tg-bot-link-hint');
+          if (botHint) {
+            const bName = res.botUsername || 'fitness_ecosystem_bot';
+            botHint.innerHTML = `<a href="https://t.me/${bName}?start=login" target="_blank" class="app-btn btn-secondary" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;padding:9px 12px;background:#2AABEE;color:#fff;border-radius:10px;font-weight:600;margin-top:6px;"><span>🤖</span><span>Открыть бота @${bName} для получения кода</span></a>`;
+            botHint.style.display = 'block';
+          }
         } catch (_) {}
       };
     }

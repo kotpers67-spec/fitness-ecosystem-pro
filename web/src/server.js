@@ -27,6 +27,70 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const db = new AppDatabase();
 const authLimiter = new RateLimiter(60000, 15); // Max 15 auth attempts/min per IP
 const telegramOtpStore = new Map(); // key: username -> { code, expiresAt, attempts }
+const userTgChatMap = new Map(); // key: username -> chatId
+
+// Real Telegram Bot Instance (grammY)
+let tgBotInstance = null;
+let activeBotUsername = process.env.BOT_USERNAME || '';
+
+if (process.env.BOT_TOKEN) {
+  try {
+    const { Bot } = require('grammy');
+    tgBotInstance = new Bot(process.env.BOT_TOKEN);
+
+    // When user types /start, /code or opens bot -> send 6-digit code immediately!
+    tgBotInstance.command(['start', 'code', 'login'], async (ctx) => {
+      const username = ctx.from?.username ? ctx.from.username.toLowerCase() : null;
+      const chatId = ctx.chat.id;
+      if (username) {
+        userTgChatMap.set(username, chatId);
+      }
+
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 5 * 60 * 1000;
+
+      if (username) {
+        telegramOtpStore.set(username, { code, expiresAt, attempts: 0 });
+      }
+      telegramOtpStore.set(`id_${ctx.from?.id}`, { code, expiresAt, attempts: 0 });
+
+      await ctx.reply(
+        `👋 Привет, ${ctx.from?.first_name || 'атлет'}!\n\n` +
+        `🔐 Ваш одноразовый код для входа на сайт:\n\n` +
+        `👉 <b>${code}</b> 👈\n\n` +
+        `⏱ Код действует 5 минут.\n` +
+        `Введите эти 6 цифр в форму на сайте для мгновенного входа.`,
+        { parse_mode: 'HTML' }
+      );
+    });
+
+    tgBotInstance.on('message:text', async (ctx) => {
+      const username = ctx.from?.username ? ctx.from.username.toLowerCase() : null;
+      if (username) {
+        userTgChatMap.set(username, ctx.chat.id);
+      }
+      const text = ctx.message.text.trim();
+      if (!text.startsWith('/start') && !text.startsWith('/code') && !text.startsWith('/login')) {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const expiresAt = Date.now() + 5 * 60 * 1000;
+        if (username) telegramOtpStore.set(username, { code, expiresAt, attempts: 0 });
+        telegramOtpStore.set(`id_${ctx.from?.id}`, { code, expiresAt, attempts: 0 });
+        await ctx.reply(`🔐 Ваш код для входа на сайт: <b>${code}</b> (действует 5 минут)`, { parse_mode: 'HTML' });
+      }
+    });
+
+    tgBotInstance.start({
+      onStart: (info) => {
+        activeBotUsername = info.username;
+        console.log(`[Telegram Bot] 🚀 @${info.username} успешно запущен в облаке Render!`);
+      }
+    }).catch(err => {
+      console.warn('[Telegram Bot] Ошибка polling:', err.message);
+    });
+  } catch (err) {
+    console.warn('[Telegram Bot] Ошибка инициализации:', err.message);
+  }
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -425,17 +489,32 @@ const server = http.createServer(async (req, res) => {
           attempts: 0
         });
 
-        const botToken = process.env.BOT_TOKEN;
-        if (botToken) {
-          console.log(`[Telegram Auth] One-time code for @${cleanUsername}: ${code} (expires in 5 min)`);
+        let delivered = false;
+        const targetChatId = userTgChatMap.get(cleanUsername);
+
+        if (tgBotInstance && targetChatId) {
+          try {
+            await tgBotInstance.api.sendMessage(
+              targetChatId,
+              `🔐 Ваш 6-значный код для входа в <b>Fitness Ecosystem Pro</b>:\n\n<code>${code}</code>\n\n⏱ Действует ровно 5 минут. Введите его на сайте.`,
+              { parse_mode: 'HTML' }
+            );
+            delivered = true;
+          } catch (sendErr) {
+            console.error('[Telegram Bot] Ошибка отправки:', sendErr.message);
+          }
         }
 
         return sendJson(res, 200, {
           success: true,
-          message: 'Одноразовый код отправлен в Telegram. Действует 5 минут.',
+          message: delivered 
+            ? 'Код отправлен вам в бота Telegram!' 
+            : 'Код сгенерирован. Откройте бота в Telegram для получения кода.',
           expiresInSeconds: 300,
           telegramUsername: cleanUsername,
-          debugCode: (process.env.NODE_ENV === 'test' || !botToken) ? code : undefined
+          botUsername: activeBotUsername || process.env.BOT_USERNAME || '',
+          delivered,
+          needStartBot: !delivered
         });
       }
 
