@@ -131,7 +131,7 @@ describe('Milestone 2 - Anthropometry Sync & Leaderboard Parity', () => {
     assert.equal(db.getAnthropometryHistory(testUserId).length, 3);
   });
 
-  it('5. Aligns Leaderboard points formula in CloudSync to workoutsCount * 10 + floor(tonnage / 100)', async () => {
+  it('5. Aligns Leaderboard points formula in CloudSync to workoutsCount * 10 + weightGain (baseline 15kg)', async () => {
     syncService.fetchCloudData = async () => ({
       clients: {
         'cloud-athlete-1': {
@@ -142,8 +142,8 @@ describe('Milestone 2 - Anthropometry Sync & Leaderboard Parity', () => {
               exercises: [
                 {
                   sets: [
-                    { isCompleted: true, actualWeightKg: 100, actualReps: 10 }, // 1000 kg
-                    { isCompleted: true, actualWeightKg: 120, actualReps: 5 }   // 600 kg
+                    { isCompleted: true, actualWeightKg: 100, actualReps: 10 }, // weight > 15 -> gain = 85
+                    { isCompleted: true, actualWeightKg: 120, actualReps: 5 }   // weight > 15 -> gain = 105
                   ]
                 }
               ]
@@ -153,7 +153,7 @@ describe('Milestone 2 - Anthropometry Sync & Leaderboard Parity', () => {
               exercises: [
                 {
                   sets: [
-                    { isCompleted: true, actualWeightKg: 95, actualReps: 10 }  // 950 kg
+                    { isCompleted: true, actualWeightKg: 95, actualReps: 10 }  // weight > 15 -> gain = 80
                   ]
                 }
               ]
@@ -163,32 +163,32 @@ describe('Milestone 2 - Anthropometry Sync & Leaderboard Parity', () => {
       }
     });
 
-    // 2 workouts, tonnage = 1000 + 600 + 950 = 2550 kg
-    // Points = 2 * 10 + Math.floor(2550 / 100) = 20 + 25 = 45 points
+    // 2 workouts, weightGain = (100-15) + (120-15) + (95-15) = 85 + 105 + 80 = 270 kg
+    // Points = 2 * 10 + 270 = 20 + 270 = 290 points
     const leaderboard = await syncService.getCombinedLeaderboard([]);
     assert.equal(leaderboard.length, 1);
     const athlete = leaderboard[0];
     assert.equal(athlete.workoutsCount, 2);
-    assert.equal(athlete.totalTonnage, 2550);
-    assert.equal(athlete.points, 45, 'Points formula must be workoutsCount * 10 + Math.floor(tonnage / 100)');
+    assert.equal(athlete.weightGain, 270);
+    assert.equal(athlete.points, 290, 'Points formula must be workoutsCount * 10 + weightGain (baseline 15kg)');
   });
 
   it('6. Aligns Leaderboard points formula in db.js SQL query', () => {
     // Create an athlete and sessions/sets
     const session1 = db.getOrCreateSession(testUserId, '2026-10-01');
-    db.addWorkoutSet(session1.id, 'Приседания', 100, 10, 8.0, 1); // 1000 kg
-    db.addWorkoutSet(session1.id, 'Жим ногами', 150, 10, 8.0, 1); // 1500 kg
+    db.addWorkoutSet(session1.id, 'Приседания', 100, 10, 8.0, 1); // 100 - 15 = 85
+    db.addWorkoutSet(session1.id, 'Жим ногами', 150, 10, 8.0, 1); // 150 - 15 = 135
 
     const session2 = db.getOrCreateSession(testUserId, '2026-10-02');
-    db.addWorkoutSet(session2.id, 'Становая тяга', 120, 8, 8.0, 1); // 960 kg
+    db.addWorkoutSet(session2.id, 'Становая тяга', 120, 8, 8.0, 1); // 120 - 15 = 105
 
-    // Total workouts: 2, Total tonnage: 1000 + 1500 + 960 = 3460 kg
-    // Expected points: 2 * 10 + Math.floor(3460 / 100) = 20 + 34 = 54 points
+    // Total workouts: 2, Total weight gain: 85 + 135 + 105 = 325 kg
+    // Expected points: 2 * 10 + 325 = 20 + 325 = 345 points
     const localLeaderboard = db.getLeaderboard();
     const entry = localLeaderboard.find(e => e.id === testUserId);
     assert.ok(entry, 'Athlete must be in leaderboard');
     assert.equal(entry.workouts_count, 2);
-    assert.equal(entry.total_tonnage, 3460);
-    assert.equal(entry.points, 54, 'Points in SQLite query must match workouts * 10 + floor(tonnage / 100)');
+    assert.equal(entry.weight_gain, 325);
+    assert.equal(entry.points, 345, 'Points in SQLite query must match workouts * 10 + weight_gain (baseline 15kg)');
   });
 });

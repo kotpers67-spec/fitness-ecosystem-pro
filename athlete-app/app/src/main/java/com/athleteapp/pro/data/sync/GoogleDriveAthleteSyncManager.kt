@@ -111,18 +111,18 @@ class GoogleDriveAthleteSyncManager(private val dao: AthleteDao) {
                                         !otherPayload.clientName.contains("Спам", ignoreCase = true) &&
                                         !otherPayload.clientName.contains("Тест", ignoreCase = true)) {
                                         val workoutsCount = otherPayload.assignedWorkouts.count { it.completed }
-                                        val tonnage = otherPayload.assignedWorkouts
+                                        val weightGain = otherPayload.assignedWorkouts
                                             .flatMap { it.exercises }
                                             .flatMap { it.sets }
                                             .filter { it.isCompleted }
-                                            .sumOf { it.actualWeightKg * it.actualReps }
-                                        val pts = workoutsCount * 10 + (tonnage / 100.0).toInt()
+                                            .sumOf { if (it.actualWeightKg > 15.0) (it.actualWeightKg - 15.0) else 0.0 }
+                                        val pts = workoutsCount * 10 + weightGain.toInt()
                                         otherAthletes.add(
                                             LeaderboardEntry(
                                                 rank = 0,
                                                 name = otherPayload.clientName,
                                                 workoutsCount = workoutsCount,
-                                                tonnageKg = tonnage,
+                                                weightGainKg = weightGain,
                                                 points = pts,
                                                 avatarBase64 = otherPayload.avatarBase64,
                                                 isMe = false

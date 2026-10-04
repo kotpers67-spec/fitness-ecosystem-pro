@@ -66,24 +66,35 @@ class CloudSyncService {
       const timeoutId = setTimeout(() => ac.abort(), 20000);
       const res = await fetch(this.getCloudUrl(), {
         signal: ac.signal,
-        headers: { 'User-Agent': 'FitnessEcosystemWeb/1.0.5' }
+        headers: { 'User-Agent': 'FitnessEcosystemWeb/1.0.5' },
+        redirect: 'follow'
       });
       clearTimeout(timeoutId);
 
       if (res.ok) {
         const text = await res.text();
-        const decrypted = decryptPayload(text);
-        const parsed = JSON.parse(decrypted || '{}');
-        this.cachedCloudData = parsed;
-        this.lastFetchTime = now;
-        return parsed;
+        if (text && text.startsWith('ENC:')) {
+          const decrypted = decryptPayload(text);
+          const parsed = JSON.parse(decrypted || '{}');
+          if (parsed && typeof parsed === 'object') {
+            this.cachedCloudData = parsed;
+            this.lastFetchTime = now;
+            return parsed;
+          }
+        } else if (text && text.trim().startsWith('{')) {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed === 'object') {
+            this.cachedCloudData = parsed;
+            this.lastFetchTime = now;
+            return parsed;
+          }
+        }
       }
     } catch (err) {
       console.warn('[CloudSync] Fetch failed, using fallback or cache:', err.message);
-      if (this.cachedCloudData) return this.cachedCloudData;
     }
 
-    return { clients: {}, pairing: {}, updates: {} };
+    return this.cachedCloudData || { clients: {}, pairing: {}, updates: {} };
   }
 
   async pushCloudData(rootObj) {
@@ -591,7 +602,7 @@ class CloudSyncService {
         const workouts = Array.isArray(entry.assignedWorkouts) ? entry.assignedWorkouts : [];
         const completedWorkouts = workouts.filter(w => w.completed || (w.exercises && w.exercises.some(e => e.sets && e.sets.some(s => s.isCompleted))));
         
-        let tonnage = 0;
+        let weightGain = 0;
         for (const w of workouts) {
           if (!w.exercises) continue;
           for (const ex of w.exercises) {
@@ -599,20 +610,21 @@ class CloudSyncService {
             for (const s of ex.sets) {
               if (s.isCompleted) {
                 const wt = Number(s.actualWeightKg || s.targetWeightKg || s.weight || 0);
-                const reps = Number(s.actualReps || s.targetReps || s.reps || 0);
-                tonnage += (wt * reps);
+                if (wt > 15) {
+                  weightGain += (wt - 15);
+                }
               }
             }
           }
         }
 
         const workoutsCount = completedWorkouts.length;
-        const points = workoutsCount * 10 + Math.floor(tonnage / 100);
+        const points = workoutsCount * 10 + Math.round(weightGain);
 
         map.set(name.toLowerCase(), {
           name,
           workoutsCount,
-          totalTonnage: Math.round(tonnage),
+          weightGain: Math.round(weightGain),
           points,
           avatarBase64: entry.avatarBase64 || '',
           source: 'cloud'
@@ -628,19 +640,19 @@ class CloudSyncService {
       const key = name.toLowerCase();
 
       const localWorkouts = Number(a.workouts_count || 0);
-      const localTonnage = Math.round(Number(a.total_tonnage || 0));
+      const localWeightGain = Math.round(Number(a.weight_gain || a.total_tonnage || 0));
       const localPoints = Number(a.points || 0);
 
       if (map.has(key)) {
         const item = map.get(key);
         item.workoutsCount = Math.max(item.workoutsCount, localWorkouts);
-        item.totalTonnage = Math.max(item.totalTonnage, localTonnage);
+        item.weightGain = Math.max(item.weightGain || 0, localWeightGain);
         item.points = Math.max(item.points, localPoints);
       } else {
         map.set(key, {
           name,
           workoutsCount: localWorkouts,
-          totalTonnage: localTonnage,
+          weightGain: localWeightGain,
           points: localPoints,
           avatarBase64: a.avatar_base64 || '',
           source: 'local'
@@ -649,13 +661,13 @@ class CloudSyncService {
     }
 
     const leaderboard = Array.from(map.values());
-    leaderboard.sort((a, b) => b.points - a.points || b.totalTonnage - a.totalTonnage);
+    leaderboard.sort((a, b) => b.points - a.points || (b.weightGain || 0) - (a.weightGain || 0));
 
     return leaderboard.map((item, index) => ({
       rank: index + 1,
       name: item.name,
       workoutsCount: item.workoutsCount,
-      totalTonnage: item.totalTonnage,
+      weightGain: item.weightGain || 0,
       points: item.points,
       avatarBase64: item.avatarBase64
     }));
@@ -849,11 +861,11 @@ class CloudSyncService {
    * Bi-directional Cloud Sync for Athletes:
    * Syncs athlete profile (FIO, phone, avatar, PIN, clientUuid) between mobile app and web portal.
    */
-  async syncAthleteFromCloud(athleteUser, db = null) {
+  async syncAthleteFromCloud(athleteUser, db = null, force = false) {
     const resolvedDb = db || this.db;
     if (!athleteUser || !resolvedDb) return { synced: false };
 
-    const cloud = await this.fetchCloudData(true);
+    const cloud = await this.fetchCloudData(force);
     let synced = false;
 
     const userTg = String(athleteUser.telegram_username || '').replace(/^@/, '').trim().toLowerCase();
@@ -931,10 +943,12 @@ class CloudSyncService {
       }
 
       if (updateProfileNeeded && typeof resolvedDb.updateProfile === 'function') {
-        resolvedDb.updateProfile(athleteUser.id, newName, newPhone, newAvatar);
+        resolvedDb.updateProfile(athleteUser.id, newName, newPhone, newAvatar, cloudRestrictions || athleteUser.restrictions, cloudUuid || athleteUser.client_uuid);
         athleteUser.full_name = newName;
         athleteUser.phone = newPhone;
         athleteUser.avatar_base64 = newAvatar;
+        if (cloudRestrictions) athleteUser.restrictions = cloudRestrictions;
+        if (cloudUuid) athleteUser.client_uuid = cloudUuid;
         synced = true;
       }
 

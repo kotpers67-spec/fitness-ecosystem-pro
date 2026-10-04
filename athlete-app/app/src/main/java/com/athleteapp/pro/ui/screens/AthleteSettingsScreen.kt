@@ -36,6 +36,7 @@ import androidx.core.content.FileProvider
 import com.athleteapp.pro.R
 import com.athleteapp.pro.ui.AthleteViewModel
 import com.athleteapp.pro.ui.components.AthleteAvatar
+import com.athleteapp.pro.ui.components.PullToRefreshContainer
 import com.athleteapp.pro.ui.components.QrCodeView
 import com.athleteapp.pro.ui.i18n.AthleteLanguage
 import com.athleteapp.pro.ui.i18n.AthleteStrings
@@ -151,68 +152,21 @@ fun AthleteSettingsScreen(
             )
         }
     ) { innerPadding ->
-        var isPullSyncing by remember { mutableStateOf(false) }
-        var pullOffset by remember { mutableStateOf(0f) }
+        val isSyncing by viewModel.isSyncing.collectAsState()
 
-        Box(
+        PullToRefreshContainer(
+            isRefreshing = isSyncing,
+            onRefresh = { viewModel.syncWithCoachGoogleDrive() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            if (pullOffset > 120f && !isPullSyncing) {
-                                isPullSyncing = true
-                                scope.launch {
-                                    viewModel.syncWithCoachGoogleDrive()
-                                    kotlinx.coroutines.delay(1200L)
-                                    isPullSyncing = false
-                                    pullOffset = 0f
-                                }
-                            } else {
-                                pullOffset = 0f
-                            }
-                        },
-                        onDragCancel = { pullOffset = 0f },
-                        onVerticalDrag = { change, dragAmount ->
-                            if (dragAmount > 0 || pullOffset > 0f) {
-                                pullOffset = (pullOffset + dragAmount * 0.5f).coerceIn(0f, 200f)
-                                change.consume()
-                            }
-                        }
-                    )
-                }
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                if (pullOffset > 20f || isPullSyncing) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = if (isPullSyncing) "Синхронизация данных..." else "Потяните вниз для синхронизации",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                     // 1. Profile Editing & Photo Card
                     item {
                         Card(
@@ -1277,4 +1231,5 @@ fun AthleteSettingsScreen(
     }
 }
 }
-}
+
+

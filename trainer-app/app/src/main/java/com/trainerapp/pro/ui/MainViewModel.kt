@@ -744,12 +744,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus: StateFlow<String?> = _syncStatus.asStateFlow()
 
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     fun syncActiveClientWithGoogleDrive() {
         viewModelScope.launch {
             val client = activeClient.value ?: run {
                 _syncStatus.value = "Ошибка: подопечный не выбран"
                 return@launch
             }
+            _isSyncing.value = true
             _syncStatus.value = "Синхронизация данных..."
             val coachFullName = "$trainerFirstName $trainerLastName".trim().ifBlank { "Алексей Романов" }
             val result = googleDriveSync.syncClient(
@@ -766,7 +770,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 _syncStatus.value = "Ошибка: ${result.exceptionOrNull()?.message}"
             }
+            _isSyncing.value = false
         }
+    }
+
+    fun syncAllWithGoogleDrive() {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            _syncStatus.value = "Синхронизация всех данных..."
+            val allClients = withContext(Dispatchers.IO) { dao.getAllClientsSync() }
+            val coachFullName = "$trainerFirstName $trainerLastName".trim().ifBlank { "Алексей Романов" }
+            if (allClients.isEmpty()) {
+                _syncStatus.value = "Нет подопечных для синхронизации"
+                _isSyncing.value = false
+                return@launch
+            }
+            var successCount = 0
+            for (client in allClients) {
+                val res = googleDriveSync.syncClient(
+                    dao = dao,
+                    client = client,
+                    coachName = coachFullName,
+                    coachPhone = trainerPhone,
+                    coachAvatarBase64 = trainerAvatarBase64
+                )
+                if (res.isSuccess) successCount++
+            }
+            val active = activeClient.value
+            if (active != null) {
+                loadSessionForDate(active.id, currentDate.value)
+            }
+            _syncStatus.value = "Синхронизировано подопечных: $successCount из ${allClients.size}"
+            _isSyncing.value = false
+        }
+    }
+
+    fun clearSyncStatus() {
+        _syncStatus.value = null
     }
 
     fun setSelfWorkoutAllowed(allowed: Boolean) {

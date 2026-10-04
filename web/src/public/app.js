@@ -1203,11 +1203,10 @@
       const meInBoard = state.leaderboard.find(u => (u.name || '').toLowerCase() === myName);
 
       const workouts = meInBoard ? meInBoard.workoutsCount || 0 : 0;
-      const tonnageKg = meInBoard ? meInBoard.totalTonnage || 0 : 0;
       const pts = meInBoard ? meInBoard.points || 0 : 0;
 
       el.userMetricWorkouts.textContent = workouts;
-      el.userMetricTonnage.textContent = tonnageKg >= 1000 ? `${(tonnageKg / 1000).toFixed(1)} т` : `${tonnageKg} кг`;
+      if (el.userMetricTonnage) el.userMetricTonnage.textContent = `${workouts} трен.`;
       el.userMetricPoints.textContent = pts;
 
       renderLeaderboardRows();
@@ -1239,8 +1238,6 @@
 
       const cleanName = String(entry.name || '').replace(/\s*\((Web|Mobile Athlete|Mobile)\)/gi, '').trim();
       const displayName = isMe ? `${escapeHtml(cleanName)} (ВЫ)` : escapeHtml(cleanName);
-      const tonnage = entry.totalTonnage || entry.tonnage_kg || 0;
-      const tonnageStr = tonnage >= 1000 ? `${(tonnage / 1000).toFixed(1)} т` : `${tonnage} кг`;
 
       row.innerHTML = `
         <div class="rank-badge ${rankClass}">${rank}</div>

@@ -279,6 +279,12 @@ class AppDatabase {
     return stmt.run(coachName, coachPhone, athleteId);
   }
 
+  updateClientUuid(athleteId, clientUuid) {
+    const cleanUuid = String(clientUuid || '').trim();
+    const stmt = this.db.prepare(`UPDATE users SET client_uuid = ? WHERE id = ?`);
+    return stmt.run(cleanUuid, athleteId);
+  }
+
   updateAthletePrivacy(athleteId, isPrivate) {
     const stmt = this.db.prepare(`
       UPDATE users SET is_private = ? WHERE id = ? AND role = 'athlete'
@@ -688,15 +694,15 @@ class AppDatabase {
     const stmt = this.db.prepare(`
       SELECT u.id, u.full_name, u.avatar_base64,
              COUNT(DISTINCT ws.id) as workouts_count,
-             COALESCE(SUM(s.weight_kg * s.reps), 0) as total_tonnage,
-             CAST(COUNT(DISTINCT ws.id) * 10 + FLOOR(COALESCE(SUM(s.weight_kg * s.reps), 0) / 100.0) AS INTEGER) as points
+             COALESCE(SUM(CASE WHEN s.weight_kg > 15 THEN s.weight_kg - 15 ELSE 0 END), 0) as weight_gain,
+             CAST(COUNT(DISTINCT ws.id) * 10 + COALESCE(SUM(CASE WHEN s.weight_kg > 15 THEN s.weight_kg - 15 ELSE 0 END), 0) AS INTEGER) as points
       FROM users u
       JOIN workout_sessions ws ON u.id = ws.athlete_id
       JOIN workout_sets s ON ws.id = s.session_id AND s.is_completed = 1
       WHERE u.role = 'athlete' AND u.is_private = 0
       GROUP BY u.id, u.full_name, u.avatar_base64
-      HAVING workouts_count > 0 AND total_tonnage > 0
-      ORDER BY points DESC, total_tonnage DESC
+      HAVING workouts_count > 0
+      ORDER BY points DESC, weight_gain DESC
     `);
     return stmt.all();
   }

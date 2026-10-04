@@ -1,6 +1,9 @@
 package com.trainerapp.pro.ui.components
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,11 +17,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.launch
 import com.trainerapp.pro.domain.calculators.FitnessCalculators
 
 @Composable
@@ -290,3 +303,131 @@ fun ClientAvatar(
         }
     }
 }
+
+@Composable
+fun PullToRefreshContainer(
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+    refreshThresholdDp: Float = 72f,
+    maxPullDp: Float = 140f,
+    content: @Composable () -> Unit
+) {
+    val density = LocalDensity.current
+    val refreshThresholdPx = with(density) { refreshThresholdDp.dp.toPx() }
+    val maxPullPx = with(density) { maxPullDp.dp.toPx() }
+    val refreshIndicatorOffsetPx = with(density) { 56.dp.toPx() }
+
+    val scope = rememberCoroutineScope()
+    val pullOffset = remember { Animatable(0f) }
+
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
+            pullOffset.animateTo(
+                targetValue = refreshIndicatorOffsetPx,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            )
+        } else {
+            pullOffset.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            )
+        }
+    }
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // If scrolling up and pullOffset > 0, consume delta to close refresh
+                if (available.y < 0f && pullOffset.value > 0f) {
+                    val newOffset = (pullOffset.value + available.y).coerceAtLeast(0f)
+                    val consumed = pullOffset.value - newOffset
+                    scope.launch { pullOffset.snapTo(newOffset) }
+                    return Offset(0f, -consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                // If scrolling down and at the top of content (available.y > 0)
+                if (available.y > 0f && !isRefreshing) {
+                    val dragResistance = 0.5f
+                    val newOffset = (pullOffset.value + available.y * dragResistance).coerceAtMost(maxPullPx)
+                    val consumedY = (newOffset - pullOffset.value) / dragResistance
+                    scope.launch { pullOffset.snapTo(newOffset) }
+                    return Offset(0f, consumedY)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullOffset.value >= refreshThresholdPx && !isRefreshing) {
+                    onRefresh()
+                } else if (!isRefreshing) {
+                    pullOffset.animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    )
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(nestedScrollConnection)
+    ) {
+        content()
+
+        // Browser-style floating indicator at top
+        val currentOffset = pullOffset.value
+        if (currentOffset > 0f || isRefreshing) {
+            val progress = (currentOffset / refreshThresholdPx).coerceIn(0f, 1f)
+            val indicatorY = with(density) { (currentOffset - 44.dp.toPx()).coerceAtLeast(8.dp.toPx()).toDp() }
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = indicatorY)
+                    .zIndex(10f),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shadowElevation = 6.dp,
+                tonalElevation = 6.dp
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.fillMaxSize(),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        val rotation = progress * 180f
+                        Icon(
+                            imageVector = Icons.Default.ArrowDownward,
+                            contentDescription = "Потяните для синхронизации",
+                            tint = if (progress >= 1f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .rotate(rotation)
+                                .scale(0.8f + 0.2f * progress)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

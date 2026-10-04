@@ -27,7 +27,7 @@ data class LeaderboardEntry(
     val rank: Int,
     val name: String,
     val workoutsCount: Int,
-    val tonnageKg: Double,
+    val weightGainKg: Double = 0.0,
     val points: Int,
     val avatarBase64: String? = null,
     val isMe: Boolean = false
@@ -46,17 +46,19 @@ fun LeaderboardScreen(
     val sessions by viewModel.allSessions.collectAsState()
     val completedWorkouts = sessions.count { it.completed }
     val sets by viewModel.allSets.collectAsState()
-    val myTonnage: Double = sets.filter { it.isCompleted }.fold(0.0) { acc, s -> acc + (s.actualWeightKg * s.actualReps) }
-    val myPoints: Int = completedWorkouts * 10 + (myTonnage / 100.0).toInt()
+    val myWeightGain: Double = sets.filter { it.isCompleted }.fold(0.0) { acc, s ->
+        acc + if (s.actualWeightKg > 15.0) (s.actualWeightKg - 15.0) else 0.0
+    }
+    val myPoints: Int = completedWorkouts * 10 + myWeightGain.toInt()
 
     val cloudAthletes by viewModel.cloudAthletes.collectAsState()
 
-    val myEntry = remember(completedWorkouts, myTonnage, myPoints, myName, profile?.avatarBase64) {
+    val myEntry = remember(completedWorkouts, myWeightGain, myPoints, myName, profile?.avatarBase64) {
         LeaderboardEntry(
             rank = 1,
             name = myName,
             workoutsCount = completedWorkouts,
-            tonnageKg = myTonnage,
+            weightGainKg = myWeightGain,
             points = myPoints,
             avatarBase64 = profile?.avatarBase64,
             isMe = true
@@ -66,19 +68,19 @@ fun LeaderboardScreen(
     // Только реальные участники с выполненными тренировками (Zero-Mocks)
     val entries = remember(myEntry, cloudAthletes, isPrivate) {
         val rawList = mutableListOf<LeaderboardEntry>()
-        if (!isPrivate && (myEntry.workoutsCount > 0 || myEntry.tonnageKg > 0)) {
+        if (!isPrivate && (myEntry.workoutsCount > 0 || myEntry.points > 0)) {
             rawList.add(myEntry)
         }
         rawList.addAll(cloudAthletes.filter { 
             !it.isMe && 
-            (it.workoutsCount > 0 || it.tonnageKg > 0) &&
+            (it.workoutsCount > 0 || it.points > 0) &&
             !it.name.contains("Смирнов", ignoreCase = true) &&
             !it.name.contains("Smirnov", ignoreCase = true) &&
             !it.name.contains("Спам", ignoreCase = true) &&
             !it.name.contains("Тест", ignoreCase = true)
         })
         rawList
-            .sortedByDescending { it.points }
+            .sortedWith(compareByDescending<LeaderboardEntry> { it.points }.thenByDescending { it.weightGainKg })
             .mapIndexed { index, entry -> entry.copy(rank = index + 1) }
     }
 
