@@ -39,7 +39,15 @@ async function handleLinkToken(ctx, token, db, userTgChatMap) {
   const cleanToken = String(token || '').replace(/^link_/, '').trim();
   if (!cleanToken) {
     await ctx.reply(
-      '❌ Не указан токен привязки. Запросите ссылку привязки в приложении.',
+      'ℹ️ <b>Привязка аккаунта к Telegram</b>\n\n' +
+      '🔑 <b>Что такое токен привязки:</b>\n' +
+      'Это одноразовый 5-минутный код для связки вашего профиля (атлета или тренера) на сайте с Telegram-ботом.\n\n' +
+      '📌 <b>Где взять токен:</b>\n' +
+      '1. Зайдите на сайт приложения и откройте ваш <b>Профиль</b>.\n' +
+      '2. Нажмите кнопку <b>«Привязать Telegram»</b>.\n' +
+      '3. Скопируйте 5-минутный токен или нажмите ссылку переход в Telegram.\n\n' +
+      '💬 <b>Команда для отправки в бот:</b>\n' +
+      '<code>/link &lt;ваш_токен&gt;</code>',
       { parse_mode: 'HTML', reply_markup: createMainMenuKeyboard() }
     );
     return { success: false, reason: 'missing_token' };
@@ -154,9 +162,16 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
     const rawToken = (ctx.match || '').trim();
     if (!rawToken) {
       return ctx.reply(
-        'ℹ️ <b>Привязка Telegram аккаунта</b>\n\n' +
-        'Укажите токен привязки: <code>/link &lt;токен&gt;</code>\n\n' +
-        'Получить токен можно нажав кнопку «Привязать Telegram» в профиле приложения.',
+        '🔗 <b>Привязка аккаунта к Telegram</b>\n\n' +
+        '🔑 <b>Что такое токен привязки:</b>\n' +
+        'Это одноразовый 5-минутный код для связки вашего профиля (атлета или тренера) на сайте с этим Telegram-ботом.\n\n' +
+        '📌 <b>Откуда его брать:</b>\n' +
+        '1. Откройте сайт <b>Fitness Ecosystem Pro</b>.\n' +
+        '2. Перейдите в раздел <b>Профиль</b> (или настройки аккаунта).\n' +
+        '3. Нажмите кнопку <b>«Привязать Telegram»</b> — система сгенерирует токен.\n' +
+        '4. Скопируйте токен или нажмите прямую кнопку перехода в Telegram.\n\n' +
+        '💬 <b>Формат команды:</b>\n' +
+        '<code>/link &lt;токен&gt;</code>',
         {
           parse_mode: 'HTML',
           reply_markup: createMainMenuKeyboard()
@@ -192,9 +207,13 @@ function setupBotHandlers(bot, { db, telegramOtpStore, userTgChatMap }) {
   // Button handler: 🔗 Привязать аккаунт
   bot.hears(['🔗 Привязать аккаунт'], async (ctx) => {
     await ctx.reply(
-      `🔗 <b>Привязка Telegram аккаунта</b>\n\n` +
-      `Для привязки аккаунта откройте сайт, перейдите в <b>Профиль</b> и нажмите <b>«Привязать Telegram»</b>.\n\n` +
-      `Или отправьте команду с токеном: <code>/link &lt;токен&gt;</code>`,
+      `🔗 <b>Привязка аккаунта к Telegram</b>\n\n` +
+      `🔑 <b>Откуда брать токен привязки:</b>\n` +
+      `1. Откройте сайт <b>Fitness Ecosystem Pro</b>.\n` +
+      `2. Перейдите в раздел <b>Профиль</b> (или карточку тренера/атлета).\n` +
+      `3. Нажмите <b>«Привязать Telegram»</b> для генерации 5-минутного токена.\n` +
+      `4. Отправьте в этот чат команду:\n\n` +
+      `<code>/link &lt;токен&gt;</code>`,
       {
         parse_mode: 'HTML',
         reply_markup: createMainMenuKeyboard()
