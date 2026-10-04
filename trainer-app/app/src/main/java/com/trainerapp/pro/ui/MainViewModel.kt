@@ -142,6 +142,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         telegramUsername = username
     }
 
+    var isApproved: Boolean
+        get() = authPrefs.getBoolean("is_approved", false)
+        set(value) = authPrefs.edit().putBoolean("is_approved", value).apply()
+
     fun checkCredentials(username: String, pass: String): Boolean {
         val savedUser = authPrefs.getString("username", "") ?: ""
         val savedHash = authPrefs.getString("password_hash", "") ?: ""
@@ -166,6 +170,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun login(username: String, pass: String): Boolean {
         if (checkCredentials(username, pass)) {
+            if (!isApproved) {
+                return false
+            }
             if (is2FaEnabled) {
                 return false
             }
@@ -174,16 +181,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return false
     }
 
-    fun register(trainerName: String, username: String, password: String, phone: String) {
+    fun submitTrainerRegistration(trainerName: String, username: String, password: String, phone: String, telegram: String) {
         val inputHash = hashPassword(password)
         authPrefs.edit()
             .putString("username", username.trim())
             .putString("password_hash", inputHash)
             .putString("trainer_name", trainerName.trim())
             .putString("phone", phone.trim())
-            .putBoolean("is_logged_in", true)
+            .putString("telegram_username", telegram.trim())
+            .putBoolean("is_logged_in", false)
+            .putBoolean("is_approved", false)
             .apply()
-        _isLoggedIn.value = true
+        _isLoggedIn.value = false
 
         val parts = trainerName.trim().split(" ", limit = 2)
         val firstName = parts.firstOrNull() ?: trainerName.trim()
@@ -194,7 +203,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .putString("trainer_phone", phone.trim())
             .apply()
 
-        syncActiveClientWithGoogleDrive()
+        // Send notification to owners & server for approval
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = java.net.URL("https://fitness-ecosystem-pro.onrender.com/api/register")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json; utf-8")
+                conn.doOutput = true
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                val payload = org.json.JSONObject().apply {
+                    put("username", username.trim())
+                    put("password", password)
+                    put("role", "trainer")
+                    put("fullName", trainerName.trim())
+                    put("phone", phone.trim())
+                    put("telegram", telegram.trim())
+                }
+                conn.outputStream.use { os ->
+                    os.write(payload.toString().toByteArray(Charsets.UTF_8))
+                }
+                conn.responseCode
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun register(trainerName: String, username: String, password: String, phone: String) {
+        submitTrainerRegistration(trainerName, username, password, phone, "")
     }
 
     fun logout() {

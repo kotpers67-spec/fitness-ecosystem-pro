@@ -37,6 +37,8 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
     var password by remember { mutableStateOf("") }
     var trainerName by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var telegram by remember { mutableStateOf("") }
+    var showPendingApprovalDialog by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -204,6 +206,18 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = telegram,
+                            onValueChange = { telegram = it },
+                            label = { Text("Telegram (@username)") },
+                            leadingIcon = { Icon(Icons.Default.Send, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     OutlinedTextField(
@@ -260,6 +274,8 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                                     val validCreds = viewModel.checkCredentials(username, password)
                                     if (!validCreds) {
                                         errorMessage = "Неверный логин или пароль"
+                                    } else if (!viewModel.isApproved) {
+                                        errorMessage = "⏳ Аккаунт тренера находится на рассмотрении (до 72 часов). Свяжитесь с владельцами: @SantiLA213 или @Spirit5449"
                                     } else {
                                         if (viewModel.is2FaEnabled) {
                                             show2FaDialog = true
@@ -279,12 +295,14 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                                 } else if (password.length < 4) {
                                     errorMessage = "Пароль должен быть от 4 символов"
                                 } else {
-                                    viewModel.register(
+                                    viewModel.submitTrainerRegistration(
                                         trainerName = trainerName,
                                         username = username,
                                         password = password,
-                                        phone = phone
+                                        phone = phone,
+                                        telegram = telegram
                                     )
+                                    showPendingApprovalDialog = true
                                 }
                             }
                         },
@@ -423,6 +441,55 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
             dismissButton = {
                 TextButton(onClick = { show2FaDialog = false }) {
                     Text("Отмена")
+                }
+            }
+        )
+    }
+
+    if (showPendingApprovalDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showPendingApprovalDialog = false
+                isLoginMode = true
+            },
+            title = {
+                Text("⏳ ЗАЯВКА НА РАССМОТРЕНИИ", fontWeight = FontWeight.Black)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Ваша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.\n\nЕсли аккаунт не будет создан в течение 72 часов, обратитесь к владельцам:")
+                    Button(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/SantiLA213"))
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2AABEE))
+                    ) {
+                        Text("💬 Написать @SantiLA213", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Spirit5449"))
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2AABEE))
+                    ) {
+                        Text("💬 Написать @Spirit5449", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPendingApprovalDialog = false
+                        isLoginMode = true
+                    }
+                ) {
+                    Text("Понятно")
                 }
             }
         )
