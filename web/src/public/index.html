@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <link rel="stylesheet" href="/styles.css?v=2.4.1">
+  <link rel="stylesheet" href="/styles.css?v=2.4.2">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -1327,7 +1327,7 @@
       <dialog id="dialog-unpair-confirm" class="app-dialog">
         <div class="dialog-content">
           <div class="dialog-header">
-            <h3 class="dialog-title">ОТВЯЗКА ОТ ТРЕНЕРА</h3>
+            <h3 class="dialog-title" id="dialog-unpair-title">ОТВЯЗКА ОТ ТРЕНЕРА</h3>
             <button type="button" class="dialog-close-btn" id="btn-close-unpair-dialog" aria-label="Закрыть">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1335,8 +1335,8 @@
               </svg>
             </button>
           </div>
-          <p class="card-desc" style="margin: 8px 0 12px; line-height: 1.4;">
-            Для безопасности разрыв связи с тренером требует подтверждения. Мы отправили 6-значный код в ваш привязанный Telegram бот.
+          <p class="card-desc" id="dialog-unpair-desc" style="margin: 8px 0 12px; line-height: 1.4;">
+            Для безопасности разрыв связи требует подтверждения. Мы отправили 6-значный код в ваш привязанный Telegram бот.
           </p>
           <div class="tg-timer-badge" id="unpair-tg-timer-display" style="margin-bottom: 14px;">⏱ Действует: 05:00</div>
           <form id="form-unpair-confirm">
@@ -1379,7 +1379,7 @@
   </div>
 
   <script src="/qrcode.min.js"></script>
-  <script src="/qr.js?v=2.4.1"></script>
-  <script src="/app.js?v=2.4.1"></script>
+  <script src="/qr.js?v=2.4.2"></script>
+  <script src="/app.js?v=2.4.2"></script>
 </body>
 </html>

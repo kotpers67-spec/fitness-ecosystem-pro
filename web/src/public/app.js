@@ -245,8 +245,10 @@
     editExerciseGroup: document.getElementById('edit-exercise-group'),
     editExerciseRest: document.getElementById('edit-exercise-rest'),
 
-    // Athlete Unpair with Telegram OTP
+    // Athlete & Trainer Unpair with Telegram OTP
     dialogUnpairConfirm: document.getElementById('dialog-unpair-confirm'),
+    dialogUnpairTitle: document.getElementById('dialog-unpair-title'),
+    dialogUnpairDesc: document.getElementById('dialog-unpair-desc'),
     btnCloseUnpairDialog: document.getElementById('btn-close-unpair-dialog'),
     btnCancelUnpairDialog: document.getElementById('btn-cancel-unpair-dialog'),
     formUnpairConfirm: document.getElementById('form-unpair-confirm'),
@@ -1691,33 +1693,84 @@
     const client = state.clients.find(c => c.id === id);
     const clientName = client ? (client.full_name || client.username) : 'подопечного';
 
-    if (!confirm(`Вы действительно хотите отвязать ${clientName}? Повторная автоматическая привязка будет заблокирована на 24 часа.`)) return;
+    const hasTg = Boolean(state.user.telegram_id || state.user.telegram_username);
+    if (!hasTg) {
+      if (!confirm(`Отвязать подопечного ${clientName}? Повторная автоматическая привязка будет заблокирована на 24 часа.`)) return;
+      try {
+        showToast('Разрываем связь с подопечным...', 'info');
+        const res = await api('/api/trainer/unpair', {
+          method: 'POST',
+          body: JSON.stringify({ athleteId: id })
+        });
 
+        state.clients = state.clients.filter(c => c.id !== id);
+        if (state.activeClientId === id) {
+          state.activeClientId = null;
+          if (el.trainerActiveClientName) el.trainerActiveClientName.textContent = 'Нет подопечных';
+          if (el.trainerActiveClientAvatar) el.trainerActiveClientAvatar.innerHTML = '';
+          const cardRestrictions = document.getElementById('card-trainer-restrictions');
+          const workoutBanner = document.getElementById('trainer-workout-restrictions-banner');
+          if (cardRestrictions) cardRestrictions.style.display = 'none';
+          if (workoutBanner) workoutBanner.style.display = 'none';
+        }
+
+        renderTrainerClientsList();
+        populateTrainerClientDropdown();
+        showToast(res.message || 'Связь успешно разорвана.', 'success');
+        loadTrainerClients();
+      } catch (err) {
+        showToast(err.message || 'Ошибка отвязки подопечного', 'error');
+      }
+      return;
+    }
+
+    // Telegram linked: request OTP and show confirmation modal for safety
     try {
-      showToast('Разрываем связь с подопечным...', 'info');
-      const res = await api('/api/trainer/unpair', {
+      showToast('Запрашиваем код подтверждения в Telegram...', 'info');
+      const res = await api('/api/trainer/unpair/request-otp', {
         method: 'POST',
         body: JSON.stringify({ athleteId: id })
       });
+      showToast(res.message || 'Код отправлен в Telegram бот', 'success');
 
-      // Immediately filter out client locally to provide snappy instant feedback
-      state.clients = state.clients.filter(c => c.id !== id);
-      if (state.activeClientId === id) {
-        state.activeClientId = null;
-        if (el.trainerActiveClientName) el.trainerActiveClientName.textContent = 'Нет подопечных';
-        if (el.trainerActiveClientAvatar) el.trainerActiveClientAvatar.innerHTML = '';
-        const cardRestrictions = document.getElementById('card-trainer-restrictions');
-        const workoutBanner = document.getElementById('trainer-workout-restrictions-banner');
-        if (cardRestrictions) cardRestrictions.style.display = 'none';
-        if (workoutBanner) workoutBanner.style.display = 'none';
+      state.pendingUnpairAthleteId = id;
+      state.pendingUnpairAthleteName = clientName;
+
+      if (el.dialogUnpairTitle) el.dialogUnpairTitle.textContent = 'ОТВЯЗКА ПОДОПЕЧНОГО';
+      if (el.dialogUnpairDesc) {
+        el.dialogUnpairDesc.textContent = `Для безопасности удаление подопечного «${clientName}» требует подтверждения. Мы отправили 6-значный код в ваш Telegram бот.`;
       }
+      if (el.unpairInputCode) el.unpairInputCode.value = '';
 
-      renderTrainerClientsList();
-      populateTrainerClientDropdown();
-      showToast(res.message || 'Связь успешно разорвана. Повторная привязка заблокирована на 24 часа.', 'success');
-      loadTrainerClients();
+      if (el.dialogUnpairConfirm) {
+        if (typeof el.dialogUnpairConfirm.showModal === 'function') {
+          try { el.dialogUnpairConfirm.showModal(); } catch (_) { el.dialogUnpairConfirm.setAttribute('open', ''); }
+        } else {
+          el.dialogUnpairConfirm.setAttribute('open', '');
+        }
+      }
+      if (el.unpairInputCode) setTimeout(() => el.unpairInputCode.focus(), 50);
+
+      // 5-minute countdown timer
+      let remaining = 300;
+      if (state.unpairTimerInterval) clearInterval(state.unpairTimerInterval);
+      const updateUnpairTimer = () => {
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        const mm = String(m).padStart(2, '0');
+        const ss = String(s).padStart(2, '0');
+        if (el.unpairTgTimerDisplay) el.unpairTgTimerDisplay.textContent = `⏱ Действует: ${mm}:${ss}`;
+        if (remaining <= 0) {
+          clearInterval(state.unpairTimerInterval);
+          el.dialogUnpairConfirm?.close();
+          showToast('Время действия кода истекло. Запросите заново.', 'error');
+        }
+        remaining--;
+      };
+      updateUnpairTimer();
+      state.unpairTimerInterval = setInterval(updateUnpairTimer, 1000);
     } catch (err) {
-      showToast(err.message || 'Ошибка отвязки подопечного', 'error');
+      showToast(err.message || 'Ошибка запроса кода в Telegram', 'error');
     }
   }
 
@@ -3508,6 +3561,13 @@
           const res = await api('/api/athlete/unpair/request-otp', { method: 'POST' });
           showToast(res.message || 'Код отправлен в Telegram бот', 'success');
 
+          if (el.dialogUnpairTitle) el.dialogUnpairTitle.textContent = 'ОТВЯЗКА ОТ ТРЕНЕРА';
+          if (el.dialogUnpairDesc) {
+            el.dialogUnpairDesc.textContent = 'Для безопасности разрыв связи с тренером требует подтверждения. Мы отправили 6-значный код в ваш привязанный Telegram бот.';
+          }
+          state.pendingUnpairAthleteId = null;
+          state.pendingUnpairAthleteName = null;
+
           if (el.unpairInputCode) el.unpairInputCode.value = '';
           if (el.dialogUnpairConfirm) {
             if (typeof el.dialogUnpairConfirm.showModal === 'function') {
@@ -3562,6 +3622,42 @@
         const code = (el.unpairInputCode?.value || '').trim();
         if (!code) return;
 
+        // Case 1: Trainer unpairing a client
+        if (state.user?.role === 'trainer' && state.pendingUnpairAthleteId) {
+          const id = state.pendingUnpairAthleteId;
+          const name = state.pendingUnpairAthleteName || 'подопечного';
+          try {
+            const res = await api('/api/trainer/unpair', {
+              method: 'POST',
+              body: JSON.stringify({ athleteId: id, code })
+            });
+            if (state.unpairTimerInterval) clearInterval(state.unpairTimerInterval);
+            el.dialogUnpairConfirm?.close();
+
+            state.clients = state.clients.filter(c => c.id !== id);
+            if (state.activeClientId === id) {
+              state.activeClientId = null;
+              if (el.trainerActiveClientName) el.trainerActiveClientName.textContent = 'Нет подопечных';
+              if (el.trainerActiveClientAvatar) el.trainerActiveClientAvatar.innerHTML = '';
+              const cardRestrictions = document.getElementById('card-trainer-restrictions');
+              const workoutBanner = document.getElementById('trainer-workout-restrictions-banner');
+              if (cardRestrictions) cardRestrictions.style.display = 'none';
+              if (workoutBanner) workoutBanner.style.display = 'none';
+            }
+
+            state.pendingUnpairAthleteId = null;
+            state.pendingUnpairAthleteName = null;
+            renderTrainerClientsList();
+            populateTrainerClientDropdown();
+            showToast(res.message || `✅ Подопечный «${name}» успешно отвязан!`, 'success');
+            loadTrainerClients();
+          } catch (err) {
+            showToast(err.message || 'Неверный код подтверждения', 'error');
+          }
+          return;
+        }
+
+        // Case 2: Athlete unpairing from coach
         try {
           await api('/api/athlete/unpair', {
             method: 'POST',
