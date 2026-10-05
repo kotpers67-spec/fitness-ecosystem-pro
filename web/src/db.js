@@ -141,6 +141,19 @@ class AppDatabase {
     safeAddColumn('users', "is_approved INTEGER DEFAULT 1");
     safeAddColumn('users', "restrictions TEXT DEFAULT ''");
 
+    // Table to prevent immediate auto re-pairing (blocks re-pairing for 1 day)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS unpair_blocks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trainer_id INTEGER NOT NULL,
+        athlete_id INTEGER NOT NULL,
+        blocked_until INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(trainer_id, athlete_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_unpair_blocks_lookup ON unpair_blocks(trainer_id, athlete_id);
+    `);
+
     safeAddColumn('workout_sessions', "is_self_workout_allowed INTEGER DEFAULT 0");
     safeAddColumn('workout_sessions', "assigned_by_trainer_id INTEGER DEFAULT NULL");
     safeAddColumn('workout_sessions', "completed INTEGER DEFAULT 0");
@@ -439,12 +452,24 @@ class AppDatabase {
 
   // --- Pairing Operations ---
 
-  pairTrainerAndAthlete(trainerId, athleteId) {
+  pairTrainerAndAthlete(trainerId, athleteId, force = false) {
+    const tId = Number(trainerId);
+    const aId = Number(athleteId);
+    if (!tId || !aId) return false;
+
+    // Check if pairing is temporarily blocked (1-day cooldown after unpairing)
+    if (!force && this.isPairingBlocked(tId, aId)) {
+      return false;
+    }
+
+    // Remove any past block if explicitly pairing now with PIN
+    this.removePairingBlock(tId, aId);
+
     const stmt = this.db.prepare(`
       INSERT OR IGNORE INTO trainer_clients (trainer_id, athlete_id)
       VALUES (?, ?)
     `);
-    stmt.run(trainerId, athleteId);
+    stmt.run(tId, aId);
     return true;
   }
 
@@ -459,29 +484,87 @@ class AppDatabase {
     return Boolean(row);
   }
 
+  isPairingBlocked(trainerId, athleteId) {
+    const tId = Number(trainerId);
+    const aId = Number(athleteId);
+    if (!tId || !aId) return false;
+    const now = Date.now();
+    const row = this.db.prepare(`
+      SELECT blocked_until FROM unpair_blocks 
+      WHERE trainer_id = ? AND athlete_id = ?
+    `).get(tId, aId);
+    if (!row) return false;
+    if (Number(row.blocked_until) > now) {
+      return true;
+    }
+    // Block expired: clean it up
+    this.removePairingBlock(tId, aId);
+    return false;
+  }
+
+  blockPairing(trainerId, athleteId, durationMs = 24 * 60 * 60 * 1000) {
+    const tId = Number(trainerId);
+    const aId = Number(athleteId);
+    if (!tId || !aId) return false;
+    const blockedUntil = Date.now() + durationMs;
+    const stmt = this.db.prepare(`
+      INSERT INTO unpair_blocks (trainer_id, athlete_id, blocked_until)
+      VALUES (?, ?, ?)
+      ON CONFLICT(trainer_id, athlete_id) DO UPDATE SET blocked_until = excluded.blocked_until
+    `);
+    stmt.run(tId, aId, blockedUntil);
+    return true;
+  }
+
+  removePairingBlock(trainerId, athleteId) {
+    const tId = Number(trainerId);
+    const aId = Number(athleteId);
+    if (!tId || !aId) return false;
+    this.db.prepare(`
+      DELETE FROM unpair_blocks WHERE trainer_id = ? AND athlete_id = ?
+    `).run(tId, aId);
+    return true;
+  }
+
   unpairTrainerAndAthlete(trainerId, athleteId) {
+    const tId = Number(trainerId);
+    const aId = Number(athleteId);
+    if (!tId || !aId) return false;
+
     const stmt = this.db.prepare(`
       DELETE FROM trainer_clients WHERE trainer_id = ? AND athlete_id = ?
     `);
-    stmt.run(trainerId, athleteId);
+    stmt.run(tId, aId);
 
     const coachClearStmt = this.db.prepare(`
       UPDATE users SET coach_name = '', coach_phone = '' WHERE id = ?
     `);
-    coachClearStmt.run(athleteId);
+    coachClearStmt.run(aId);
+
+    // Block automatic re-pairing between this trainer and athlete for 24 hours (1 day)
+    this.blockPairing(tId, aId, 24 * 60 * 60 * 1000);
     return true;
   }
 
   unpairAthleteBySelf(athleteId) {
+    const aId = Number(athleteId);
+    if (!aId) return false;
+
+    // Find all trainers previously paired with this athlete and block re-pairing for 1 day
+    const rows = this.db.prepare(`SELECT trainer_id FROM trainer_clients WHERE athlete_id = ?`).all(aId);
+    for (const r of rows) {
+      this.blockPairing(r.trainer_id, aId, 24 * 60 * 60 * 1000);
+    }
+
     const stmt = this.db.prepare(`
       DELETE FROM trainer_clients WHERE athlete_id = ?
     `);
-    stmt.run(athleteId);
+    stmt.run(aId);
 
     const coachClearStmt = this.db.prepare(`
       UPDATE users SET coach_name = '', coach_phone = '' WHERE id = ?
     `);
-    coachClearStmt.run(athleteId);
+    coachClearStmt.run(aId);
     return true;
   }
 

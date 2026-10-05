@@ -1687,19 +1687,38 @@
   }
 
   async function unpairTrainerClient(clientId) {
-    if (!confirm('Отвязать этого подопечного?')) return;
+    const id = Number(clientId);
+    const client = state.clients.find(c => c.id === id);
+    const clientName = client ? (client.full_name || client.username) : 'подопечного';
+
+    if (!confirm(`Вы действительно хотите отвязать ${clientName}? Повторная автоматическая привязка будет заблокирована на 24 часа.`)) return;
+
     try {
-      await api('/api/trainer/unpair', {
+      showToast('Разрываем связь с подопечным...', 'info');
+      const res = await api('/api/trainer/unpair', {
         method: 'POST',
-        body: JSON.stringify({ athleteId: clientId })
+        body: JSON.stringify({ athleteId: id })
       });
-      if (state.activeClientId === clientId) {
+
+      // Immediately filter out client locally to provide snappy instant feedback
+      state.clients = state.clients.filter(c => c.id !== id);
+      if (state.activeClientId === id) {
         state.activeClientId = null;
-        el.trainerActiveClientName.textContent = 'Нет подопечных';
+        if (el.trainerActiveClientName) el.trainerActiveClientName.textContent = 'Нет подопечных';
+        if (el.trainerActiveClientAvatar) el.trainerActiveClientAvatar.innerHTML = '';
+        const cardRestrictions = document.getElementById('card-trainer-restrictions');
+        const workoutBanner = document.getElementById('trainer-workout-restrictions-banner');
+        if (cardRestrictions) cardRestrictions.style.display = 'none';
+        if (workoutBanner) workoutBanner.style.display = 'none';
       }
-      showToast('Связь разорвана', 'info');
+
+      renderTrainerClientsList();
+      populateTrainerClientDropdown();
+      showToast(res.message || 'Связь успешно разорвана. Повторная привязка заблокирована на 24 часа.', 'success');
       loadTrainerClients();
-    } catch {}
+    } catch (err) {
+      showToast(err.message || 'Ошибка отвязки подопечного', 'error');
+    }
   }
 
   // --- TRAINER: Workout Assignment Logic ---

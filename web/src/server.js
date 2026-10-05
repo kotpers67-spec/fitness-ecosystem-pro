@@ -1797,8 +1797,12 @@ const server = http.createServer(async (req, res) => {
         }
 
         db.unpairAthleteBySelf(user.id);
-        cloudSyncService.unpairAthlete(user.pairing_code, user.client_uuid).catch(() => {});
-        return sendJson(res, 200, { success: true, message: 'Связь с тренером успешно разорвана' });
+        try {
+          await cloudSyncService.unpairAthlete(user.pairing_code, user.client_uuid);
+        } catch (err) {
+          console.warn('[Server] Cloud unpair notice:', err.message);
+        }
+        return sendJson(res, 200, { success: true, message: 'Связь с тренером успешно разорвана. Повторная привязка заблокирована на 24 часа.' });
       }
 
       // TRAINER: PAIR ATHLETE BY 6-DIGIT CODE (Local + Google Drive Cloud Sync)
@@ -1890,11 +1894,15 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 400, 'Укажите athleteId');
         }
         const athlete = db.findUserById(athleteId);
-        if (athlete && athlete.pairing_code) {
-          cloudSyncService.unpairAthlete(athlete.pairing_code, athlete.client_uuid).catch(() => {});
+        if (athlete) {
+          try {
+            await cloudSyncService.unpairAthlete(athlete.pairing_code, athlete.client_uuid);
+          } catch (err) {
+            console.warn('[Server] Cloud unpair notice:', err.message);
+          }
         }
         db.unpairTrainerAndAthlete(user.id, athleteId);
-        return sendJson(res, 200, { success: true, message: 'Связь с атлетом разорвана' });
+        return sendJson(res, 200, { success: true, message: 'Связь с атлетом разорвана. Повторная привязка заблокирована на 24 часа.' });
       }
 
       // TRAINER: GET CLIENTS

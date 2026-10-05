@@ -252,14 +252,47 @@ class CloudSyncService {
    * Unpair athlete from cloud
    */
   async unpairAthlete(pin, clientUuid) {
-    const cloud = await this.fetchCloudData(true);
-    if (cloud.pairing && cloud.pairing[pin]) {
-      cloud.pairing[pin].status = 'UNPAIRED';
-      delete cloud.pairing[pin].coachName;
-      delete cloud.pairing[pin].coachPhone;
+    try {
+      const cloud = await this.fetchCloudData(true);
+      const cleanPin = pin ? String(pin).replace(/\D/g, '') : '';
+
+      // 1. Clear pairing record if exists
+      if (cloud.pairing) {
+        if (cleanPin && cloud.pairing[cleanPin]) {
+          cloud.pairing[cleanPin].status = 'UNPAIRED';
+          delete cloud.pairing[cleanPin].coachName;
+          delete cloud.pairing[cleanPin].coachPhone;
+          delete cloud.pairing[cleanPin].coachAvatarBase64;
+        }
+        // Search by clientUuid if pin didn't match
+        if (clientUuid) {
+          for (const p of Object.values(cloud.pairing)) {
+            if (p && p.clientUuid === clientUuid) {
+              p.status = 'UNPAIRED';
+              delete p.coachName;
+              delete p.coachPhone;
+              delete p.coachAvatarBase64;
+            }
+          }
+        }
+      }
+
+      // 2. Clear coach info in cloud.clients
+      if (cloud.clients) {
+        if (clientUuid && cloud.clients[clientUuid]) {
+          delete cloud.clients[clientUuid].coachName;
+          delete cloud.clients[clientUuid].coachPhone;
+          delete cloud.clients[clientUuid].coachAvatarBase64;
+          cloud.clients[clientUuid].syncTimestamp = Date.now();
+        }
+      }
+
+      await this.pushCloudData(cloud);
+      return true;
+    } catch (err) {
+      console.warn('[CloudSync] unpairAthlete error:', err.message);
+      return false;
     }
-    await this.pushCloudData(cloud);
-    return true;
   }
 
   /**
@@ -846,11 +879,18 @@ class CloudSyncService {
       }
 
       if (athlete) {
-        if (!resolvedDb.isAthletePairedToTrainer(trainerUser.id, athlete.id)) {
-          resolvedDb.pairTrainerAndAthlete(trainerUser.id, athlete.id);
-          syncedClients++;
+        // If pairing is temporarily blocked (due to unpair), do not re-pair or restore coach info
+        if (typeof resolvedDb.isPairingBlocked === 'function' && resolvedDb.isPairingBlocked(trainerUser.id, athlete.id)) {
+          continue;
         }
-        resolvedDb.updateCoachInfo(athlete.id, updatedName, updatedPhone);
+
+        if (!resolvedDb.isAthletePairedToTrainer(trainerUser.id, athlete.id)) {
+          const paired = resolvedDb.pairTrainerAndAthlete(trainerUser.id, athlete.id);
+          if (paired) syncedClients++;
+        }
+        if (resolvedDb.isAthletePairedToTrainer(trainerUser.id, athlete.id)) {
+          resolvedDb.updateCoachInfo(athlete.id, updatedName, updatedPhone);
+        }
       }
     }
 
