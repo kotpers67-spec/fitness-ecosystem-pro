@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <link rel="stylesheet" href="/styles.css?v=2.2.0">
+  <link rel="stylesheet" href="/styles.css?v=2.3.0">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -856,9 +856,8 @@
               <span style="font-size: 18px;">🏋️</span>
               <div class="card-title" id="trainer-catalog-title" style="margin: 0;">КАТАЛОГ УПРАЖНЕНИЙ (0)</div>
             </div>
-            <button type="button" class="app-btn btn-primary" id="btn-open-add-exercise" style="padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
-              <span>+</span>
-              <span>Добавить</span>
+            <button type="button" class="btn-action-pill btn-action-primary" id="btn-open-add-exercise" style="padding: 8px 14px; font-size: 12px;">
+              <span>➕ Добавить упражнение</span>
             </button>
           </div>
           <p class="card-desc">Управление упражнениями для назначения подопечным (добавление, редактирование, удаление).</p>
@@ -867,17 +866,8 @@
             <input type="text" id="trainer-catalog-search" class="app-input" placeholder="🔍 Поиск упражнения..." style="padding: 8px 12px; font-size: 13px;">
           </div>
 
-          <!-- Muscle Group Filter Chips -->
-          <div class="chip-scroll-row" id="trainer-catalog-group-chips" style="margin-bottom: 12px; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
-            <button type="button" class="chip-pill active" data-group="Все">Все</button>
-            <button type="button" class="chip-pill" data-group="Грудь">Грудь</button>
-            <button type="button" class="chip-pill" data-group="Спина">Спина</button>
-            <button type="button" class="chip-pill" data-group="Ноги">Ноги</button>
-            <button type="button" class="chip-pill" data-group="Плечи">Плечи</button>
-            <button type="button" class="chip-pill" data-group="Руки">Руки</button>
-            <button type="button" class="chip-pill" data-group="Пресс/Кор">Пресс/Кор</button>
-            <button type="button" class="chip-pill" data-group="Кардио">Кардио</button>
-          </div>
+          <!-- Dynamic Muscle Group Filter Chips (Rendered dynamically when exercises exist) -->
+          <div class="chip-scroll-row" id="trainer-catalog-group-chips" style="margin-bottom: 12px; display: none; gap: 6px; overflow-x: auto; padding-bottom: 4px;"></div>
 
           <!-- Exercise List Container -->
           <div id="trainer-catalog-list" class="catalog-list" style="display: flex; flex-direction: column; gap: 8px;">
@@ -1288,6 +1278,8 @@
             </div>
           </form>
         </div>
+      </dialog>
+
       <!-- DIALOG: Добавить / Редактировать упражнение (Mobile Parity) -->
       <dialog id="dialog-edit-exercise" class="app-dialog">
         <div class="dialog-content">
@@ -1357,7 +1349,7 @@
   </div>
 
   <script src="/qrcode.min.js"></script>
-  <script src="/qr.js?v=2.2.0"></script>
-  <script src="/app.js?v=2.2.0"></script>
+  <script src="/qr.js?v=2.3.0"></script>
+  <script src="/app.js?v=2.3.0"></script>
 </body>
 </html>

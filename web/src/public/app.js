@@ -2020,6 +2020,32 @@
     const query = (state.catalogSearchQuery || '').trim().toLowerCase();
     const group = state.catalogSelectedGroup || 'Все';
 
+    // Dynamic Muscle Groups calculation from existing exercises
+    const existingGroups = Array.from(new Set(state.customExercises.map(e => e.muscleGroup).filter(Boolean)));
+    if (el.trainerCatalogGroupChips) {
+      if (existingGroups.length > 0) {
+        el.trainerCatalogGroupChips.style.display = 'flex';
+        const allGroups = ['Все', ...existingGroups];
+        el.trainerCatalogGroupChips.innerHTML = allGroups.map(grp => `
+          <button type="button" class="chip-pill ${grp === group ? 'active' : ''}" data-group="${escapeHtml(grp)}">
+            ${escapeHtml(grp)}
+          </button>
+        `).join('');
+
+        el.trainerCatalogGroupChips.querySelectorAll('.chip-pill').forEach(chip => {
+          chip.onclick = () => {
+            el.trainerCatalogGroupChips.querySelectorAll('.chip-pill').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            state.catalogSelectedGroup = chip.dataset.group;
+            renderTrainerExercisesCatalog();
+          };
+        });
+      } else {
+        el.trainerCatalogGroupChips.style.display = 'none';
+        state.catalogSelectedGroup = 'Все';
+      }
+    }
+
     const filtered = state.customExercises.filter(ex => {
       const matchesGroup = (group === 'Все') || (ex.muscleGroup === group);
       const matchesQuery = !query || ex.name.toLowerCase().includes(query) || (ex.muscleGroup && ex.muscleGroup.toLowerCase().includes(query));
@@ -2032,8 +2058,8 @@
 
     if (filtered.length === 0) {
       el.trainerCatalogList.innerHTML = `
-        <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 18px 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px dashed var(--border-subtle);">
-          Упражнения не найдены. Нажмите «+ Добавить» для создания нового упражнения.
+        <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 22px 14px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px dashed var(--border-subtle);">
+          Упражнения не найдены. Нажмите «➕ Добавить упражнение» выше.
         </div>
       `;
       return;
@@ -2046,17 +2072,19 @@
           <div class="catalog-exercise-meta">${escapeHtml(ex.muscleGroup || 'Грудь')} • Отдых ${ex.defaultRestSeconds || 90}с</div>
         </div>
         <div class="catalog-exercise-actions">
-          <button type="button" class="btn-icon-sm btn-edit-ex" title="Редактировать" data-id="${ex.id}">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <button type="button" class="btn-icon-sm btn-edit-action btn-edit-ex" title="Редактировать" data-id="${ex.id}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
+            <span>Редактировать</span>
           </button>
           <button type="button" class="btn-icon-sm btn-danger btn-del-ex" title="Удалить" data-id="${ex.id}">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
+            <span>Удалить</span>
           </button>
         </div>
       </div>
@@ -2091,22 +2119,37 @@
   }
 
   function openEditExerciseModal(exercise = null) {
-    if (!el.dialogEditExercise) return;
-    if (exercise) {
-      if (el.dialogEditExerciseTitle) el.dialogEditExerciseTitle.textContent = 'Редактировать упражнение';
-      if (el.editExerciseId) el.editExerciseId.value = exercise.id;
-      if (el.editExerciseName) el.editExerciseName.value = exercise.name;
-      if (el.editExerciseGroup) el.editExerciseGroup.value = exercise.muscleGroup || 'Грудь';
-      if (el.editExerciseRest) el.editExerciseRest.value = exercise.defaultRestSeconds || 90;
-    } else {
-      if (el.dialogEditExerciseTitle) el.dialogEditExerciseTitle.textContent = 'Новое упражнение';
-      if (el.editExerciseId) el.editExerciseId.value = '';
-      if (el.editExerciseName) el.editExerciseName.value = '';
-      if (el.editExerciseGroup) el.editExerciseGroup.value = 'Грудь';
-      if (el.editExerciseRest) el.editExerciseRest.value = 90;
+    const dlg = el.dialogEditExercise || document.getElementById('dialog-edit-exercise');
+    if (!dlg) {
+      console.error('Modal dialog-edit-exercise not found in DOM');
+      return;
     }
-    el.dialogEditExercise.showModal();
-    if (el.editExerciseName) el.editExerciseName.focus();
+    const titleEl = el.dialogEditExerciseTitle || document.getElementById('dialog-edit-exercise-title');
+    const idEl = el.editExerciseId || document.getElementById('edit-exercise-id');
+    const nameEl = el.editExerciseName || document.getElementById('edit-exercise-name');
+    const groupEl = el.editExerciseGroup || document.getElementById('edit-exercise-group');
+    const restEl = el.editExerciseRest || document.getElementById('edit-exercise-rest');
+
+    if (exercise) {
+      if (titleEl) titleEl.textContent = 'Редактировать упражнение';
+      if (idEl) idEl.value = exercise.id;
+      if (nameEl) nameEl.value = exercise.name;
+      if (groupEl) groupEl.value = exercise.muscleGroup || 'Грудь';
+      if (restEl) restEl.value = exercise.defaultRestSeconds || 90;
+    } else {
+      if (titleEl) titleEl.textContent = 'Новое упражнение';
+      if (idEl) idEl.value = '';
+      if (nameEl) nameEl.value = '';
+      if (groupEl) groupEl.value = 'Грудь';
+      if (restEl) restEl.value = 90;
+    }
+
+    if (typeof dlg.showModal === 'function') {
+      try { dlg.showModal(); } catch (_) { dlg.setAttribute('open', ''); }
+    } else {
+      dlg.setAttribute('open', '');
+    }
+    if (nameEl) setTimeout(() => nameEl.focus(), 50);
   }
 
   // --- Event Listeners Setup ---
