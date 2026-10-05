@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <link rel="stylesheet" href="/styles.css?v=2.4.2">
+  <link rel="stylesheet" href="/styles.css?v=2.4.3">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -615,7 +615,13 @@
 
         <!-- Clients List Card -->
         <div class="app-card">
-          <div class="card-title">СПИСОК ПОДОПЕЧНЫХ</div>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div class="card-title" id="trainer-clients-title">СПИСОК ПОДОПЕЧНЫХ</div>
+            <span class="role-card-tag" id="trainer-clients-count-badge" style="background: rgba(200, 255, 0, 0.12); color: var(--accent-lime); border: 1px solid rgba(200, 255, 0, 0.3); font-size: 11px; padding: 2px 8px; border-radius: 6px;">0</span>
+          </div>
+          <div style="margin: 4px 0 6px;">
+            <input type="text" id="trainer-clients-search" class="app-input" placeholder="🔍 Поиск подопечного по имени или телефону..." style="padding: 9px 12px; font-size: 13px;">
+          </div>
           <div class="clients-list" id="trainer-clients-list">
             <!-- Dynamic client items -->
           </div>
@@ -1379,7 +1385,7 @@
   </div>
 
   <script src="/qrcode.min.js"></script>
-  <script src="/qr.js?v=2.4.2"></script>
-  <script src="/app.js?v=2.4.2"></script>
+  <script src="/qr.js?v=2.4.3"></script>
+  <script src="/app.js?v=2.4.3"></script>
 </body>
 </html>

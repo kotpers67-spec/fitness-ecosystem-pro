@@ -58,6 +58,7 @@
     trainerDate: new Date().toISOString().slice(0, 10),
     activeClientId: null,
     clients: [],
+    clientsSearchQuery: '',
     athleteSets: [],
     trainerSets: [],
     leaderboard: [],
@@ -199,6 +200,8 @@
     inputPairCode: document.getElementById('input-pairing-code'),
     inputQrFile: document.getElementById('input-qr-file'),
     trainerClientsList: document.getElementById('trainer-clients-list'),
+    trainerClientsSearch: document.getElementById('trainer-clients-search'),
+    trainerClientsCountBadge: document.getElementById('trainer-clients-count-badge'),
 
     // Trainer Workout
     trainerWorkoutNotice: document.getElementById('trainer-workout-target-notice'),
@@ -1592,7 +1595,10 @@
 
   function renderTrainerClientsList() {
     el.trainerClientsList.innerHTML = '';
-    if (state.clients.length === 0) {
+    const totalClients = state.clients.length;
+
+    if (totalClients === 0) {
+      if (el.trainerClientsCountBadge) el.trainerClientsCountBadge.textContent = '0';
       el.trainerClientsList.innerHTML = `
         <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 13px;">
           У вас пока нет привязанных подопечных.<br>Введите 6-значный код подопечного выше, чтобы подключить его.
@@ -1601,7 +1607,36 @@
       return;
     }
 
-    state.clients.forEach(c => {
+    const q = (state.clientsSearchQuery || '').trim().toLowerCase();
+    const filteredClients = q
+      ? state.clients.filter(c => {
+          const name = (c.full_name || '').toLowerCase();
+          const username = (c.username || '').toLowerCase();
+          const phone = (c.phone || '').replace(/\D/g, '');
+          const queryDigits = q.replace(/\D/g, '');
+          return name.includes(q) ||
+                 username.includes(q) ||
+                 (c.phone && c.phone.toLowerCase().includes(q)) ||
+                 (queryDigits && phone.includes(queryDigits));
+        })
+      : state.clients;
+
+    if (el.trainerClientsCountBadge) {
+      el.trainerClientsCountBadge.textContent = q
+        ? `${filteredClients.length} / ${totalClients}`
+        : `${totalClients}`;
+    }
+
+    if (filteredClients.length === 0) {
+      el.trainerClientsList.innerHTML = `
+        <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 13px;">
+          Подопечные по запросу «${escapeHtml(q)}» не найдены.
+        </div>
+      `;
+      return;
+    }
+
+    filteredClients.forEach(c => {
       const isSelected = state.activeClientId === c.id;
       const card = document.createElement('div');
       card.className = `client-item-card ${isSelected ? 'selected' : ''}`;
@@ -3682,6 +3717,14 @@
         selectTrainerClient(e.target.value);
       }
     };
+
+    // Trainer Clients Search input
+    if (el.trainerClientsSearch) {
+      el.trainerClientsSearch.oninput = (e) => {
+        state.clientsSearchQuery = e.target.value || '';
+        renderTrainerClientsList();
+      };
+    }
 
     // Trainer Pair Code input auto-filter
     el.inputPairCode.oninput = (e) => {
