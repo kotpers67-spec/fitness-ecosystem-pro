@@ -564,8 +564,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addExerciseToSession(exerciseId: Long) {
         val session = _currentSession.value ?: return
         val currentOrders = _currentSets.value.map { it.exerciseOrder }.distinct()
-        if (currentOrders.size >= 8) return // Max 8 per notebook design
-
         val nextOrder = (currentOrders.maxOrNull() ?: 0) + 1
         viewModelScope.launch(Dispatchers.IO) {
             // Check previous weight for smart hint

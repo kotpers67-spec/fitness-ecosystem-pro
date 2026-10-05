@@ -171,4 +171,80 @@ class TrainerStrictPairingTest {
         assertEquals("Тренер Тест", entry.get("coachName").asString)
         assertEquals("+70001112233", entry.get("coachPhone").asString)
     }
+
+    @Test
+    fun testPairing_withRestrictionsInPairingEntry_extractsRestrictionsIntoNotes() {
+        val now = 1728000000000L
+        val validTimestamp = now - (60 * 1000L)
+
+        val rootObj = JsonObject().apply {
+            add("pairing", JsonObject().apply {
+                add("333444", JsonObject().apply {
+                    addProperty("pin", "333444")
+                    addProperty("clientUuid", "uuid-restricted-athlete")
+                    addProperty("clientName", "Травмированный Атлет")
+                    addProperty("phone", "+79991112233")
+                    addProperty("goal", "Реабилитация")
+                    addProperty("restrictions", "Травма колена, избегать приседаний")
+                    addProperty("timestamp", validTimestamp)
+                    addProperty("status", "PENDING")
+                })
+            })
+        }
+
+        val result = GoogleDriveSyncManager.validateAndProcessPairingData(
+            rootObj = rootObj,
+            cleanPin = "333444",
+            coachName = "Тренер Тест",
+            coachPhone = "+70001112233",
+            now = now
+        )
+
+        assertTrue(result.isSuccess)
+        val client: ClientEntity = result.getOrThrow().first
+        assertEquals("Травма колена, избегать приседаний", client.notes)
+        assertEquals("+79991112233", client.phone)
+        assertEquals("Травмированный Атлет", client.fullName)
+    }
+
+    @Test
+    fun testPairing_withRestrictionsInClientsMap_extractsRestrictionsIntoNotes() {
+        val now = 1728000000000L
+        val validTimestamp = now - (60 * 1000L)
+
+        val rootObj = JsonObject().apply {
+            add("pairing", JsonObject().apply {
+                add("555666", JsonObject().apply {
+                    addProperty("pin", "555666")
+                    addProperty("clientUuid", "uuid-athlete-clients-map")
+                    addProperty("clientName", "Атлет из реестра")
+                    addProperty("timestamp", validTimestamp)
+                    addProperty("status", "PENDING")
+                })
+            })
+            add("clients", JsonObject().apply {
+                add("uuid-athlete-clients-map", JsonObject().apply {
+                    addProperty("phone", "+79994445566")
+                    addProperty("goal", "Выносливость")
+                    addProperty("restrictions", "Грыжа поясничного отдела")
+                    addProperty("avatarBase64", "client-avatar-data")
+                })
+            })
+        }
+
+        val result = GoogleDriveSyncManager.validateAndProcessPairingData(
+            rootObj = rootObj,
+            cleanPin = "555666",
+            coachName = "Тренер Тест",
+            coachPhone = "+70001112233",
+            now = now
+        )
+
+        assertTrue(result.isSuccess)
+        val client: ClientEntity = result.getOrThrow().first
+        assertEquals("Грыжа поясничного отдела", client.notes)
+        assertEquals("+79994445566", client.phone)
+        assertEquals("Выносливость", client.goal)
+        assertEquals("client-avatar-data", client.avatarBase64)
+    }
 }

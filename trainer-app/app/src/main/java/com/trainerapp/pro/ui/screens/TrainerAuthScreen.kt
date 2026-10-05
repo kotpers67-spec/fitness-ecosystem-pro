@@ -64,16 +64,13 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
     var tgStatusText by remember { mutableStateOf<String?>(null) }
 
     var showTgCodeDialog by remember { mutableStateOf(false) }
-    var tgCodeStep by remember { mutableIntStateOf(1) } // 1: username, 2: 6-digit otp
-    var tgUsernameInput by remember { mutableStateOf("") }
     var tgCodeInput by remember { mutableStateOf("") }
     var tgCodeError by remember { mutableStateOf<String?>(null) }
     var tgCodeTimerSeconds by remember { mutableIntStateOf(300) }
-    var isRequestingTgOtp by remember { mutableStateOf(false) }
     var isVerifyingTgOtp by remember { mutableStateOf(false) }
 
-    LaunchedEffect(showTgCodeDialog, tgCodeStep) {
-        if (showTgCodeDialog && tgCodeStep == 2) {
+    LaunchedEffect(showTgCodeDialog) {
+        if (showTgCodeDialog) {
             tgCodeTimerSeconds = 300
             while (tgCodeTimerSeconds > 0) {
                 delay(1000L)
@@ -143,15 +140,27 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                         tgStatusText = "Подключение к Telegram..."
 
                         val session = viewModel.remoteAuthManager.initTelegramSession()
-                        val targetUrl = if (session != null) session.second else "https://t.me/fitnessecosystemBOT?start=login"
-
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
-                            context.startActivity(intent)
-                        } catch (_: Exception) {}
-
                         if (session != null) {
                             val sessionId = session.first
+                            val botUrl = session.second
+                            val startParam = if (sessionId.startsWith("auth_")) sessionId else "auth_$sessionId"
+                            val tgAppUri = Uri.parse("tg://resolve?domain=fitnessecosystemBOT&start=$startParam")
+                            val webFallbackUri = Uri.parse(botUrl)
+
+                            try {
+                                val nativeIntent = Intent(Intent.ACTION_VIEW, tgAppUri).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(nativeIntent)
+                            } catch (_: Exception) {
+                                try {
+                                    val webIntent = Intent(Intent.ACTION_VIEW, webFallbackUri).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(webIntent)
+                                } catch (_: Exception) {}
+                            }
+
                             tgStatusText = "Ожидание нажатия кнопки СТАРТ в Telegram боте..."
                             var elapsed = 0
                             while (elapsed < 300 && isPollingTgSession) {
@@ -167,7 +176,7 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                                     errorMessage = "Включена 2FA аутентификация: вход в 1 клик заблокирован политикой безопасности. Введите 6-значный код из Telegram"
                                     isPollingTgSession = false
                                     tgStatusText = null
-                                    tgCodeStep = 2
+                                    tgCodeInput = ""
                                     tgCodeError = null
                                     showTgCodeDialog = true
                                     break
@@ -179,6 +188,12 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                                 }
                             }
                         } else {
+                            try {
+                                val fallbackUri = Uri.parse("https://t.me/fitnessecosystemBOT?start=login")
+                                context.startActivity(Intent(Intent.ACTION_VIEW, fallbackUri).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                })
+                            } catch (_: Exception) {}
                             tgStatusText = null
                             isPollingTgSession = false
                         }
@@ -233,7 +248,7 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
             // Telegram Login by 6-digit Bot Code Button
             OutlinedButton(
                 onClick = {
-                    tgCodeStep = 1
+                    tgCodeInput = ""
                     tgCodeError = null
                     showTgCodeDialog = true
                 },
@@ -659,75 +674,55 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
     }
 
     if (showTgCodeDialog) {
+        val mm = tgCodeTimerSeconds / 60
+        val ss = tgCodeTimerSeconds % 60
+        val timeStr = String.format(java.util.Locale.US, "%02d:%02d", mm, ss)
+
         AlertDialog(
             onDismissRequest = {
-                if (!isRequestingTgOtp && !isVerifyingTgOtp) {
+                if (!isVerifyingTgOtp) {
                     showTgCodeDialog = false
                 }
             },
             title = {
                 Text(
-                    text = if (tgCodeStep == 1) "Вход по коду из Telegram" else "Одноразовый 6-значный код",
+                    text = "Вход по 6-значному коду",
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (tgCodeStep == 1) {
+                    Text(
+                        text = "Введите 6-значный код из Telegram бота (@fitnessecosystemBOT):",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
                         Text(
-                            text = "Введите ваш Telegram @username. Мы отправим 6-значный код в Telegram бота (действует 5 минут).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        OutlinedTextField(
-                            value = tgUsernameInput,
-                            onValueChange = {
-                                tgUsernameInput = it
-                                tgCodeError = null
-                            },
-                            label = { Text("Telegram логин (@username)") },
-                            placeholder = { Text("@username или логин") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        val mm = tgCodeTimerSeconds / 60
-                        val ss = tgCodeTimerSeconds % 60
-                        val timeStr = String.format(java.util.Locale.US, "%02d:%02d", mm, ss)
-
-                        Text(
-                            text = "В Telegram бота отправлен 6-значный код. Введите его ниже:",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Text(
-                                text = "⏱ Действует: $timeStr",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                fontSize = 12.sp
-                            )
-                        }
-                        OutlinedTextField(
-                            value = tgCodeInput,
-                            onValueChange = {
-                                if (it.length <= 6 && it.all { c -> c.isDigit() }) {
-                                    tgCodeInput = it
-                                    tgCodeError = null
-                                }
-                            },
-                            label = { Text("6-значный код из бота") },
-                            placeholder = { Text("123456") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                            modifier = Modifier.fillMaxWidth()
+                            text = "⏱ Действует: $timeStr",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontSize = 12.sp
                         )
                     }
+                    OutlinedTextField(
+                        value = tgCodeInput,
+                        onValueChange = {
+                            if (it.length <= 6 && it.all { c -> c.isDigit() }) {
+                                tgCodeInput = it
+                                tgCodeError = null
+                            }
+                        },
+                        label = { Text("6-значный код из Telegram") },
+                        placeholder = { Text("123456") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
                     if (tgCodeError != null) {
                         Text(
@@ -740,94 +735,54 @@ fun TrainerAuthScreen(viewModel: MainViewModel) {
                 }
             },
             confirmButton = {
-                if (tgCodeStep == 1) {
-                    Button(
-                        enabled = !isRequestingTgOtp,
-                        onClick = {
-                            val clean = tgUsernameInput.trim().removePrefix("@")
-                            if (clean.isBlank()) {
-                                tgCodeError = "Укажите ваш Telegram username"
-                            } else {
-                                scope.launch {
-                                    isRequestingTgOtp = true
-                                    tgCodeError = null
-                                    val (success, msg) = viewModel.remoteAuthManager.requestTelegramOtp(clean)
-                                    isRequestingTgOtp = false
-                                    if (success) {
-                                        tgCodeStep = 2
+                Button(
+                    enabled = !isVerifyingTgOtp,
+                    onClick = {
+                        if (tgCodeTimerSeconds <= 0) {
+                            tgCodeError = "Срок действия кода истёк (5 минут)"
+                        } else if (tgCodeInput.length != 6) {
+                            tgCodeError = "Введите ровно 6 цифр"
+                        } else {
+                            scope.launch {
+                                isVerifyingTgOtp = true
+                                tgCodeError = null
+                                val res = viewModel.remoteAuthManager.verifyTelegramLogin(otp = tgCodeInput)
+                                if (res is TrainerRemoteAuthResult.Success) {
+                                    viewModel.completeRemoteLogin(res.user)
+                                    showTgCodeDialog = false
+                                } else if (res is TrainerRemoteAuthResult.Error) {
+                                    tgCodeError = res.message
+                                } else {
+                                    val ok = viewModel.verify2FaOtpRemote(tgCodeInput)
+                                    if (ok) {
+                                        showTgCodeDialog = false
                                     } else {
-                                        tgCodeError = msg
+                                        tgCodeError = "Неверный код из Telegram"
                                     }
                                 }
+                                isVerifyingTgOtp = false
                             }
-                        }
-                    ) {
-                        if (isRequestingTgOtp) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        } else {
-                            Text("Получить код")
                         }
                     }
-                } else {
-                    Button(
-                        enabled = !isVerifyingTgOtp,
-                        onClick = {
-                            if (tgCodeTimerSeconds <= 0) {
-                                tgCodeError = "Срок действия кода истёк (5 минут)"
-                            } else if (tgCodeInput.length != 6) {
-                                tgCodeError = "Введите ровно 6 цифр"
-                            } else {
-                                scope.launch {
-                                    isVerifyingTgOtp = true
-                                    tgCodeError = null
-                                    val cleanUser = tgUsernameInput.trim().removePrefix("@")
-                                    val res = viewModel.remoteAuthManager.verifyTelegramLogin(cleanUser, tgCodeInput)
-                                    if (res is TrainerRemoteAuthResult.Success) {
-                                        viewModel.completeRemoteLogin(res.user)
-                                        showTgCodeDialog = false
-                                    } else if (res is TrainerRemoteAuthResult.Error) {
-                                        tgCodeError = res.message
-                                    } else {
-                                        val ok = viewModel.verify2FaOtpRemote(tgCodeInput, cleanUser)
-                                        if (ok) {
-                                            showTgCodeDialog = false
-                                        } else {
-                                            tgCodeError = "Неверный код из Telegram"
-                                        }
-                                    }
-                                    isVerifyingTgOtp = false
-                                }
-                            }
-                        }
-                    ) {
-                        if (isVerifyingTgOtp) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        } else {
-                            Text("Войти по коду")
-                        }
+                ) {
+                    if (isVerifyingTgOtp) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Войти по коду")
                     }
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
-                        if (tgCodeStep == 2) {
-                            tgCodeStep = 1
-                            tgCodeError = null
-                        } else {
-                            showTgCodeDialog = false
-                        }
+                        showTgCodeDialog = false
                     }
                 ) {
-                    Text(if (tgCodeStep == 2) "Назад" else "Отмена")
+                    Text("Отмена")
                 }
             }
         )

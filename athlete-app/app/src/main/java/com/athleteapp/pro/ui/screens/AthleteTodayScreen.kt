@@ -57,9 +57,13 @@ fun AthleteTodayScreen(
     val lang = settings?.language ?: "ru"
     var showAddExerciseDialog by remember { mutableStateOf(false) }
 
-    // Group sets by exercise
-    val setsByExercise = remember(sets) {
-        sets.groupBy { it.exerciseId }
+    // Group sets by exercise and sort: incomplete at top, completed at bottom
+    val sortedExerciseGroups = remember(sets) {
+        sets.groupBy { it.exerciseId }.entries.sortedWith(
+            compareBy<Map.Entry<Long, List<MyWorkoutSetEntity>>> { (_, exerciseSets) ->
+                if (exerciseSets.isNotEmpty() && exerciseSets.all { it.isCompleted }) 1 else 0
+            }.thenBy { it.value.firstOrNull()?.setNumber ?: 0 }
+        )
     }
 
     Scaffold(
@@ -231,7 +235,7 @@ fun AthleteTodayScreen(
             }
 
             // 4. Exercise Matrix Cards
-            if (setsByExercise.isEmpty()) {
+            if (sortedExerciseGroups.isEmpty()) {
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -251,7 +255,7 @@ fun AthleteTodayScreen(
                     }
                 }
             } else {
-                items(setsByExercise.entries.toList(), key = { it.key }) { (exerciseId, exerciseSets) ->
+                items(sortedExerciseGroups, key = { it.key }) { (exerciseId, exerciseSets) ->
                     val exerciseName = exerciseSets.firstOrNull()?.exerciseName ?: "Упражнение"
                     val muscleGroup = exerciseSets.firstOrNull()?.muscleGroup ?: ""
                     val matchedExercise = exercises.find { it.id == exerciseId }
@@ -363,10 +367,16 @@ fun AthleteExerciseCard(
     onAddSet: () -> Unit,
     onDeleteSet: (MyWorkoutSetEntity) -> Unit
 ) {
+    val isAllCompleted = sets.isNotEmpty() && sets.all { it.isCompleted }
+    var isCollapsed by remember(exerciseName, isAllCompleted) { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isAllCompleted) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surfaceVariant
+        ),
+        border = if (isAllCompleted) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22C55E).copy(alpha = 0.4f)) else null
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -375,45 +385,73 @@ fun AthleteExerciseCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = exerciseName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isAllCompleted) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isAllCompleted) {
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "✓ СДЕЛАНО",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF22C55E)
+                            )
+                        }
+                    }
                     Text(
-                        text = exerciseName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = muscleGroup,
+                        text = "$muscleGroup • ${sets.size} подходов",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (isSelfAllowed) {
-                    FilledTonalButton(
-                        onClick = onAddSet,
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.heightIn(min = 36.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("+ Подход", style = MaterialTheme.typography.labelSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isAllCompleted) {
+                        TextButton(
+                            onClick = { isCollapsed = !isCollapsed },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                if (isCollapsed) "▶ Развернуть" else "▼ Свернуть",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    if (isSelfAllowed) {
+                        FilledTonalButton(
+                            onClick = onAddSet,
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.heightIn(min = 36.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("+ Подход", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            if (!isCollapsed) {
+                Spacer(modifier = Modifier.height(12.dp))
 
-            sets.forEach { set ->
-                AthleteSetRow(
-                    set = set,
-                    isSelfAllowed = isSelfAllowed,
-                    onToggle = { onToggleSet(set) },
-                    onUpdate = { w, r -> onUpdateSet(set, w, r) },
-                    onUpdateRpe = { rpe -> onUpdateRpe(set, rpe) },
-                    onDelete = { onDeleteSet(set) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                sets.forEach { set ->
+                    AthleteSetRow(
+                        set = set,
+                        isSelfAllowed = isSelfAllowed,
+                        onToggle = { onToggleSet(set) },
+                        onUpdate = { w, r -> onUpdateSet(set, w, r) },
+                        onUpdateRpe = { rpe -> onUpdateRpe(set, rpe) },
+                        onDelete = { onDeleteSet(set) }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
             }
         }
     }

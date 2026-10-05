@@ -49,17 +49,24 @@ fun WorkoutScreen(
     var statsSummary by remember { mutableStateOf<MainViewModel.LastExerciseStatsSummary?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Distinct exercise orders present in this session (max 8)
+    // Distinct exercise orders present in this session (sorted: incomplete at top, completed at bottom)
     val sessionExercises = remember(currentSets, exercises) {
-        currentSets.groupBy { it.exerciseOrder }.toSortedMap().mapNotNull { (order, sets) ->
+        val list = currentSets.groupBy { it.exerciseOrder }.toSortedMap().mapNotNull { (order, sets) ->
             val exId = sets.firstOrNull()?.exerciseId ?: return@mapNotNull null
             val exercise = exercises.find { it.id == exId } ?: return@mapNotNull null
             Triple(order, exercise, sets)
         }
+        list.sortedWith(
+            compareBy<Triple<Int, ExerciseEntity, List<WorkoutSetEntity>>> { (_, _, sets) ->
+                if (sets.isNotEmpty() && sets.all { it.isCompleted }) 1 else 0
+            }.thenBy { it.first }
+        )
     }
 
     val activeExerciseTriple = sessionExercises.find { it.first == selectedOrder }
         ?: sessionExercises.firstOrNull()
+
+    var isSetsCollapsed by remember(activeExerciseTriple?.first) { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -178,14 +185,29 @@ fun WorkoutScreen(
             // Athlete Restrictions / Injuries Banner (Swiss Warning Styling)
             AthleteRestrictionsBanner(notes = activeClient?.notes)
 
-            // 2. Горизонтальная лента плиток упражнений (Max 8 плиток, строго по эскизу 2)
-            Text(
-                text = "УПРАЖНЕНИЯ НА СЕГОДНЯ (MAX 8)",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 6.dp)
-            )
+            // 2. Список упражнений (без ограничений на день)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "СПИСОК УПРАЖНЕНИЙ (${sessionExercises.size})",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                TextButton(
+                    onClick = { showAddExerciseDialog = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(4.dp))
+                    Text("+ Добавить упр.", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
 
             LazyRow(
                 modifier = Modifier
@@ -196,15 +218,21 @@ fun WorkoutScreen(
                 items(sessionExercises) { (order, exercise, sets) ->
                     val isSelected = order == (activeExerciseTriple?.first ?: 1)
                     val completedCount = sets.count { it.isCompleted }
+                    val isAllDone = sets.isNotEmpty() && completedCount == sets.size
 
                     Card(
                         onClick = { viewModel.setSelectedExerciseOrder(order) },
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = when {
+                                isSelected -> MaterialTheme.colorScheme.primary
+                                isAllDone -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            }
                         ),
+                        border = if (isAllDone && !isSelected) BorderStroke(1.dp, Color(0xFF22C55E).copy(alpha = 0.5f)) else null,
                         modifier = Modifier
-                            .width(130.dp)
+                            .width(135.dp)
                             .height(68.dp)
                     ) {
                         Column(
@@ -226,42 +254,44 @@ fun WorkoutScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${exercise.muscleGroup}",
+                                    text = exercise.muscleGroup,
                                     fontSize = 10.sp,
                                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.secondary
                                 )
                                 Text(
-                                    text = "$completedCount/${sets.size}",
+                                    text = if (isAllDone) "✓ $completedCount/${sets.size}" else "$completedCount/${sets.size}",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                                    color = when {
+                                        isSelected -> MaterialTheme.colorScheme.onPrimary
+                                        isAllDone -> Color(0xFF22C55E)
+                                        else -> MaterialTheme.colorScheme.primary
+                                    }
                                 )
                             }
                         }
                     }
                 }
 
-                if (sessionExercises.size < 8) {
-                    item {
-                        Card(
-                            onClick = { showAddExerciseDialog = true },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = CardDefaults.outlinedCardBorder().copy(
-                                brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
-                            ),
-                            modifier = Modifier
-                                .width(90.dp)
-                                .height(68.dp)
+                item {
+                    Card(
+                        onClick = { showAddExerciseDialog = true },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
+                        ),
+                        modifier = Modifier
+                            .width(90.dp)
+                            .height(68.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.primary)
-                                Text("+ Упр.", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            }
+                            Icon(Icons.Default.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.primary)
+                            Text("+ Упр.", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -269,9 +299,10 @@ fun WorkoutScreen(
 
             Spacer(Modifier.height(10.dp))
 
-            // 3. Таблица подходов для выбранного упражнения (строго по эскизу 2)
+            // 3. Таблица подходов для выбранного упражнения
             if (activeExerciseTriple != null) {
                 val (order, exercise, sets) = activeExerciseTriple
+                val isExerciseAllCompleted = sets.isNotEmpty() && sets.all { it.isCompleted }
 
                 Card(
                     modifier = Modifier
@@ -279,7 +310,10 @@ fun WorkoutScreen(
                         .weight(1f)
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isExerciseAllCompleted) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    border = if (isExerciseAllCompleted) BorderStroke(1.dp, Color(0xFF22C55E).copy(alpha = 0.35f)) else null
                 ) {
                     Column(
                         modifier = Modifier
@@ -292,40 +326,67 @@ fun WorkoutScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text(
-                                    text = exercise.name,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = exercise.name,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (isExerciseAllCompleted) Color(0xFF22C55E) else MaterialTheme.colorScheme.primary
+                                    )
+                                    if (isExerciseAllCompleted) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = "✓ СДЕЛАНО",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF22C55E)
+                                        )
+                                    }
+                                }
                                 Text(
                                     text = "${exercise.muscleGroup} • Отдых: ${exercise.defaultRestSeconds}с",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.secondary
                                 )
                             }
-                            IconButton(onClick = { viewModel.removeExerciseFromSession(exercise.id) }) {
-                                Icon(Icons.Default.DeleteOutline, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.error)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (isExerciseAllCompleted) {
+                                    TextButton(
+                                        onClick = { isSetsCollapsed = !isSetsCollapsed },
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            if (isSetsCollapsed) "▶ Развернуть" else "▼ Свернуть",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = { viewModel.removeExerciseFromSession(exercise.id) }) {
+                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.error)
+                                }
                             }
                         }
 
-                        Spacer(Modifier.height(10.dp))
+                        if (!isSetsCollapsed) {
+                            Spacer(Modifier.height(10.dp))
 
-                        // Table Column Headers
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("ПОДХОД", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(50.dp))
-                            Text("ВЕС (КГ)", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Spacer(Modifier.width(8.dp))
-                            Text("ПОВТОРЫ", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Spacer(Modifier.width(8.dp))
-                            Text("ГОТОВО", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(50.dp))
+                            // Table Column Headers
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("ПОДХОД", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(50.dp))
+                                Text("ВЕС (КГ)", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Spacer(Modifier.width(8.dp))
+                                Text("ПОВТОРЫ", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Spacer(Modifier.width(8.dp))
+                                Text("ГОТОВО", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(50.dp))
+                            }
+
+                            Divider(modifier = Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outline)
                         }
-
-                        Divider(modifier = Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outline)
 
                         LazyColumn(
                             modifier = Modifier.weight(1f),

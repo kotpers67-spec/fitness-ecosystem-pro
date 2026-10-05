@@ -24,6 +24,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -136,6 +137,13 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
                     val elapsedSec = ((now - created).coerceAtLeast(0L) / 1000L).toInt()
                     val remaining = (300 - elapsedSec).coerceAtLeast(0)
                     _pinSecondsRemaining.value = remaining
+                    if (remaining == 0) {
+                        pinCreatedAt = now
+                        _pinSecondsRemaining.value = 300
+                        withContext(Dispatchers.Main) {
+                            regeneratePairingPin()
+                        }
+                    }
                 }
                 delay(1000L)
             }
@@ -663,24 +671,43 @@ class AthleteViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private var isRegeneratingPin = false
+
     fun regeneratePairingPin() {
+        if (isRegeneratingPin) return
+        isRegeneratingPin = true
         viewModelScope.launch {
-            val current = profile.value ?: AthleteProfileEntity()
-            val newPin = String.format(Locale.US, "%06d", (100000..999999).random())
-            val now = System.currentTimeMillis()
-            pinCreatedAt = now
-            _pinSecondsRemaining.value = 300
-            val updated = current.copy(
-                pairingPin = newPin,
-                isPairedWithCoach = false,
-                pairedCoachName = "",
-                pairedCoachPhone = "",
-                pairedCoachPhotoUri = null,
-                pairedCoachAvatarBase64 = null
-            )
-            dao.saveProfile(updated)
-            _syncMessage.value = "Сгенерирован новый PIN: ${newPin.substring(0, 3)}-${newPin.substring(3)}"
-            googleDriveSync.syncWithCoach(clientUuidOverride = updated.clientUuid, pinCreatedAt = now)
+            try {
+                val current = profile.value ?: AthleteProfileEntity()
+                val token = authPrefs.getString("auth_token", "") ?: ""
+                var newPin = ""
+                if (token.isNotBlank()) {
+                    remoteAuthManager.backendBaseUrl = backendBaseUrl
+                    val remotePin = remoteAuthManager.regeneratePairingPin(token)
+                    if (!remotePin.isNullOrBlank() && remotePin.length == 6 && remotePin.all { it.isDigit() }) {
+                        newPin = remotePin
+                    }
+                }
+                if (newPin.isBlank()) {
+                    newPin = String.format(Locale.US, "%06d", (100000..999999).random())
+                }
+                val now = System.currentTimeMillis()
+                pinCreatedAt = now
+                _pinSecondsRemaining.value = 300
+                val updated = current.copy(
+                    pairingPin = newPin,
+                    isPairedWithCoach = false,
+                    pairedCoachName = "",
+                    pairedCoachPhone = "",
+                    pairedCoachPhotoUri = null,
+                    pairedCoachAvatarBase64 = null
+                )
+                dao.saveProfile(updated)
+                _syncMessage.value = "Сгенерирован новый PIN: ${newPin.substring(0, 3)}-${newPin.substring(3)}"
+                googleDriveSync.syncWithCoach(clientUuidOverride = updated.clientUuid, pinCreatedAt = now)
+            } finally {
+                isRegeneratingPin = false
+            }
         }
     }
 

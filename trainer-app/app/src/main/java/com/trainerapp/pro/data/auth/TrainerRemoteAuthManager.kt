@@ -60,9 +60,13 @@ class TrainerRemoteAuthManager(
 ) {
     private val gson = Gson()
 
-    fun cleanOtp(otp: String): String = otp.filter { it.isDigit() }
+    fun cleanOtp(otp: String): String = Companion.cleanOtp(otp)
+    fun isValidOtpFormat(otp: String): Boolean = Companion.isValidOtpFormat(otp)
 
-    fun isValidOtpFormat(otp: String): Boolean = cleanOtp(otp).length == 6
+    companion object {
+        fun cleanOtp(otp: String): String = otp.filter { it.isDigit() }
+        fun isValidOtpFormat(otp: String): Boolean = cleanOtp(otp).length == 6
+    }
 
     /**
      * Remote login via POST /api/login
@@ -341,7 +345,10 @@ class TrainerRemoteAuthManager(
             }
 
             val payload = JsonObject().apply {
-                addProperty("username", username.trim().removePrefix("@"))
+                val cleanUser = username.trim().removePrefix("@")
+                if (cleanUser.isNotBlank()) {
+                    addProperty("username", cleanUser)
+                }
                 addProperty("code", clean)
             }
             conn.outputStream.use { os ->
@@ -369,12 +376,20 @@ class TrainerRemoteAuthManager(
     }
 
     /**
-     * Verify one-time 6-digit code for Trainer Login returning TrainerRemoteAuthResult
+     * Verify one-time 6-digit code for Trainer Login returning TrainerRemoteAuthResult.
+     * Supports direct 1-step verification by OTP alone or optional username.
      */
-    suspend fun verifyTelegramLogin(username: String, otp: String): TrainerRemoteAuthResult = withContext(Dispatchers.IO) {
-        val cleanUser = username.trim().removePrefix("@")
-        val clean = cleanOtp(otp)
-        if (clean.length != 6) {
+    suspend fun verifyTelegramLogin(otp: String, username: String = ""): TrainerRemoteAuthResult = withContext(Dispatchers.IO) {
+        var codeClean = cleanOtp(otp)
+        var userClean = username.trim().removePrefix("@")
+        // Gracefully swap if called positionally as (username, otp)
+        if (codeClean.length != 6 && cleanOtp(userClean).length == 6) {
+            val temp = codeClean
+            codeClean = cleanOtp(userClean)
+            userClean = temp
+        }
+
+        if (codeClean.length != 6) {
             return@withContext TrainerRemoteAuthResult.Error("Код должен содержать ровно 6 цифр")
         }
 
@@ -389,8 +404,10 @@ class TrainerRemoteAuthManager(
             }
 
             val payload = JsonObject().apply {
-                addProperty("username", cleanUser)
-                addProperty("code", clean)
+                if (userClean.isNotBlank()) {
+                    addProperty("username", userClean)
+                }
+                addProperty("code", codeClean)
             }
             conn.outputStream.use { os ->
                 os.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
@@ -406,17 +423,19 @@ class TrainerRemoteAuthManager(
                 val user = if (userObj != null) {
                     TrainerRemoteUserInfo(
                         id = if (userObj.has("id")) userObj.get("id").asLong else 0L,
-                        username = if (userObj.has("username")) userObj.get("username").asString else cleanUser,
+                        username = if (userObj.has("username")) userObj.get("username").asString else if (userClean.isNotBlank()) userClean else "trainer",
                         role = if (userObj.has("role")) userObj.get("role").asString else "trainer",
                         fullName = if (userObj.has("fullName") && !userObj.get("fullName").isJsonNull) userObj.get("fullName").asString else "",
                         phone = if (userObj.has("phone") && !userObj.get("phone").isJsonNull) userObj.get("phone").asString else "",
-                        telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else cleanUser,
+                        telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString
+                            else if (userObj.has("telegram_username") && !userObj.get("telegram_username").isJsonNull) userObj.get("telegram_username").asString
+                            else userClean,
                         isApproved = true,
                         twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
                         token = token
                     )
                 } else {
-                    TrainerRemoteUserInfo(username = cleanUser, telegramUsername = cleanUser, isApproved = true, token = token)
+                    TrainerRemoteUserInfo(username = if (userClean.isNotBlank()) userClean else "trainer", telegramUsername = userClean, isApproved = true, token = token)
                 }
                 return@withContext TrainerRemoteAuthResult.Success(token, user)
             } else {
@@ -528,7 +547,10 @@ class TrainerRemoteAuthManager(
                 connectTimeout = 5000
                 readTimeout = 5000
             }
-            conn.outputStream.use { os -> os.write("{}".toByteArray(Charsets.UTF_8)) }
+            val payload = JsonObject().apply {
+                addProperty("requestedRole", "trainer")
+            }
+            conn.outputStream.use { os -> os.write(gson.toJson(payload).toByteArray(Charsets.UTF_8)) }
 
             if (conn.responseCode == 200) {
                 val text = conn.inputStream.bufferedReader().readText()

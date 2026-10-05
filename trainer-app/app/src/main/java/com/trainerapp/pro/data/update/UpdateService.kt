@@ -178,7 +178,9 @@ class UpdateService(private val context: Context) {
     suspend fun downloadApkDirectly(downloadUrl: String): File? = withContext(Dispatchers.IO) {
         val candidateUrls = mutableListOf<String>()
         if (downloadUrl.isNotBlank()) candidateUrls.add(downloadUrl)
+        candidateUrls.add("https://fitness-ecosystem-pro.onrender.com/releases/trainer-latest.apk")
         candidateUrls.add("https://fitness-ecosystem-pro.onrender.com/releases/trainer-pro-v2.0.1.apk")
+        candidateUrls.add("https://fitness-ecosystem-pro.onrender.com/releases/trainer-pro-v1.0.5.apk")
         candidateUrls.add("https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v2.0.1/trainer-pro-v2.0.1.apk")
 
         val targetFile = File(context.cacheDir, "TrainerPro_Update.apk")

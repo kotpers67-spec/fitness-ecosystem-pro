@@ -295,10 +295,10 @@ class GoogleDriveSyncManager {
             if (client != null) {
                 // Обновляем данные существующего клиента
                 val updated = client.copy(
-                    fullName = if (client.fullName.isBlank() || client.fullName.startsWith("Подопечный ")) clientData.fullName else client.fullName,
-                    phone = if (client.phone.isBlank()) clientData.phone else client.phone,
-                    goal = if (client.goal.isBlank()) clientData.goal else client.goal,
-                    notes = if (client.notes.isBlank()) clientData.notes else client.notes,
+                    fullName = if (client.fullName.isBlank() || client.fullName.startsWith("Подопечный ") || client.fullName == "Атлет") clientData.fullName else client.fullName,
+                    phone = if (clientData.phone.isNotBlank()) clientData.phone else client.phone,
+                    goal = if (clientData.goal.isNotBlank()) clientData.goal else client.goal,
+                    notes = if (clientData.notes.isNotBlank()) clientData.notes else client.notes,
                     clientUuid = clientData.clientUuid,
                     pairingCode = cleanPin,
                     membershipStatus = "Активен",
@@ -391,14 +391,30 @@ class GoogleDriveSyncManager {
             val athleteName = foundPairingEntry.get("clientName")?.asString?.takeIf { it.isNotBlank() }
                 ?: foundPairingEntry.get("name")?.asString?.takeIf { it.isNotBlank() }
                 ?: "Подопечный"
-            val athletePhone = foundPairingEntry.get("phone")?.asString ?: ""
-            val athleteGoal = foundPairingEntry.get("goal")?.asString ?: ""
-            val athleteNotes = foundPairingEntry.get("notes")?.asString ?: ""
+            var athletePhone = foundPairingEntry.get("phone")?.asString?.takeIf { it.isNotBlank() } ?: ""
+            var athleteGoal = foundPairingEntry.get("goal")?.asString?.takeIf { it.isNotBlank() } ?: ""
+            var athleteNotes = foundPairingEntry.get("restrictions")?.asString?.takeIf { it.isNotBlank() }
+                ?: foundPairingEntry.get("notes")?.asString?.takeIf { it.isNotBlank() }
+                ?: ""
             var athleteAvatar: String? = foundPairingEntry.get("avatarBase64")?.asString?.takeIf { it.isNotBlank() }
-            if (athleteAvatar.isNullOrBlank() && rootObj.has("clients")) {
+            if (rootObj.has("clients")) {
                 val clientsObj = rootObj.getAsJsonObject("clients")
                 if (clientsObj.has(athleteUuid) && clientsObj.get(athleteUuid).isJsonObject) {
-                    athleteAvatar = clientsObj.getAsJsonObject(athleteUuid).get("avatarBase64")?.asString?.takeIf { it.isNotBlank() }
+                    val clientObj = clientsObj.getAsJsonObject(athleteUuid)
+                    if (athleteAvatar.isNullOrBlank()) {
+                        athleteAvatar = clientObj.get("avatarBase64")?.asString?.takeIf { it.isNotBlank() }
+                    }
+                    if (athleteNotes.isBlank()) {
+                        athleteNotes = clientObj.get("restrictions")?.asString?.takeIf { it.isNotBlank() }
+                            ?: clientObj.get("notes")?.asString?.takeIf { it.isNotBlank() }
+                            ?: ""
+                    }
+                    if (athletePhone.isBlank()) {
+                        athletePhone = clientObj.get("phone")?.asString?.takeIf { it.isNotBlank() } ?: ""
+                    }
+                    if (athleteGoal.isBlank()) {
+                        athleteGoal = clientObj.get("goal")?.asString?.takeIf { it.isNotBlank() } ?: ""
+                    }
                 }
             }
 

@@ -305,8 +305,9 @@ class AthleteRemoteAuthManager(
 
     /**
      * Verify one-time 6-digit code: POST /api/auth/telegram/verify-otp
+     * Supports 1-step direct verification by code alone or with optional username.
      */
-    suspend fun verifyTelegramOtp(username: String, otp: String): AthleteRemoteAuthResult = withContext(Dispatchers.IO) {
+    suspend fun verifyTelegramOtp(otp: String, username: String = ""): AthleteRemoteAuthResult = withContext(Dispatchers.IO) {
         val cleanUser = username.trim().removePrefix("@")
         val clean = cleanOtp(otp)
         if (clean.length != 6) {
@@ -324,8 +325,10 @@ class AthleteRemoteAuthManager(
             }
 
             val payload = JsonObject().apply {
-                addProperty("username", cleanUser)
                 addProperty("code", clean)
+                if (cleanUser.isNotBlank()) {
+                    addProperty("username", cleanUser)
+                }
             }
             conn.outputStream.use { os ->
                 os.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
@@ -339,14 +342,17 @@ class AthleteRemoteAuthManager(
                 val token = if (json.has("token")) json.get("token").asString else ""
                 val userObj = json.getAsJsonObject("user")
                 val user = if (userObj != null) {
+                    val resolvedUsername = if (userObj.has("username") && !userObj.get("username").isJsonNull) userObj.get("username").asString else cleanUser
+                    val resolvedTgUser = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString
+                        else if (userObj.has("telegram_username") && !userObj.get("telegram_username").isJsonNull) userObj.get("telegram_username").asString else cleanUser
                     AthleteRemoteUserInfo(
                         id = if (userObj.has("id")) userObj.get("id").asLong else 0L,
-                        username = if (userObj.has("username")) userObj.get("username").asString else cleanUser,
+                        username = resolvedUsername,
                         role = if (userObj.has("role")) userObj.get("role").asString else "athlete",
                         fullName = if (userObj.has("fullName") && !userObj.get("fullName").isJsonNull) userObj.get("fullName").asString else "",
                         phone = if (userObj.has("phone") && !userObj.get("phone").isJsonNull) userObj.get("phone").asString else "",
                         pairingCode = if (userObj.has("pairingCode") && !userObj.get("pairingCode").isJsonNull) userObj.get("pairingCode").asString else "",
-                        telegramUsername = if (userObj.has("telegramUsername") && !userObj.get("telegramUsername").isJsonNull) userObj.get("telegramUsername").asString else cleanUser,
+                        telegramUsername = resolvedTgUser,
                         twoFactorEnabled = if (userObj.has("twoFactorEnabled") && !userObj.get("twoFactorEnabled").isJsonNull) userObj.get("twoFactorEnabled").asBoolean else false,
                         avatarBase64 = if (userObj.has("avatarBase64") && !userObj.get("avatarBase64").isJsonNull) userObj.get("avatarBase64").asString
                             else if (userObj.has("avatar_base64") && !userObj.get("avatar_base64").isJsonNull) userObj.get("avatar_base64").asString else "",
@@ -360,7 +366,7 @@ class AthleteRemoteAuthManager(
                 }
                 return@withContext AthleteRemoteAuthResult.Success(token, user)
             } else {
-                val errMsg = json?.get("error")?.asString ?: "Неверный код из Telegram"
+                val errMsg = json?.get("error")?.asString ?: "Неверный код"
                 return@withContext AthleteRemoteAuthResult.Error(errMsg)
             }
         } catch (_: Exception) {
@@ -590,6 +596,38 @@ class AthleteRemoteAuthManager(
                         restrictions = if (userObj.has("restrictions") && !userObj.get("restrictions").isJsonNull) userObj.get("restrictions").asString else "",
                         token = authToken
                     )
+                }
+            }
+        } catch (_: Exception) {}
+        null
+    }
+
+    /**
+     * Regenerate dynamic 6-digit pairing PIN on backend server: POST /api/athlete/regenerate-pin
+     */
+    suspend fun regeneratePairingPin(authToken: String): String? = withContext(Dispatchers.IO) {
+        if (authToken.isBlank()) return@withContext null
+        try {
+            val url = URL("$backendBaseUrl/api/athlete/regenerate-pin")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Authorization", "Bearer $authToken")
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            conn.outputStream.use { os ->
+                os.write("{}".toByteArray(Charsets.UTF_8))
+            }
+            if (conn.responseCode == 200) {
+                val text = conn.inputStream.bufferedReader().readText()
+                val json = runCatching { JsonParser.parseString(text).asJsonObject }.getOrNull()
+                if (json != null && json.has("pairingCode") && !json.get("pairingCode").isJsonNull) {
+                    val pin = json.get("pairingCode").asString
+                    if (pin.length == 6 && pin.all { it.isDigit() }) {
+                        return@withContext pin
+                    }
                 }
             }
         } catch (_: Exception) {}

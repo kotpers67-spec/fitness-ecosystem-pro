@@ -82,6 +82,8 @@ class GitHubSyncManager {
             pairingCode = client.pairingCode,
             syncTimestamp = System.currentTimeMillis(),
             clientName = client.fullName,
+            phone = client.phone,
+            restrictions = client.notes,
             avatarBase64 = client.avatarBase64,
             assignedWorkouts = assignedWorkouts,
             anthropometry = syncAnthropometry
@@ -213,8 +215,23 @@ class GitHubSyncManager {
             var addedAnthroCount = 0
 
             val existingClient = dao.getClientById(clientId)
-            if (existingClient != null && !payload.avatarBase64.isNullOrBlank() && existingClient.avatarBase64 != payload.avatarBase64) {
-                dao.updateClient(existingClient.copy(avatarBase64 = payload.avatarBase64))
+            if (existingClient != null) {
+                var updated = existingClient
+                if (!payload.avatarBase64.isNullOrBlank() && existingClient.avatarBase64 != payload.avatarBase64) {
+                    updated = updated.copy(avatarBase64 = payload.avatarBase64)
+                }
+                if (payload.clientName.isNotBlank() && (existingClient.fullName.isBlank() || existingClient.fullName.startsWith("Подопечный ") || existingClient.fullName == "Атлет")) {
+                    updated = updated.copy(fullName = payload.clientName)
+                }
+                if (payload.phone.isNotBlank() && existingClient.phone.isBlank()) {
+                    updated = updated.copy(phone = payload.phone)
+                }
+                if (payload.restrictions.isNotBlank()) {
+                    updated = updated.copy(notes = payload.restrictions)
+                }
+                if (updated != existingClient) {
+                    dao.updateClient(updated)
+                }
             }
 
             // 1. Обновляем сессии и выполненные подходы
