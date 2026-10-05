@@ -110,9 +110,19 @@ class AppDatabase {
         FOREIGN KEY(user_id) REFERENCES users(id)
       );
 
+      CREATE TABLE IF NOT EXISTS exercises (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        muscle_group TEXT DEFAULT 'Грудь',
+        default_rest_seconds INTEGER DEFAULT 90,
+        is_custom INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_pairing_code ON users(pairing_code);
       CREATE INDEX IF NOT EXISTS idx_workout_sets_session ON workout_sets(session_id);
       CREATE INDEX IF NOT EXISTS idx_revoked_tokens ON revoked_tokens(token);
+      CREATE INDEX IF NOT EXISTS idx_exercises_name ON exercises(name);
     `);
 
     // Ensure backwards-compatible columns exist in existing tables
@@ -802,6 +812,73 @@ class AppDatabase {
   getWorkoutSets(athleteId, date) {
     const session = this.getWorkoutSessionWithSets(athleteId, date);
     return session ? session.sets : [];
+  }
+
+  // --- Exercises Catalog Operations ---
+
+  getAllExercises() {
+    const stmt = this.db.prepare(`
+      SELECT id, name, muscle_group as muscleGroup, default_rest_seconds as defaultRestSeconds, is_custom as isCustom, created_at as createdAt
+      FROM exercises
+      ORDER BY muscle_group ASC, name ASC
+    `);
+    return stmt.all();
+  }
+
+  getExerciseById(id) {
+    const stmt = this.db.prepare(`
+      SELECT id, name, muscle_group as muscleGroup, default_rest_seconds as defaultRestSeconds, is_custom as isCustom
+      FROM exercises WHERE id = ?
+    `);
+    return stmt.get(Number(id)) || null;
+  }
+
+  findExerciseByName(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return null;
+    const stmt = this.db.prepare(`
+      SELECT id, name, muscle_group as muscleGroup, default_rest_seconds as defaultRestSeconds, is_custom as isCustom
+      FROM exercises WHERE LOWER(name) = LOWER(?)
+    `);
+    return stmt.get(clean) || null;
+  }
+
+  createExercise(name, muscleGroup = 'Грудь', defaultRestSeconds = 90) {
+    const cleanName = String(name || '').trim();
+    const cleanGroup = String(muscleGroup || 'Грудь').trim();
+    const restSec = Number(defaultRestSeconds) || 90;
+    if (!cleanName) return null;
+
+    const stmt = this.db.prepare(`
+      INSERT INTO exercises (name, muscle_group, default_rest_seconds, is_custom)
+      VALUES (?, ?, ?, 1)
+    `);
+    const res = stmt.run(cleanName, cleanGroup, restSec);
+    return Number(res.lastInsertRowid);
+  }
+
+  updateExercise(id, name, muscleGroup, defaultRestSeconds) {
+    const exId = Number(id);
+    const cleanName = String(name || '').trim();
+    const cleanGroup = String(muscleGroup || 'Грудь').trim();
+    const restSec = Number(defaultRestSeconds) || 90;
+    if (!exId || !cleanName) return false;
+
+    const stmt = this.db.prepare(`
+      UPDATE exercises
+      SET name = ?, muscle_group = ?, default_rest_seconds = ?
+      WHERE id = ?
+    `);
+    stmt.run(cleanName, cleanGroup, restSec, exId);
+    return true;
+  }
+
+  deleteExercise(id) {
+    const exId = Number(id);
+    if (!exId) return false;
+    const stmt = this.db.prepare(`DELETE FROM exercises WHERE id = ?`);
+    stmt.run(exId);
+    return true;
   }
 
   close() {

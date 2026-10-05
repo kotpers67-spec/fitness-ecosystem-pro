@@ -2156,6 +2156,55 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, setId });
       }
 
+      // EXERCISES CATALOG CRUD (Mobile Parity)
+      if (pathname === '/api/exercises' && req.method === 'GET') {
+        const exercises = db.getAllExercises();
+        return sendJson(res, 200, { exercises });
+      }
+
+      if (pathname === '/api/exercises' && req.method === 'POST') {
+        if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
+        const body = await parseJsonBody(req);
+        const name = String(body.name || '').trim();
+        const muscleGroup = String(body.muscleGroup || 'Грудь').trim();
+        const defaultRestSeconds = Number(body.defaultRestSeconds) || 90;
+        if (!name) return sendError(res, 400, 'Укажите название упражнения');
+
+        try {
+          const id = db.createExercise(name, muscleGroup, defaultRestSeconds);
+          return sendJson(res, 201, { success: true, exercise: { id, name, muscleGroup, defaultRestSeconds, isCustom: 1 } });
+        } catch (err) {
+          if (err.message && err.message.includes('UNIQUE')) {
+            return sendError(res, 400, 'Упражнение с таким названием уже существует');
+          }
+          return sendError(res, 500, err.message);
+        }
+      }
+
+      if (pathname.startsWith('/api/exercises/') && req.method === 'PUT') {
+        if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
+        const id = Number(pathname.replace('/api/exercises/', ''));
+        if (!id) return sendError(res, 400, 'Некорректный ID упражнения');
+
+        const body = await parseJsonBody(req);
+        const name = String(body.name || '').trim();
+        const muscleGroup = String(body.muscleGroup || 'Грудь').trim();
+        const defaultRestSeconds = Number(body.defaultRestSeconds) || 90;
+        if (!name) return sendError(res, 400, 'Укажите название упражнения');
+
+        const ok = db.updateExercise(id, name, muscleGroup, defaultRestSeconds);
+        return sendJson(res, 200, { success: ok });
+      }
+
+      if (pathname.startsWith('/api/exercises/') && req.method === 'DELETE') {
+        if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
+        const id = Number(pathname.replace('/api/exercises/', ''));
+        if (!id) return sendError(res, 400, 'Некорректный ID упражнения');
+
+        const ok = db.deleteExercise(id);
+        return sendJson(res, 200, { success: ok });
+      }
+
       // PROGRESS & CHARTS: Get list of all exercises for athlete
       if (pathname === '/api/progress/exercises' && req.method === 'GET') {
         const targetAthleteId = user.role === 'athlete'

@@ -74,6 +74,9 @@
       sets: true,
       reps: true
     },
+    customExercises: [],
+    catalogSearchQuery: '',
+    catalogSelectedGroup: 'Все',
     deferredInstallPrompt: null,
     restTimerSeconds: 0,
     restTimerTotal: 90,
@@ -225,6 +228,22 @@
     trainerEditPhone: document.getElementById('trainer-edit-phone'),
     btnSaveTrainerProfile: document.getElementById('btn-save-trainer-profile'),
     btnLogoutTrainer: document.getElementById('btn-logout-trainer'),
+
+    // Trainer Exercises Catalog Elements (Mobile Parity CRUD)
+    trainerCatalogTitle: document.getElementById('trainer-catalog-title'),
+    btnOpenAddExercise: document.getElementById('btn-open-add-exercise'),
+    trainerCatalogSearch: document.getElementById('trainer-catalog-search'),
+    trainerCatalogGroupChips: document.getElementById('trainer-catalog-group-chips'),
+    trainerCatalogList: document.getElementById('trainer-catalog-list'),
+    dialogEditExercise: document.getElementById('dialog-edit-exercise'),
+    dialogEditExerciseTitle: document.getElementById('dialog-edit-exercise-title'),
+    btnCloseExerciseDialog: document.getElementById('btn-close-exercise-dialog'),
+    btnCancelEditExercise: document.getElementById('btn-cancel-edit-exercise'),
+    formEditExercise: document.getElementById('form-edit-exercise'),
+    editExerciseId: document.getElementById('edit-exercise-id'),
+    editExerciseName: document.getElementById('edit-exercise-name'),
+    editExerciseGroup: document.getElementById('edit-exercise-group'),
+    editExerciseRest: document.getElementById('edit-exercise-rest'),
 
     // 2FA & Telegram Link Elements
     pinCountdownText: document.getElementById('pin-countdown-text'),
@@ -1979,6 +1998,115 @@
 
     // Telegram and 2FA status
     renderTelegramAnd2FAStatus('trainer');
+
+    // Load exercises catalog
+    loadTrainerExercisesCatalog();
+  }
+
+  // --- TRAINER: Exercises Catalog CRUD (Mobile Parity) ---
+  async function loadTrainerExercisesCatalog() {
+    try {
+      const res = await api('/api/exercises');
+      state.customExercises = Array.isArray(res.exercises) ? res.exercises : [];
+      renderTrainerExercisesCatalog();
+    } catch (err) {
+      console.warn('Failed to load exercises catalog:', err);
+    }
+  }
+
+  function renderTrainerExercisesCatalog() {
+    if (!el.trainerCatalogList) return;
+
+    const query = (state.catalogSearchQuery || '').trim().toLowerCase();
+    const group = state.catalogSelectedGroup || 'Все';
+
+    const filtered = state.customExercises.filter(ex => {
+      const matchesGroup = (group === 'Все') || (ex.muscleGroup === group);
+      const matchesQuery = !query || ex.name.toLowerCase().includes(query) || (ex.muscleGroup && ex.muscleGroup.toLowerCase().includes(query));
+      return matchesGroup && matchesQuery;
+    });
+
+    if (el.trainerCatalogTitle) {
+      el.trainerCatalogTitle.textContent = `КАТАЛОГ УПРАЖНЕНИЙ (${filtered.length}/${state.customExercises.length})`;
+    }
+
+    if (filtered.length === 0) {
+      el.trainerCatalogList.innerHTML = `
+        <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 18px 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px dashed var(--border-subtle);">
+          Упражнения не найдены. Нажмите «+ Добавить» для создания нового упражнения.
+        </div>
+      `;
+      return;
+    }
+
+    el.trainerCatalogList.innerHTML = filtered.map(ex => `
+      <div class="catalog-exercise-card" data-id="${ex.id}">
+        <div class="catalog-exercise-info">
+          <div class="catalog-exercise-name">${escapeHtml(ex.name)}</div>
+          <div class="catalog-exercise-meta">${escapeHtml(ex.muscleGroup || 'Грудь')} • Отдых ${ex.defaultRestSeconds || 90}с</div>
+        </div>
+        <div class="catalog-exercise-actions">
+          <button type="button" class="btn-icon-sm btn-edit-ex" title="Редактировать" data-id="${ex.id}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+          <button type="button" class="btn-icon-sm btn-danger btn-del-ex" title="Удалить" data-id="${ex.id}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    // Attach Edit handlers
+    el.trainerCatalogList.querySelectorAll('.btn-edit-ex').forEach(btn => {
+      btn.onclick = () => {
+        const id = Number(btn.dataset.id);
+        const ex = state.customExercises.find(e => e.id === id);
+        if (ex) openEditExerciseModal(ex);
+      };
+    });
+
+    // Attach Delete handlers
+    el.trainerCatalogList.querySelectorAll('.btn-del-ex').forEach(btn => {
+      btn.onclick = async () => {
+        const id = Number(btn.dataset.id);
+        const ex = state.customExercises.find(e => e.id === id);
+        const name = ex ? ex.name : 'упражнение';
+        if (!confirm(`Удалить упражнение «${name}» из каталога?`)) return;
+
+        try {
+          await api(`/api/exercises/${id}`, { method: 'DELETE' });
+          showToast(`Упражнение «${name}» удалено`, 'success');
+          loadTrainerExercisesCatalog();
+        } catch (err) {
+          showToast(err.message || 'Ошибка удаления упражнения', 'error');
+        }
+      };
+    });
+  }
+
+  function openEditExerciseModal(exercise = null) {
+    if (!el.dialogEditExercise) return;
+    if (exercise) {
+      if (el.dialogEditExerciseTitle) el.dialogEditExerciseTitle.textContent = 'Редактировать упражнение';
+      if (el.editExerciseId) el.editExerciseId.value = exercise.id;
+      if (el.editExerciseName) el.editExerciseName.value = exercise.name;
+      if (el.editExerciseGroup) el.editExerciseGroup.value = exercise.muscleGroup || 'Грудь';
+      if (el.editExerciseRest) el.editExerciseRest.value = exercise.defaultRestSeconds || 90;
+    } else {
+      if (el.dialogEditExerciseTitle) el.dialogEditExerciseTitle.textContent = 'Новое упражнение';
+      if (el.editExerciseId) el.editExerciseId.value = '';
+      if (el.editExerciseName) el.editExerciseName.value = '';
+      if (el.editExerciseGroup) el.editExerciseGroup.value = 'Грудь';
+      if (el.editExerciseRest) el.editExerciseRest.value = 90;
+    }
+    el.dialogEditExercise.showModal();
+    if (el.editExerciseName) el.editExerciseName.focus();
   }
 
   // --- Event Listeners Setup ---
@@ -2926,69 +3054,26 @@
       } catch {}
     };
 
-    // Trainer Searchable Exercise Catalog (Aligned with Mobile App's 34 standard exercises)
-    const EXERCISE_CATALOG = [
-      // Грудь
-      { name: 'Жим штанги лежа', category: 'Грудь' },
-      { name: 'Жим гантелей на наклонной скамье', category: 'Грудь' },
-      { name: 'Отжимания на брусьях (акцент на грудь)', category: 'Грудь' },
-      { name: 'Сведение рук в кроссовере', category: 'Грудь' },
-      { name: 'Жим в тренажере Хаммер', category: 'Грудь' },
-      { name: 'Пуловер с гантелью', category: 'Грудь' },
-
-      // Спина
-      { name: 'Становая тяга', category: 'Спина' },
-      { name: 'Тяга штанги в наклоне', category: 'Спина' },
-      { name: 'Подтягивания широким хватом', category: 'Спина' },
-      { name: 'Тяга верхнего блока к груди', category: 'Спина' },
-      { name: 'Тяга горизонтального блока к поясу', category: 'Спина' },
-      { name: 'Тяга гантели одной рукой', category: 'Спина' },
-      { name: 'Гиперэкстензия', category: 'Спина' },
-
-      // Ноги & Ягодицы
-      { name: 'Приседания со штангой на плечах', category: 'Ноги' },
-      { name: 'Жим ногами в тренажере', category: 'Ноги' },
-      { name: 'Румынская тяга со штангой', category: 'Ноги' },
-      { name: 'Выпады с гантелями на месте', category: 'Ноги' },
-      { name: 'Сгибания ног лежа в тренажере', category: 'Ноги' },
-      { name: 'Разгибания ног сидя в тренажере', category: 'Ноги' },
-      { name: 'Подъем на носки стоя (икры)', category: 'Ноги' },
-      { name: 'Ягодичный мостик со штангой', category: 'Ноги' },
-
-      // Плечи (Дельты)
-      { name: 'Армейский жим стоя', category: 'Плечи' },
-      { name: 'Жим гантелей сидя', category: 'Плечи' },
-      { name: 'Махи гантелями через стороны', category: 'Плечи' },
-      { name: 'Тяга штанги к подбородку', category: 'Плечи' },
-      { name: 'Махи в наклоне на заднюю дельту', category: 'Плечи' },
-      { name: 'Махи в кроссовере назад (Face Pull)', category: 'Плечи' },
-
-      // Руки (Бицепс / Трицепс)
-      { name: 'Подъем штанги на бицепс стоя', category: 'Руки' },
-      { name: 'Молотковые сгибания (Hummer)', category: 'Руки' },
-      { name: 'Сгибания на скамье Скотта', category: 'Руки' },
-      { name: 'Французский жим лежа со штангой', category: 'Руки' },
-      { name: 'Разгибания рук на верхнем блоке (канат)', category: 'Руки' },
-      { name: 'Жим узким хватом', category: 'Руки' },
-
-      // Пресс и Кор
-      { name: 'Скручивания на наклонной скамье', category: 'Пресс/Кор' },
-      { name: 'Подъем ног в висе на турнике', category: 'Пресс/Кор' },
-      { name: 'Планка на предплечьях', category: 'Пресс/Кор' },
-      { name: 'Молитва (скручивания на блоке)', category: 'Пресс/Кор' }
-    ];
-
+    // Trainer Searchable Exercise Catalog (Dynamic CRUD from DB, zero hardcoded stock exercises)
     if (el.trainerInputExercise && el.trainerExerciseSearchResults) {
-      function renderTrainerSearchResults(query = '') {
+      async function renderTrainerSearchResults(query = '') {
+        // Ensure catalog is loaded
+        if (state.customExercises.length === 0) {
+          try {
+            const res = await api('/api/exercises');
+            state.customExercises = Array.isArray(res.exercises) ? res.exercises : [];
+          } catch (_) {}
+        }
+
         const q = query.trim().toLowerCase();
-        const matches = EXERCISE_CATALOG.filter(item =>
-          !q || item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+        const matches = state.customExercises.filter(item =>
+          !q || item.name.toLowerCase().includes(q) || (item.muscleGroup && item.muscleGroup.toLowerCase().includes(q))
         );
 
         if (matches.length === 0) {
           el.trainerExerciseSearchResults.innerHTML = `
             <div style="padding: 10px 14px; font-size: 12px; color: var(--text-muted);">
-              Своё упражнение: <strong>${escapeHtml(query)}</strong>
+              ${q ? `Своё упражнение: <strong>${escapeHtml(query)}</strong>` : 'Каталог пуст. Добавьте упражнения в Настройках.'}
             </div>
           `;
           el.trainerExerciseSearchResults.style.display = 'block';
@@ -2998,7 +3083,7 @@
         el.trainerExerciseSearchResults.innerHTML = matches.map(item => `
           <div class="exercise-search-item" data-name="${escapeHtml(item.name)}">
             <span class="exercise-search-name">${escapeHtml(item.name)}</span>
-            <span class="exercise-search-category">${escapeHtml(item.category)}</span>
+            <span class="exercise-search-category">${escapeHtml(item.muscleGroup || '')}</span>
           </div>
         `).join('');
         el.trainerExerciseSearchResults.style.display = 'block';
@@ -3234,6 +3319,69 @@
           renderTrainerSettings();
           showToast('Профиль тренера обновлен!', 'success');
         } catch {}
+      };
+    }
+
+    // --- Trainer Exercises Catalog Events (Mobile Parity CRUD) ---
+    if (el.btnOpenAddExercise) {
+      el.btnOpenAddExercise.onclick = () => openEditExerciseModal(null);
+    }
+
+    if (el.btnCloseExerciseDialog) {
+      el.btnCloseExerciseDialog.onclick = () => el.dialogEditExercise?.close();
+    }
+
+    if (el.btnCancelEditExercise) {
+      el.btnCancelEditExercise.onclick = () => el.dialogEditExercise?.close();
+    }
+
+    if (el.trainerCatalogSearch) {
+      el.trainerCatalogSearch.oninput = (e) => {
+        state.catalogSearchQuery = e.target.value;
+        renderTrainerExercisesCatalog();
+      };
+    }
+
+    if (el.trainerCatalogGroupChips) {
+      el.trainerCatalogGroupChips.querySelectorAll('.chip-pill').forEach(chip => {
+        chip.onclick = () => {
+          el.trainerCatalogGroupChips.querySelectorAll('.chip-pill').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          state.catalogSelectedGroup = chip.dataset.group;
+          renderTrainerExercisesCatalog();
+        };
+      });
+    }
+
+    if (el.formEditExercise) {
+      el.formEditExercise.onsubmit = async (e) => {
+        e.preventDefault();
+        const id = el.editExerciseId.value ? Number(el.editExerciseId.value) : null;
+        const name = el.editExerciseName.value.trim();
+        const muscleGroup = el.editExerciseGroup.value;
+        const defaultRestSeconds = parseInt(el.editExerciseRest.value, 10) || 90;
+
+        if (!name) return;
+
+        try {
+          if (id) {
+            await api(`/api/exercises/${id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ name, muscleGroup, defaultRestSeconds })
+            });
+            showToast(`Упражнение «${name}» обновлено`, 'success');
+          } else {
+            await api('/api/exercises', {
+              method: 'POST',
+              body: JSON.stringify({ name, muscleGroup, defaultRestSeconds })
+            });
+            showToast(`Упражнение «${name}» добавлено в каталог`, 'success');
+          }
+          el.dialogEditExercise?.close();
+          loadTrainerExercisesCatalog();
+        } catch (err) {
+          showToast(err.message || 'Ошибка сохранения упражнения', 'error');
+        }
       };
     }
 
