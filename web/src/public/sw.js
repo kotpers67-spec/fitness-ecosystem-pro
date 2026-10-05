@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fitpro-v2.0.5';
+const CACHE_NAME = 'fitpro-v2.1.0';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
