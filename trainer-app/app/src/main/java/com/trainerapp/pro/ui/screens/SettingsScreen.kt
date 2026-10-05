@@ -52,7 +52,6 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val clients by viewModel.clients.collectAsState()
-    val exercises by viewModel.exercises.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val activeClient by viewModel.activeClient.collectAsState()
 
@@ -115,14 +114,8 @@ fun SettingsScreen(
 
     var showAddClientDialog by remember { mutableStateOf(false) }
     var clientToEdit by remember { mutableStateOf<ClientEntity?>(null) }
-    var showAddExerciseDialog by remember { mutableStateOf(false) }
-    var exerciseToEdit by remember { mutableStateOf<ExerciseEntity?>(null) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var backupJsonText by remember { mutableStateOf("") }
-
-    // Exercise search & filter
-    var exerciseSearch by remember { mutableStateOf("") }
-    var selectedMuscleGroup by remember { mutableStateOf("Все") }
 
     var isSyncing by remember { mutableStateOf(false) }
 
@@ -130,16 +123,6 @@ fun SettingsScreen(
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var updateResult by remember { mutableStateOf<UpdateCheckResult?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
-
-    val muscleGroups = listOf("Все", "Грудь", "Спина", "Ноги", "Плечи", "Руки", "Пресс/Кор", "Кардио")
-
-    val filteredExercises = remember(exercises, exerciseSearch, selectedMuscleGroup) {
-        exercises.filter { ex ->
-            val matchesSearch = exerciseSearch.isBlank() || ex.name.contains(exerciseSearch, ignoreCase = true)
-            val matchesGroup = selectedMuscleGroup == "Все" || ex.muscleGroup.equals(selectedMuscleGroup, ignoreCase = true)
-            matchesSearch && matchesGroup
-        }
-    }
 
     var trainerFirstName by remember { mutableStateOf(viewModel.trainerFirstName) }
     var trainerLastName by remember { mutableStateOf(viewModel.trainerLastName) }
@@ -862,134 +845,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. КАТАЛОГ УПРАЖНЕНИЙ (ПОЛНЫЙ CRUD: ДОБАВЛЕНИЕ, РЕДАКТИРОВАНИЕ, ПОИСК, УДАЛЕНИЕ)
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "КАТАЛОГ УПРАЖНЕНИЙ (${filteredExercises.size}/${exercises.size})",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            IconButton(onClick = {
-                                exerciseToEdit = null
-                                showAddExerciseDialog = true
-                            }) {
-                                Icon(Icons.Default.AddCircle, contentDescription = "Добавить упражнение", tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
 
-                        Spacer(Modifier.height(8.dp))
-
-                        // Search Field
-                        OutlinedTextField(
-                            value = exerciseSearch,
-                            onValueChange = { exerciseSearch = it },
-                            placeholder = { Text("Поиск упражнения...", fontSize = 13.sp) },
-                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                            trailingIcon = {
-                                if (exerciseSearch.isNotBlank()) {
-                                    IconButton(onClick = { exerciseSearch = "" }) {
-                                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        // Muscle Group Filter Chips
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(muscleGroups) { group ->
-                                FilterChip(
-                                    selected = selectedMuscleGroup == group,
-                                    onClick = { selectedMuscleGroup = group },
-                                    label = { Text(group, fontSize = 11.sp) }
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-
-                        if (filteredExercises.isEmpty()) {
-                            Text(
-                                text = "Упражнения не найдены. Нажмите '+' для добавления нового упражнения.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                filteredExercises.forEach { ex ->
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.surface,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = ex.name,
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Text(
-                                                    text = "${ex.muscleGroup} • Отдых ${ex.defaultRestSeconds}с",
-                                                    fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.secondary
-                                                )
-                                            }
-                                            Row {
-                                                IconButton(
-                                                    onClick = {
-                                                        exerciseToEdit = ex
-                                                        showAddExerciseDialog = true
-                                                    },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Edit, contentDescription = "Редактировать", modifier = Modifier.size(16.dp))
-                                                }
-                                                IconButton(
-                                                    onClick = { viewModel.deleteExercise(ex) },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
 
             // 7. ЛОКАЛЬНЫЙ JSON ЭКСПОРТ/ИМПОРТ & ФАЙЛЫ
@@ -1150,58 +1006,7 @@ fun SettingsScreen(
     }
 }
 
-    // Exercise Add/Edit Dialog
-    if (showAddExerciseDialog) {
-        var exName by remember(exerciseToEdit) { mutableStateOf(exerciseToEdit?.name ?: "") }
-        var exGroup by remember(exerciseToEdit) { mutableStateOf(exerciseToEdit?.muscleGroup ?: "Грудь") }
-        var exRest by remember(exerciseToEdit) { mutableStateOf((exerciseToEdit?.defaultRestSeconds ?: 90).toString()) }
 
-        AlertDialog(
-            onDismissRequest = { showAddExerciseDialog = false },
-            title = { Text(if (exerciseToEdit == null) "Новое упражнение" else "Редактировать упражнение", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = exName,
-                        onValueChange = { exName = it },
-                        label = { Text("Название упражнения *") },
-                        placeholder = { Text("Например: Жим лежа на брусьях") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = exGroup,
-                        onValueChange = { exGroup = it },
-                        label = { Text("Группа мышц") },
-                        placeholder = { Text("Грудь, Спина, Ноги, Плечи, Руки, Пресс...") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = exRest,
-                        onValueChange = { exRest = it },
-                        label = { Text("Время отдыха (секунды)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (exName.isNotBlank()) {
-                            val restSec = exRest.toIntOrNull() ?: 90
-                            val ex = exerciseToEdit?.copy(name = exName.trim(), muscleGroup = exGroup.trim(), defaultRestSeconds = restSec)
-                                ?: ExerciseEntity(name = exName.trim(), muscleGroup = exGroup.trim(), defaultRestSeconds = restSec, isCustom = true)
-                            viewModel.saveExercise(ex)
-                            showAddExerciseDialog = false
-                        }
-                    }
-                ) { Text("Сохранить") }
-            },
-            dismissButton = { TextButton(onClick = { showAddExerciseDialog = false }) { Text("Отмена") } }
-        )
-    }
 
     // Client Add/Edit Dialog
     if (showAddClientDialog) {
