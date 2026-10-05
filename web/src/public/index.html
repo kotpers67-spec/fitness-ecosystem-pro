@@ -579,16 +579,17 @@
           </div>
         </div>
 
-        <!-- Card: Athlete Injuries & Restrictions ("Строчки травмы") -->
-        <div class="app-card" id="card-trainer-restrictions" style="display: none;">
-          <div class="card-title">ТРАВМЫ И ОГРАНИЧЕНИЯ АТЛЕТА</div>
-          <p class="card-desc">Укажите противопоказания, травмы или особенности атлета</p>
-          <form id="form-trainer-restrictions">
-            <div class="form-group" style="margin-bottom: 10px;">
-              <textarea id="input-athlete-restrictions" class="app-input" rows="3" placeholder="Например: Травма колена, избегать осевых нагрузок..."></textarea>
+        <!-- Card: Athlete Injuries & Restrictions ("Строчки травмы" - Read-Only Warning Banner) -->
+        <div class="app-card restrictions-warning-card" id="card-trainer-restrictions" style="display: none; background: #231C13; border: 1px solid rgba(245, 158, 11, 0.7); border-radius: 14px; padding: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="display: inline-flex; align-items: center; gap: 5px; background: rgba(245, 158, 11, 0.22); padding: 3px 8px; border-radius: 6px;">
+              <span style="color: #F59E0B; font-size: 13px;">⚠️</span>
+              <span style="color: #F59E0B; font-size: 10px; font-weight: 900; letter-spacing: 0.8px;">ОГРАНИЧЕНИЯ / ТРАВМЫ</span>
             </div>
-            <button type="submit" class="app-btn btn-primary">Сохранить ограничения</button>
-          </form>
+            <span style="color: rgba(245, 158, 11, 0.8); font-size: 9px; font-weight: 700; letter-spacing: 0.5px;">ПРОТИВОПОКАЗАНИЯ</span>
+          </div>
+          <div id="text-athlete-restrictions" style="font-size: 13px; font-weight: 600; color: #FDFDFD; line-height: 18px; margin-bottom: 4px; white-space: pre-wrap;"></div>
+          <div style="font-size: 10px; color: #D4A373;">Учитывайте противопоказания при подборе упражнений и рабочих весов (заполняется атлетом)</div>
         </div>
 
         <!-- Add Client Card (Pairing by 6-digit PIN) -->
@@ -637,6 +638,19 @@
         <!-- Active Client Notice -->
         <div class="notice-card" id="trainer-workout-target-notice">
           Подопечный не выбран. Выберите подопечного во вкладке «Подопечные».
+        </div>
+
+        <!-- Athlete Restrictions Warning Banner (Workout Screen - Mobile Parity) -->
+        <div class="app-card restrictions-warning-card" id="trainer-workout-restrictions-banner" style="display: none; background: #231C13; border: 1px solid rgba(245, 158, 11, 0.7); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="display: inline-flex; align-items: center; gap: 5px; background: rgba(245, 158, 11, 0.22); padding: 3px 8px; border-radius: 6px;">
+              <span style="color: #F59E0B; font-size: 13px;">⚠️</span>
+              <span style="color: #F59E0B; font-size: 10px; font-weight: 900; letter-spacing: 0.8px;">ОГРАНИЧЕНИЯ / ТРАВМЫ</span>
+            </div>
+            <span style="color: rgba(245, 158, 11, 0.8); font-size: 9px; font-weight: 700; letter-spacing: 0.5px;">ПРОТИВОПОКАЗАНИЯ</span>
+          </div>
+          <div id="trainer-workout-restrictions-text" style="font-size: 13px; font-weight: 600; color: #FDFDFD; line-height: 18px; margin-bottom: 4px; white-space: pre-wrap;"></div>
+          <div style="font-size: 10px; color: #D4A373;">Учитывайте противопоказания при подборе упражнений и рабочих весов</div>
         </div>
 
         <!-- Date Bar -->
@@ -1179,6 +1193,64 @@
         </div>
       </dialog>
 
+      <!-- DIALOG: Статистика и история упражнения (Mobile Parity) -->
+      <dialog id="dialog-exercise-history" class="app-dialog">
+        <div class="dialog-content">
+          <div class="dialog-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">📊</span>
+              <h3 class="dialog-title" id="exercise-history-dialog-title">Статистика упражнения</h3>
+            </div>
+            <button type="button" class="dialog-close-btn" id="btn-close-exercise-history" aria-label="Закрыть">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div id="exercise-history-modal-body" style="padding-top: 10px;">
+            <!-- Rendered dynamically -->
+          </div>
+          <div class="dialog-actions" style="margin-top: 16px;">
+            <button type="button" class="app-btn btn-secondary" id="btn-dismiss-exercise-history" style="width: 100%;">Закрыть</button>
+          </div>
+        </div>
+      </dialog>
+
+      <!-- DIALOG: Быстрое добавление подхода к упражнению (Mobile Parity) -->
+      <dialog id="dialog-add-set" class="app-dialog">
+        <div class="dialog-content">
+          <div class="dialog-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">➕</span>
+              <h3 class="dialog-title" id="add-set-dialog-title">Добавить подход</h3>
+            </div>
+            <button type="button" class="dialog-close-btn" id="btn-close-add-set-dialog" aria-label="Закрыть">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <form id="form-quick-add-set" style="margin-top: 10px;">
+            <input type="hidden" id="quick-add-set-exercise-name">
+            <div class="double-input-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+              <div>
+                <label class="field-label">Вес (кг) *</label>
+                <input type="number" step="0.5" min="0" id="quick-add-set-weight" class="app-input tabular-nums" placeholder="20" required>
+              </div>
+              <div>
+                <label class="field-label">Повторы *</label>
+                <input type="number" step="1" min="1" id="quick-add-set-reps" class="app-input tabular-nums" placeholder="10" required>
+              </div>
+            </div>
+            <div class="dialog-actions">
+              <button type="button" class="app-btn btn-secondary" id="btn-cancel-quick-add-set">Отмена</button>
+              <button type="submit" class="app-btn btn-primary">+ Добавить подход</button>
+            </div>
+          </form>
+        </div>
+      </dialog>
     </main>
 
     <!-- Floating Rest Timer Banner (Athlete Pro Parity) -->

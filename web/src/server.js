@@ -1870,25 +1870,9 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, athleteId, restrictions: athlete.restrictions || '' });
       }
 
-      // TRAINER: UPDATE ATHLETE RESTRICTIONS ("Строчки травмы")
+      // TRAINER: UPDATE ATHLETE RESTRICTIONS ("Строчки травмы" - read-only for trainer)
       if (pathname === '/api/trainer/athlete-restrictions' && req.method === 'POST') {
-        if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
-        const body = await parseJsonBody(req);
-        const athleteId = Number(body.athleteId);
-        const restrictions = String(body.restrictions || '').trim();
-        if (!athleteId) return sendError(res, 400, 'Укажите athleteId');
-        if (!db.isAthletePairedToTrainer(user.id, athleteId)) {
-          return sendError(res, 403, 'Атлет не привязан к данному тренеру');
-        }
-
-        db.updateAthleteRestrictions(athleteId, restrictions);
-
-        const athlete = db.findUserById(athleteId);
-        if (athlete && athlete.client_uuid) {
-          cloudSyncService.updateAthleteRestrictions(athlete.client_uuid, restrictions).catch(() => {});
-        }
-
-        return sendJson(res, 200, { success: true, restrictions });
+        return sendError(res, 403, 'Заполнение травм и ограничений доступно только самому атлету');
       }
 
       // TRAINER: ASSIGN WORKOUT TO ATHLETE
@@ -1929,18 +1913,20 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, sessionId });
       }
 
-      // TRAINER: EXERCISE HISTORY
-      if (pathname === '/api/trainer/exercise-history' && req.method === 'GET') {
-        if (user.role !== 'trainer') return sendError(res, 403, 'Доступно только тренерам');
-        const athleteId = Number(reqUrl.searchParams.get('athleteId'));
+      // EXERCISE HISTORY (Last session stats summary)
+      if ((pathname === '/api/trainer/exercise-history' || pathname === '/api/workout/exercise-history') && req.method === 'GET') {
+        const targetAthleteId = user.role === 'athlete'
+          ? user.id
+          : Number(reqUrl.searchParams.get('athleteId'));
         const exerciseName = reqUrl.searchParams.get('exercise') || '';
-        if (!athleteId || !exerciseName) {
+        const beforeDate = reqUrl.searchParams.get('beforeDate') || null;
+        if (!targetAthleteId || !exerciseName) {
           return sendError(res, 400, 'Укажите athleteId и exercise');
         }
-        if (!db.isAthletePairedToTrainer(user.id, athleteId)) {
+        if (user.role === 'trainer' && !db.isAthletePairedToTrainer(user.id, targetAthleteId)) {
           return sendError(res, 403, 'Атлет не привязан к данному тренеру');
         }
-        const stats = db.getLastExerciseStats(athleteId, exerciseName);
+        const stats = db.getLastExerciseStats(targetAthleteId, exerciseName, beforeDate);
         return sendJson(res, 200, { stats });
       }
 

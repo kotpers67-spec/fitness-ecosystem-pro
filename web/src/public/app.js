@@ -800,6 +800,16 @@
           </div>
         </div>
         <div class="sets-table">${setsHtml}</div>
+        <div class="exercise-card-actions">
+          ${isSelfAllowed ? `
+            <button type="button" class="btn-action-pill btn-action-primary btn-add-set-to-exercise" data-name="${escapeHtml(exName)}" data-last-weight="${sets.length > 0 ? sets[sets.length - 1].weight_kg : 20}" data-last-reps="${sets.length > 0 ? sets[sets.length - 1].reps : 10}">
+              ➕ + ПОДХОД
+            </button>
+          ` : ''}
+          <button type="button" class="btn-action-pill btn-action-cyan btn-view-exercise-stats" data-name="${escapeHtml(exName)}">
+            📊 СТАТИСТИКА
+          </button>
+        </div>
       `;
 
       const toggleBtn = card.querySelector('.collapse-toggle-btn');
@@ -809,6 +819,22 @@
           card.classList.toggle('collapsed');
           const isNowCollapsed = card.classList.contains('collapsed');
           toggleBtn.textContent = isNowCollapsed ? '▶ Развернуть' : '▼ Свернуть';
+        };
+      }
+
+      // Add set to this specific exercise (Athlete)
+      const addSetBtn = card.querySelector('.btn-add-set-to-exercise');
+      if (addSetBtn) {
+        addSetBtn.onclick = () => {
+          openQuickAddSetDialog(exName, Number(addSetBtn.dataset.lastWeight) || 20, Number(addSetBtn.dataset.lastReps) || 10, 'athlete');
+        };
+      }
+
+      // View exercise history stats dialog (Athlete)
+      const statsBtn = card.querySelector('.btn-view-exercise-stats');
+      if (statsBtn) {
+        statsBtn.onclick = () => {
+          openExerciseStatsDialog(exName, state.user.id, state.athleteDate);
         };
       }
 
@@ -1595,7 +1621,9 @@
     state.activeClientId = Number(clientId);
     const client = state.clients.find(c => c.id === state.activeClientId);
     const cardRestrictions = document.getElementById('card-trainer-restrictions');
-    const inputRestrictions = document.getElementById('input-athlete-restrictions');
+    const textRestrictions = document.getElementById('text-athlete-restrictions');
+    const workoutBanner = document.getElementById('trainer-workout-restrictions-banner');
+    const workoutBannerText = document.getElementById('trainer-workout-restrictions-text');
 
     if (client) {
       el.trainerActiveClientName.textContent = client.full_name || client.username;
@@ -1603,15 +1631,31 @@
         el.trainerActiveClientAvatar.innerHTML = `<img src="${client.avatar_base64}" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;">`;
       }
       el.trainerWorkoutNotice.style.display = 'none';
-      if (cardRestrictions && inputRestrictions) {
-        cardRestrictions.style.display = 'block';
-        inputRestrictions.value = client.restrictions || '';
+
+      const hasRestrictions = Boolean(client.restrictions && client.restrictions.trim());
+      if (cardRestrictions && textRestrictions) {
+        if (hasRestrictions) {
+          cardRestrictions.style.display = 'block';
+          textRestrictions.textContent = client.restrictions.trim();
+        } else {
+          cardRestrictions.style.display = 'none';
+        }
       }
+      if (workoutBanner && workoutBannerText) {
+        if (hasRestrictions) {
+          workoutBanner.style.display = 'block';
+          workoutBannerText.textContent = client.restrictions.trim();
+        } else {
+          workoutBanner.style.display = 'none';
+        }
+      }
+
       populateTrainerClientDropdown();
       renderTrainerClientsList();
       showToast(`Выбран подопечный: ${client.full_name || client.username}`, 'info');
     } else {
       if (cardRestrictions) cardRestrictions.style.display = 'none';
+      if (workoutBanner) workoutBanner.style.display = 'none';
     }
   }
 
@@ -1727,6 +1771,14 @@
           </div>
         </div>
         <div class="sets-table">${setsHtml}</div>
+        <div class="exercise-card-actions">
+          <button type="button" class="btn-action-pill btn-action-primary btn-add-set-to-exercise" data-name="${escapeHtml(exName)}" data-last-weight="${sets.length > 0 ? sets[sets.length - 1].weight_kg : 20}" data-last-reps="${sets.length > 0 ? sets[sets.length - 1].reps : 10}">
+            ➕ + ПОДХОД
+          </button>
+          <button type="button" class="btn-action-pill btn-action-cyan btn-view-exercise-stats" data-name="${escapeHtml(exName)}">
+            📊 СТАТИСТИКА
+          </button>
+        </div>
       `;
 
       const toggleBtn = card.querySelector('.collapse-toggle-btn');
@@ -1736,6 +1788,22 @@
           card.classList.toggle('collapsed');
           const isNowCollapsed = card.classList.contains('collapsed');
           toggleBtn.textContent = isNowCollapsed ? '▶ Развернуть' : '▼ Свернуть';
+        };
+      }
+
+      // Add set to this specific exercise
+      const addSetBtn = card.querySelector('.btn-add-set-to-exercise');
+      if (addSetBtn) {
+        addSetBtn.onclick = () => {
+          openQuickAddSetDialog(exName, Number(addSetBtn.dataset.lastWeight) || 20, Number(addSetBtn.dataset.lastReps) || 10, 'trainer');
+        };
+      }
+
+      // View exercise history stats dialog
+      const statsBtn = card.querySelector('.btn-view-exercise-stats');
+      if (statsBtn) {
+        statsBtn.onclick = () => {
+          openExerciseStatsDialog(exName, state.activeClientId, state.trainerDate);
         };
       }
 
@@ -2858,45 +2926,56 @@
       } catch {}
     };
 
-    // Trainer Searchable Exercise Catalog (37 exercises)
+    // Trainer Searchable Exercise Catalog (Aligned with Mobile App's 34 standard exercises)
     const EXERCISE_CATALOG = [
-      { name: 'Жим штанги лёжа', category: 'Грудь' },
-      { name: 'Жим штанги на наклонной скамье', category: 'Грудь' },
+      // Грудь
+      { name: 'Жим штанги лежа', category: 'Грудь' },
       { name: 'Жим гантелей на наклонной скамье', category: 'Грудь' },
-      { name: 'Жим гантелей лёжа', category: 'Грудь' },
-      { name: 'Отжимания на брусьях', category: 'Грудь / Трицепс' },
-      { name: 'Разведение гантелей лёжа', category: 'Грудь' },
+      { name: 'Отжимания на брусьях (акцент на грудь)', category: 'Грудь' },
       { name: 'Сведение рук в кроссовере', category: 'Грудь' },
-      { name: 'Приседания со штангой', category: 'Ноги' },
-      { name: 'Жим ногами в тренажёре', category: 'Ноги' },
-      { name: 'Выпады с гантелями', category: 'Ноги' },
-      { name: 'Румынская тяга со штангой', category: 'Ноги / Спина' },
-      { name: 'Ягодичный мостик со штангой', category: 'Ягодицы' },
-      { name: 'Сгибания ног в тренажёре', category: 'Ноги' },
-      { name: 'Разгибания ног в тренажёре', category: 'Ноги' },
-      { name: 'Подъёмы на носки стоя', category: 'Икры' },
+      { name: 'Жим в тренажере Хаммер', category: 'Грудь' },
+      { name: 'Пуловер с гантелью', category: 'Грудь' },
+
+      // Спина
       { name: 'Становая тяга', category: 'Спина' },
+      { name: 'Тяга штанги в наклоне', category: 'Спина' },
       { name: 'Подтягивания широким хватом', category: 'Спина' },
       { name: 'Тяга верхнего блока к груди', category: 'Спина' },
-      { name: 'Тяга штанги в наклоне', category: 'Спина' },
-      { name: 'Т-тяга грифа к поясу', category: 'Спина' },
-      { name: 'Тяга горизонтального блока', category: 'Спина' },
-      { name: 'Тяга гантели в наклоне', category: 'Спина' },
+      { name: 'Тяга горизонтального блока к поясу', category: 'Спина' },
+      { name: 'Тяга гантели одной рукой', category: 'Спина' },
       { name: 'Гиперэкстензия', category: 'Спина' },
-      { name: 'Шраги с гантелями', category: 'Трапеции' },
+
+      // Ноги & Ягодицы
+      { name: 'Приседания со штангой на плечах', category: 'Ноги' },
+      { name: 'Жим ногами в тренажере', category: 'Ноги' },
+      { name: 'Румынская тяга со штангой', category: 'Ноги' },
+      { name: 'Выпады с гантелями на месте', category: 'Ноги' },
+      { name: 'Сгибания ног лежа в тренажере', category: 'Ноги' },
+      { name: 'Разгибания ног сидя в тренажере', category: 'Ноги' },
+      { name: 'Подъем на носки стоя (икры)', category: 'Ноги' },
+      { name: 'Ягодичный мостик со штангой', category: 'Ноги' },
+
+      // Плечи (Дельты)
       { name: 'Армейский жим стоя', category: 'Плечи' },
       { name: 'Жим гантелей сидя', category: 'Плечи' },
       { name: 'Махи гантелями через стороны', category: 'Плечи' },
+      { name: 'Тяга штанги к подбородку', category: 'Плечи' },
       { name: 'Махи в наклоне на заднюю дельту', category: 'Плечи' },
-      { name: 'Подъём штанги на бицепс', category: 'Руки' },
-      { name: 'Молотковые сгибания с гантелями', category: 'Руки' },
-      { name: 'Французский жим со штангой', category: 'Трицепс' },
-      { name: 'Разгибания рук на блоке', category: 'Трицепс' },
-      { name: 'Скручивания на пресс', category: 'Пресс' },
-      { name: 'Подъём ног в висе', category: 'Пресс' },
-      { name: 'Планка', category: 'Пресс' },
-      { name: 'Кардио: Беговая дорожка', category: 'Кардио' },
-      { name: 'Кардио: Велотренажёр', category: 'Кардио' }
+      { name: 'Махи в кроссовере назад (Face Pull)', category: 'Плечи' },
+
+      // Руки (Бицепс / Трицепс)
+      { name: 'Подъем штанги на бицепс стоя', category: 'Руки' },
+      { name: 'Молотковые сгибания (Hummer)', category: 'Руки' },
+      { name: 'Сгибания на скамье Скотта', category: 'Руки' },
+      { name: 'Французский жим лежа со штангой', category: 'Руки' },
+      { name: 'Разгибания рук на верхнем блоке (канат)', category: 'Руки' },
+      { name: 'Жим узким хватом', category: 'Руки' },
+
+      // Пресс и Кор
+      { name: 'Скручивания на наклонной скамье', category: 'Пресс/Кор' },
+      { name: 'Подъем ног в висе на турнике', category: 'Пресс/Кор' },
+      { name: 'Планка на предплечьях', category: 'Пресс/Кор' },
+      { name: 'Молитва (скручивания на блоке)', category: 'Пресс/Кор' }
     ];
 
     if (el.trainerInputExercise && el.trainerExerciseSearchResults) {
@@ -2948,29 +3027,177 @@
       });
     }
 
-    // Trainer Athlete Restrictions Form
-    const formRestrictions = document.getElementById('form-trainer-restrictions');
-    if (formRestrictions) {
-      formRestrictions.onsubmit = async (evt) => {
+    // Modal: Quick Add Set Dialog for specific exercise
+    const dialogAddSet = document.getElementById('dialog-add-set');
+    const formQuickAddSet = document.getElementById('form-quick-add-set');
+    const quickExNameInput = document.getElementById('quick-add-set-exercise-name');
+    const quickWeightInput = document.getElementById('quick-add-set-weight');
+    const quickRepsInput = document.getElementById('quick-add-set-reps');
+    const addSetTitle = document.getElementById('add-set-dialog-title');
+    let quickAddRole = 'trainer';
+
+    window.openQuickAddSetDialog = function(exerciseName, lastWeight, lastReps, role = 'trainer') {
+      quickAddRole = role;
+      if (addSetTitle) addSetTitle.textContent = `+ Подход: ${exerciseName}`;
+      if (quickExNameInput) quickExNameInput.value = exerciseName;
+      if (quickWeightInput) quickWeightInput.value = lastWeight || 20;
+      if (quickRepsInput) quickRepsInput.value = lastReps || 10;
+      if (dialogAddSet) {
+        if (typeof dialogAddSet.showModal === 'function') dialogAddSet.showModal();
+        else dialogAddSet.style.display = 'block';
+        if (quickWeightInput) quickWeightInput.focus();
+      }
+    };
+
+    if (formQuickAddSet) {
+      formQuickAddSet.onsubmit = async (evt) => {
         evt.preventDefault();
-        if (!state.activeClientId) {
-          showToast('Подопечный не выбран', 'error');
-          return;
-        }
-        const restrictions = document.getElementById('input-athlete-restrictions').value;
+        const exerciseName = quickExNameInput.value.trim();
+        const weightKg = parseFloat(quickWeightInput.value) || 0;
+        const reps = parseInt(quickRepsInput.value, 10) || 1;
+        if (!exerciseName) return;
+
         try {
-          await api('/api/trainer/athlete-restrictions', {
-            method: 'POST',
-            body: JSON.stringify({ athleteId: state.activeClientId, restrictions })
-          });
-          const client = state.clients.find(c => c.id === state.activeClientId);
-          if (client) client.restrictions = restrictions;
-          showToast('Ограничения и травмы атлета сохранены', 'success');
+          if (quickAddRole === 'trainer') {
+            if (!state.activeClientId) {
+              showToast('Подопечный не выбран', 'error');
+              return;
+            }
+            await api('/api/workout/set', {
+              method: 'POST',
+              body: JSON.stringify({
+                athleteId: state.activeClientId,
+                date: state.trainerDate,
+                exerciseName,
+                weightKg,
+                reps
+              })
+            });
+            showToast('Подход добавлен', 'success');
+            loadTrainerWorkoutSets();
+          } else {
+            await api('/api/workout/set', {
+              method: 'POST',
+              body: JSON.stringify({
+                date: state.athleteDate,
+                exerciseName,
+                weightKg,
+                reps
+              })
+            });
+            showToast('Подход добавлен', 'success');
+            loadAthleteWorkoutSets();
+          }
+          if (dialogAddSet) {
+            if (typeof dialogAddSet.close === 'function') dialogAddSet.close();
+            else dialogAddSet.style.display = 'none';
+          }
         } catch (err) {
-          showToast(err.message || 'Ошибка сохранения', 'error');
+          showToast(err.message || 'Ошибка добавления подхода', 'error');
         }
       };
     }
+
+    const btnCloseAddSet = document.getElementById('btn-close-add-set-dialog');
+    const btnCancelAddSet = document.getElementById('btn-cancel-quick-add-set');
+    [btnCloseAddSet, btnCancelAddSet].forEach(btn => {
+      if (btn) {
+        btn.onclick = () => {
+          if (dialogAddSet) {
+            if (typeof dialogAddSet.close === 'function') dialogAddSet.close();
+            else dialogAddSet.style.display = 'none';
+          }
+        };
+      }
+    });
+
+    // Modal: Exercise History & Statistics Dialog (Mobile Parity)
+    const dialogHistory = document.getElementById('dialog-exercise-history');
+    const historyTitle = document.getElementById('exercise-history-dialog-title');
+    const historyBody = document.getElementById('exercise-history-modal-body');
+
+    window.openExerciseStatsDialog = async function(exerciseName, athleteId, currentDate) {
+      if (historyTitle) historyTitle.textContent = `Статистика: ${exerciseName}`;
+      if (historyBody) historyBody.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Загрузка истории...</div>';
+      if (dialogHistory) {
+        if (typeof dialogHistory.showModal === 'function') dialogHistory.showModal();
+        else dialogHistory.style.display = 'block';
+      }
+
+      try {
+        const queryParams = new URLSearchParams({
+          exercise: exerciseName,
+          athleteId: athleteId || (state.user?.id || 1)
+        });
+        if (currentDate) queryParams.set('beforeDate', currentDate);
+
+        const res = await api(`/api/trainer/exercise-history?${queryParams.toString()}`);
+        const summary = res.stats;
+
+        if (!summary || !summary.lastDate) {
+          if (historyBody) {
+            historyBody.innerHTML = `
+              <div style="text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 13px;">
+                Ранее история выполнения этого упражнения для данного подопечного не найдена.
+              </div>
+            `;
+          }
+          return;
+        }
+
+        const setsListHtml = (summary.sets || []).map((s, idx) => `
+          <div class="exercise-stats-set-item">
+            <span style="font-weight: 500;">Подход ${idx + 1}</span>
+            <span style="font-weight: 700; color: var(--accent-lime); font-family: monospace;">
+              ${s.weight_kg} кг × ${s.reps} повт.
+            </span>
+          </div>
+        `).join('');
+
+        if (historyBody) {
+          historyBody.innerHTML = `
+            <div class="exercise-stats-box">
+              <div class="exercise-stats-row">
+                <span class="exercise-stats-label">Дата последней тренировки:</span>
+                <span class="exercise-stats-val highlight">${summary.lastDate}</span>
+              </div>
+              <div class="exercise-stats-row">
+                <span class="exercise-stats-label">Максимальный вес:</span>
+                <span class="exercise-stats-val">${summary.maxWeightKg} кг</span>
+              </div>
+              <div class="exercise-stats-row">
+                <span class="exercise-stats-label">Количество подходов:</span>
+                <span class="exercise-stats-val">${summary.setsCount} (всего ${summary.totalReps} повт.)</span>
+              </div>
+            </div>
+
+            <div style="font-size: 11px; font-weight: 800; color: var(--text-secondary); margin: 12px 0 6px 0; letter-spacing: 0.5px;">
+              ДЕТАЛИЗАЦИЯ ПОДХОДОВ:
+            </div>
+            <div class="exercise-stats-sets-list" style="max-height: 200px; overflow-y: auto;">
+              ${setsListHtml || '<div style="font-size: 12px; color: var(--text-muted);">Нет подходов</div>'}
+            </div>
+          `;
+        }
+      } catch (err) {
+        if (historyBody) {
+          historyBody.innerHTML = `<div style="text-align:center;padding:20px;color:var(--accent-rose);font-size:13px;">Ошибка загрузки статистики</div>`;
+        }
+      }
+    };
+
+    const btnCloseHistory = document.getElementById('btn-close-exercise-history');
+    const btnDismissHistory = document.getElementById('btn-dismiss-exercise-history');
+    [btnCloseHistory, btnDismissHistory].forEach(btn => {
+      if (btn) {
+        btn.onclick = () => {
+          if (dialogHistory) {
+            if (typeof dialogHistory.close === 'function') dialogHistory.close();
+            else dialogHistory.style.display = 'none';
+          }
+        };
+      }
+    });
 
     // Trainer Profile Photo Selection
     if (el.trainerAvatarInput) {

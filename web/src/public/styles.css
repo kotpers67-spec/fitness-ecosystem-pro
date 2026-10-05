@@ -1925,3 +1925,101 @@ input:checked + .slider:before {
   outline: none;
 }
 
+/* Exercise Group Card Actions & Badges (Mobile Parity) */
+.exercise-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px 4px 14px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 6px;
+}
+
+.btn-action-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-action-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-action-pill.btn-action-primary {
+  border-color: rgba(163, 230, 53, 0.4);
+  color: var(--accent-lime);
+  background: rgba(163, 230, 53, 0.08);
+}
+
+.btn-action-pill.btn-action-primary:hover {
+  background: rgba(163, 230, 53, 0.18);
+  border-color: var(--accent-lime);
+}
+
+.btn-action-pill.btn-action-cyan {
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.btn-action-pill.btn-action-cyan:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+}
+
+.exercise-stats-box {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.exercise-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.exercise-stats-label {
+  color: var(--text-secondary);
+}
+
+.exercise-stats-val {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+.exercise-stats-val.highlight {
+  color: var(--accent-lime);
+}
+
+.exercise-stats-set-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+

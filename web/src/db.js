@@ -682,16 +682,51 @@ class AppDatabase {
     return stmt.get(setId) || null;
   }
 
-  getLastExerciseStats(athleteId, exerciseName) {
-    const stmt = this.db.prepare(`
-      SELECT ws.date, s.weight_kg, s.reps, s.rpe
+  getLastExerciseStats(athleteId, exerciseName, beforeDate = null) {
+    const dateQuery = beforeDate
+      ? this.db.prepare(`
+          SELECT ws.date
+          FROM workout_sets s
+          JOIN workout_sessions ws ON s.session_id = ws.id
+          WHERE ws.athlete_id = ? AND s.exercise_name = ? AND ws.date < ?
+          ORDER BY ws.date DESC, s.id DESC
+          LIMIT 1
+        `).get(athleteId, exerciseName, beforeDate)
+      : this.db.prepare(`
+          SELECT ws.date
+          FROM workout_sets s
+          JOIN workout_sessions ws ON s.session_id = ws.id
+          WHERE ws.athlete_id = ? AND s.exercise_name = ?
+          ORDER BY ws.date DESC, s.id DESC
+          LIMIT 1
+        `).get(athleteId, exerciseName);
+
+    if (!dateQuery || !dateQuery.date) return null;
+    const lastDate = dateQuery.date;
+
+    const setsStmt = this.db.prepare(`
+      SELECT s.id, s.weight_kg, s.reps, s.rpe, s.is_completed
       FROM workout_sets s
       JOIN workout_sessions ws ON s.session_id = ws.id
-      WHERE ws.athlete_id = ? AND s.exercise_name = ?
-      ORDER BY s.id DESC
-      LIMIT 1
+      WHERE ws.athlete_id = ? AND s.exercise_name = ? AND ws.date = ?
+      ORDER BY s.id ASC
     `);
-    return stmt.get(athleteId, exerciseName) || null;
+    const sets = setsStmt.all(athleteId, exerciseName, lastDate);
+    const maxWeightKg = sets.reduce((max, s) => Math.max(max, Number(s.weight_kg) || 0), 0);
+    const totalReps = sets.reduce((sum, s) => sum + (Number(s.reps) || 0), 0);
+
+    return {
+      date: lastDate,
+      lastDate,
+      maxWeightKg,
+      setsCount: sets.length,
+      totalReps,
+      sets,
+      // Backward compatibility for single last set fields
+      weight_kg: sets.length > 0 ? sets[sets.length - 1].weight_kg : 0,
+      reps: sets.length > 0 ? sets[sets.length - 1].reps : 0,
+      rpe: sets.length > 0 ? sets[sets.length - 1].rpe : null
+    };
   }
 
   // --- Leaderboard / Competitions (Strict Zero-Mocks, Real Finished Workouts Only) ---
