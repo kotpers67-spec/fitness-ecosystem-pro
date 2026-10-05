@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <link rel="stylesheet" href="/styles.css?v=2.3.0">
+  <link rel="stylesheet" href="/styles.css?v=2.4.0">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -1299,16 +1299,17 @@
               <input type="text" id="edit-exercise-name" class="app-input" placeholder="Например: Жим лежа на брусьях" required>
             </div>
             <div class="form-group" style="margin-bottom: 12px;">
-              <label class="field-label">Группа мышц</label>
-              <select id="edit-exercise-group" class="app-input app-select">
-                <option value="Грудь">Грудь</option>
-                <option value="Спина">Спина</option>
-                <option value="Ноги">Ноги</option>
-                <option value="Плечи">Плечи</option>
-                <option value="Руки">Руки</option>
-                <option value="Пресс/Кор">Пресс/Кор</option>
-                <option value="Кардио">Кардио</option>
-              </select>
+              <label class="field-label">Группа мышц (введите свою)</label>
+              <input type="text" id="edit-exercise-group" class="app-input" list="muscle-groups-suggestions" placeholder="Например: Грудь, Трапеции, Икры, Кардио..." required>
+              <datalist id="muscle-groups-suggestions">
+                <option value="Грудь">
+                <option value="Спина">
+                <option value="Ноги">
+                <option value="Плечи">
+                <option value="Руки">
+                <option value="Пресс/Кор">
+                <option value="Кардио">
+              </datalist>
             </div>
             <div class="form-group" style="margin-bottom: 16px;">
               <label class="field-label">Время отдыха (секунды)</label>
@@ -1317,6 +1318,35 @@
             <div class="dialog-actions">
               <button type="button" class="app-btn btn-secondary" id="btn-cancel-edit-exercise">Отмена</button>
               <button type="submit" class="app-btn btn-primary" id="btn-save-exercise">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </dialog>
+
+      <!-- DIALOG: Подтверждение отвязки кодом из Telegram (Zero-Mocks Security) -->
+      <dialog id="dialog-unpair-confirm" class="app-dialog">
+        <div class="dialog-content">
+          <div class="dialog-header">
+            <h3 class="dialog-title">ОТВЯЗКА ОТ ТРЕНЕРА</h3>
+            <button type="button" class="dialog-close-btn" id="btn-close-unpair-dialog" aria-label="Закрыть">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <p class="card-desc" style="margin: 8px 0 12px; line-height: 1.4;">
+            Для безопасности разрыв связи с тренером требует подтверждения. Мы отправили 6-значный код в ваш привязанный Telegram бот.
+          </p>
+          <div class="tg-timer-badge" id="unpair-tg-timer-display" style="margin-bottom: 14px;">⏱ Действует: 05:00</div>
+          <form id="form-unpair-confirm">
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label class="field-label">6-значный код подтверждения из Telegram</label>
+              <input type="text" id="unpair-input-code" class="app-input pin-input-field tabular-nums" placeholder="123456" maxlength="6" inputmode="numeric" required autocomplete="one-time-code">
+            </div>
+            <div class="dialog-actions">
+              <button type="button" class="app-btn btn-secondary" id="btn-cancel-unpair-dialog">Отмена</button>
+              <button type="submit" class="app-btn btn-danger" id="btn-submit-unpair-confirm">Разорвать связь</button>
             </div>
           </form>
         </div>
@@ -1349,7 +1379,7 @@
   </div>
 
   <script src="/qrcode.min.js"></script>
-  <script src="/qr.js?v=2.3.0"></script>
-  <script src="/app.js?v=2.3.0"></script>
+  <script src="/qr.js?v=2.4.0"></script>
+  <script src="/app.js?v=2.4.0"></script>
 </body>
 </html>

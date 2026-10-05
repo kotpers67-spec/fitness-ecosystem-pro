@@ -1724,12 +1724,81 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, isPrivate: Boolean(body.isPrivate) });
       }
 
-      // UNPAIR TRAINER (Athlete)
+      // UNPAIR TRAINER (Athlete - Requires Telegram OTP confirmation)
+      if (pathname === '/api/athlete/unpair/request-otp' && req.method === 'POST') {
+        if (user.role !== 'athlete') return sendError(res, 403, 'Доступно только атлетам');
+        const freshUser = db.findUserById(user.id);
+        const tgId = freshUser.telegram_id || (userTgChatMap.get(freshUser.username) ? String(userTgChatMap.get(freshUser.username)) : null);
+
+        if (!tgId && !freshUser.telegram_username) {
+          return sendError(res, 400, 'Сначала привяжите Telegram к аккаунту в настройках профиля, чтобы получать коды подтверждения.');
+        }
+
+        const otp = generateSecureOtpWithRetry(telegramOtpStore);
+        const expiresAt = Date.now() + 5 * 60 * 1000;
+        telegramOtpStore.set(`unpair_${user.id}`, {
+          userId: user.id,
+          code: otp,
+          expiresAt,
+          attempts: 0
+        });
+
+        console.log(`[Unpair Athlete] Generated 5-minute OTP for user #${user.id}: ${otp}`);
+
+        if (tgBotInstance && (tgId || freshUser.telegram_id)) {
+          const targetId = tgId || freshUser.telegram_id;
+          tgBotInstance.api.sendMessage(
+            targetId,
+            `⚠️ <b>Подтверждение отвязки от тренера:</b>\n\n` +
+            `👉 <code>${otp}</code> 👈\n` +
+            `<i>(нажмите на код, чтобы скопировать)</i>\n\n` +
+            `⏱ Код действует <b>5 минут</b>.\n` +
+            `Введите этот код на сайте для подтверждения разрыва связи с тренером.`,
+            { parse_mode: 'HTML' }
+          ).catch(err => console.warn('[Unpair] Telegram delivery error:', err.message));
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          message: 'Код подтверждения отправлен в ваш Telegram бот',
+          debugCode: (process.env.NODE_ENV === 'test' || !process.env.BOT_TOKEN) ? otp : undefined
+        });
+      }
+
       if (pathname === '/api/athlete/unpair' && req.method === 'POST') {
         if (user.role !== 'athlete') return sendError(res, 403, 'Доступно только атлетам');
+        const freshUser = db.findUserById(user.id);
+        const hasTg = Boolean(freshUser.telegram_id || freshUser.telegram_username || userTgChatMap.has(freshUser.username));
+
+        // If Telegram is linked, enforce code verification
+        if (hasTg) {
+          const body = await parseJsonBody(req);
+          const inputCode = String(body.code || '').trim();
+          if (!inputCode) {
+            return sendError(res, 400, 'Введите 6-значный код подтверждения из Telegram');
+          }
+
+          const record = telegramOtpStore.get(`unpair_${user.id}`);
+          if (!record || Date.now() > record.expiresAt) {
+            telegramOtpStore.delete(`unpair_${user.id}`);
+            return sendError(res, 400, 'Срок действия кода истёк или код не был запрошен. Запросите код заново.');
+          }
+
+          if (record.code !== inputCode) {
+            record.attempts = (record.attempts || 0) + 1;
+            if (record.attempts >= 5) {
+              telegramOtpStore.delete(`unpair_${user.id}`);
+              return sendError(res, 429, 'Превышено количество попыток. Запросите новый код.');
+            }
+            return sendError(res, 400, 'Неверный код из Telegram');
+          }
+
+          telegramOtpStore.delete(`unpair_${user.id}`);
+        }
+
         db.unpairAthleteBySelf(user.id);
         cloudSyncService.unpairAthlete(user.pairing_code, user.client_uuid).catch(() => {});
-        return sendJson(res, 200, { success: true, message: 'Связь с тренером разорвана' });
+        return sendJson(res, 200, { success: true, message: 'Связь с тренером успешно разорвана' });
       }
 
       // TRAINER: PAIR ATHLETE BY 6-DIGIT CODE (Local + Google Drive Cloud Sync)

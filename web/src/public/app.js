@@ -245,6 +245,14 @@
     editExerciseGroup: document.getElementById('edit-exercise-group'),
     editExerciseRest: document.getElementById('edit-exercise-rest'),
 
+    // Athlete Unpair with Telegram OTP
+    dialogUnpairConfirm: document.getElementById('dialog-unpair-confirm'),
+    btnCloseUnpairDialog: document.getElementById('btn-close-unpair-dialog'),
+    btnCancelUnpairDialog: document.getElementById('btn-cancel-unpair-dialog'),
+    formUnpairConfirm: document.getElementById('form-unpair-confirm'),
+    unpairInputCode: document.getElementById('unpair-input-code'),
+    unpairTgTimerDisplay: document.getElementById('unpair-tg-timer-display'),
+
     // 2FA & Telegram Link Elements
     pinCountdownText: document.getElementById('pin-countdown-text'),
     athleteTgStatus: document.getElementById('athlete-tg-status'),
@@ -3455,17 +3463,103 @@
       }
     };
 
-    // Unpair Coach button
-    el.btnUnpairCoach.onclick = async () => {
-      try {
-        await api('/api/athlete/unpair', { method: 'POST' });
-        state.pairedCoach = null;
-        state.user.coach_name = '';
-        state.user.coach_phone = '';
-        renderAthleteProfile();
-        showToast('Вы успешно отвязались от тренера', 'info');
-      } catch {}
-    };
+    // Unpair Coach button with Telegram OTP confirmation
+    if (el.btnUnpairCoach) {
+      el.btnUnpairCoach.onclick = async () => {
+        const hasTg = Boolean(state.user.telegram_id || state.user.telegram_username);
+        if (!hasTg) {
+          // If Telegram not linked, confirm directly
+          if (!confirm('Вы уверены, что хотите отвязаться от текущего тренера?')) return;
+          try {
+            await api('/api/athlete/unpair', { method: 'POST', body: JSON.stringify({}) });
+            state.pairedCoach = null;
+            state.user.coach_name = '';
+            state.user.coach_phone = '';
+            renderAthleteProfile();
+            showToast('Вы успешно отвязались от тренера', 'info');
+          } catch (err) {
+            showToast(err.message || 'Ошибка отвязки', 'error');
+          }
+          return;
+        }
+
+        // Telegram linked: request OTP and show confirmation modal
+        try {
+          showToast('Запрашиваем проверочный код в Telegram...', 'info');
+          const res = await api('/api/athlete/unpair/request-otp', { method: 'POST' });
+          showToast(res.message || 'Код отправлен в Telegram бот', 'success');
+
+          if (el.unpairInputCode) el.unpairInputCode.value = '';
+          if (el.dialogUnpairConfirm) {
+            if (typeof el.dialogUnpairConfirm.showModal === 'function') {
+              try { el.dialogUnpairConfirm.showModal(); } catch (_) { el.dialogUnpairConfirm.setAttribute('open', ''); }
+            } else {
+              el.dialogUnpairConfirm.setAttribute('open', '');
+            }
+          }
+          if (el.unpairInputCode) setTimeout(() => el.unpairInputCode.focus(), 50);
+
+          // 5-minute countdown timer
+          let remaining = 300;
+          if (state.unpairTimerInterval) clearInterval(state.unpairTimerInterval);
+          const updateUnpairTimer = () => {
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            const mm = String(m).padStart(2, '0');
+            const ss = String(s).padStart(2, '0');
+            if (el.unpairTgTimerDisplay) el.unpairTgTimerDisplay.textContent = `⏱ Действует: ${mm}:${ss}`;
+            if (remaining <= 0) {
+              clearInterval(state.unpairTimerInterval);
+              el.dialogUnpairConfirm?.close();
+              showToast('Время действия кода истекло. Запросите заново.', 'error');
+            }
+            remaining--;
+          };
+          updateUnpairTimer();
+          state.unpairTimerInterval = setInterval(updateUnpairTimer, 1000);
+        } catch (err) {
+          showToast(err.message || 'Ошибка запроса кода в Telegram', 'error');
+        }
+      };
+    }
+
+    if (el.btnCloseUnpairDialog) {
+      el.btnCloseUnpairDialog.onclick = () => {
+        if (state.unpairTimerInterval) clearInterval(state.unpairTimerInterval);
+        el.dialogUnpairConfirm?.close();
+      };
+    }
+
+    if (el.btnCancelUnpairDialog) {
+      el.btnCancelUnpairDialog.onclick = () => {
+        if (state.unpairTimerInterval) clearInterval(state.unpairTimerInterval);
+        el.dialogUnpairConfirm?.close();
+      };
+    }
+
+    if (el.formUnpairConfirm) {
+      el.formUnpairConfirm.onsubmit = async (e) => {
+        e.preventDefault();
+        const code = (el.unpairInputCode?.value || '').trim();
+        if (!code) return;
+
+        try {
+          await api('/api/athlete/unpair', {
+            method: 'POST',
+            body: JSON.stringify({ code })
+          });
+          if (state.unpairTimerInterval) clearInterval(state.unpairTimerInterval);
+          el.dialogUnpairConfirm?.close();
+          state.pairedCoach = null;
+          state.user.coach_name = '';
+          state.user.coach_phone = '';
+          renderAthleteProfile();
+          showToast('✅ Вы успешно отвязались от тренера!', 'success');
+        } catch (err) {
+          showToast(err.message || 'Неверный код подтверждения', 'error');
+        }
+      };
+    }
 
     // Trainer Select Client dropdown
     el.trainerClientSelect.onchange = (e) => {
