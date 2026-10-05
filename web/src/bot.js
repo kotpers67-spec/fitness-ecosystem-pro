@@ -14,6 +14,12 @@ const OWNER_LINKS = {
   spirit: 'https://t.me/Spirit5449'
 };
 
+function isTrainerApprovalRequired() {
+  if (process.env.REQUIRE_TRAINER_APPROVAL === 'true') return true;
+  if (process.env.REQUIRE_TRAINER_APPROVAL === 'false') return false;
+  return process.env.NODE_ENV !== 'test';
+}
+
 /**
  * Creates persistent menu reply keyboard with main buttons
  */
@@ -252,7 +258,7 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
         const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
         const pairingCode = requestedRole === 'athlete' ? db.generateUniquePairingCode() : '';
         const clientUuid = crypto.randomUUID();
-        const requireTrainerApproval = (process.env.REQUIRE_TRAINER_APPROVAL === 'true');
+        const requireTrainerApproval = isTrainerApprovalRequired();
         const isApproved = (requestedRole === 'trainer' && requireTrainerApproval && !isOwnerOrAdmin) ? 0 : 1;
 
         const userId = db.createUser(
@@ -313,7 +319,7 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
           user.role = requestedRole;
 
           if (requestedRole === 'trainer') {
-            const requireTrainerApproval = (process.env.REQUIRE_TRAINER_APPROVAL === 'true');
+            const requireTrainerApproval = isTrainerApprovalRequired();
             if (isOwnerOrAdmin || !requireTrainerApproval) {
               db.approveTrainer(user.id);
               user.is_approved = 1;

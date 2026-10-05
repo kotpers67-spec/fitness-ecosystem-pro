@@ -16,15 +16,31 @@
     return token || null;
   }
 
-  function saveAuthToken(token) {
+  function getInitialUser() {
+    try {
+      const raw = localStorage.getItem('fit_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveAuthToken(token, user = null) {
     state.token = token;
     if (token) {
       localStorage.setItem('fit_token', token);
+      if (user) {
+        state.user = user;
+        try {
+          localStorage.setItem('fit_user', JSON.stringify(user));
+        } catch (_) {}
+      }
       if (typeof document !== 'undefined') {
         document.cookie = `fit_token=${token}; max-age=31536000; path=/; SameSite=Lax`;
       }
     } else {
       localStorage.removeItem('fit_token');
+      localStorage.removeItem('fit_user');
       if (typeof document !== 'undefined') {
         document.cookie = `fit_token=; max-age=0; path=/`;
       }
@@ -32,9 +48,10 @@
   }
 
   // --- Global Application State ---
+  const cachedInitialUser = getInitialUser();
   const state = {
     token: getInitialToken(),
-    user: null,
+    user: cachedInitialUser,
     pairedCoach: null,
     activeTab: 'workout',
     currentDate: new Date().toISOString().slice(0, 10),
@@ -380,14 +397,22 @@
       return;
     }
 
+    // Instant seamless hydration if cached session exists (prevents auth screen flicker on refresh)
+    if (state.user && (state.user.role === 'athlete' || state.user.role === 'trainer')) {
+      setupAppForRole(state.user.role);
+    }
+
     try {
       const data = await api('/api/me');
       state.user = data.user;
       state.pairedCoach = data.pairedCoach || null;
+      try {
+        localStorage.setItem('fit_user', JSON.stringify(data.user));
+      } catch (_) {}
       setupAppForRole(state.user.role);
     } catch (err) {
-      // Only reset session if server explicitly responded with 401 Unauthorized
-      if (err?.message?.includes('401') || err?.message?.includes('Сессия завершена')) {
+      // Only reset session if server explicitly responded with 401 Unauthorized or 403 Forbidden
+      if (err?.message?.includes('401') || err?.message?.includes('403') || err?.message?.includes('Сессия завершена') || err?.message?.includes('Требуется авторизация')) {
         logout(false);
       } else {
         // On offline/transient network errors, keep cached session alive
@@ -1942,7 +1967,7 @@
         }
 
         state.user = data.user;
-        saveAuthToken(data.token);
+        saveAuthToken(data.token, data.user);
         setupAppForRole(data.user.role);
         showToast(`Добро пожаловать, ${data.user.fullName || data.user.username}!`, 'success');
       } catch {}
@@ -1989,7 +2014,7 @@
           if (state.login2faTimerInterval) clearInterval(state.login2faTimerInterval);
           el.dialog2faVerify?.close();
           state.user = data.user;
-          saveAuthToken(data.token);
+          saveAuthToken(data.token, data.user);
           setupAppForRole(data.user.role);
           showToast(`Вход выполнен: ${data.user.fullName || data.user.username}!`, 'success');
         } catch {}
@@ -2240,7 +2265,7 @@
         }
 
         state.user = data.user;
-        saveAuthToken(data.token);
+        saveAuthToken(data.token, data.user);
         setupAppForRole(data.user.role);
         showToast('Аккаунт атлета успешно создан!', 'success');
       } catch {} finally {
@@ -2277,7 +2302,7 @@
             state.tgSessionPollInterval = null;
             state.token = res.token;
             state.user = res.user;
-            saveAuthToken(res.token);
+            saveAuthToken(res.token, res.user);
             resetTgAuthModal();
             el.dialogTelegramAuth?.close();
             setupAppForRole(res.user.role);
@@ -2409,7 +2434,7 @@
             });
             state.token = data.token;
             state.user = data.user;
-            saveAuthToken(data.token);
+            saveAuthToken(data.token, data.user);
             setupAppForRole(data.user.role);
             showToast(`Вход выполнен: ${data.user.fullName || data.user.username}!`, 'success');
             return;
@@ -2590,7 +2615,7 @@
           if (!res.isNewUser && res.token) {
             // Existing user logged in
             state.user = res.user;
-            saveAuthToken(res.token);
+            saveAuthToken(res.token, res.user);
             el.dialogTelegramAuth?.close();
             setupAppForRole(res.user.role);
             showToast(`С возвращением, ${res.user.fullName || res.user.username}!`, 'success');
@@ -2703,7 +2728,7 @@
           }
 
           state.user = res.user;
-          saveAuthToken(res.token);
+          saveAuthToken(res.token, res.user);
           el.dialogTelegramAuth?.close();
           setupAppForRole(res.user.role);
           showToast(`Добро пожаловать в Fitness Pro, ${res.user.fullName}!`, 'success');

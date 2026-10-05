@@ -733,7 +733,7 @@ class AppDatabase {
 
     const now = Date.now();
     const stmt = this.db.prepare(`
-      SELECT u.id, u.username, u.role, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.coach_name, u.coach_phone, u.pairing_code, u.pairing_code_created_at, u.is_private, u.telegram_id, u.telegram_username, u.two_factor_enabled, u.restrictions
+      SELECT u.id, u.username, u.role, u.is_approved, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.coach_name, u.coach_phone, u.pairing_code, u.pairing_code_created_at, u.is_private, u.telegram_id, u.telegram_username, u.two_factor_enabled, u.restrictions
       FROM auth_tokens t
       JOIN users u ON t.user_id = u.id
       WHERE t.token = ? AND t.expires_at > ?

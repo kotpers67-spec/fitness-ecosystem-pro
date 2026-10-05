@@ -147,6 +147,12 @@ function parseJsonBody(req) {
   });
 }
 
+function isTrainerApprovalRequired() {
+  if (process.env.REQUIRE_TRAINER_APPROVAL === 'true') return true;
+  if (process.env.REQUIRE_TRAINER_APPROVAL === 'false') return false;
+  return process.env.NODE_ENV !== 'test';
+}
+
 function getAuthUser(req) {
   let token = null;
   const authHeader = req.headers['authorization'];
@@ -157,7 +163,14 @@ function getAuthUser(req) {
     if (match) token = match[1];
   }
   if (!token) return null;
-  return db.getUserByToken(token);
+  const user = db.getUserByToken(token);
+  if (!user) return null;
+  const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.username || '').toLowerCase()) ||
+    ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.telegram_username || '').replace(/^@/, '').toLowerCase());
+  if (user.role === 'trainer' && user.is_approved === 0 && !isOwnerOrAdmin && isTrainerApprovalRequired()) {
+    return null;
+  }
+  return user;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -266,8 +279,8 @@ const server = http.createServer(async (req, res) => {
 
         const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(cleanUsername.toLowerCase()) ||
           ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((cleanTelegram || '').replace(/^@/, '').toLowerCase());
-        const requireTrainerApproval = (process.env.REQUIRE_TRAINER_APPROVAL === 'true');
-        const isApproved = (role === 'trainer' && requireTrainerApproval) ? 0 : 1;
+        const requireTrainerApproval = isTrainerApprovalRequired();
+        const isApproved = (role === 'trainer' && requireTrainerApproval && !isOwnerOrAdmin) ? 0 : 1;
         const userId = db.createUser(cleanUsername, passwordHash, role, escapedFullName, escapedPhone, pairingCode, clientUuid, avatarBase64 || '', isApproved);
 
         if (role === 'trainer') {
@@ -280,7 +293,7 @@ const server = http.createServer(async (req, res) => {
           const internalUsername = createdUser ? createdUser.username : cleanUsername;
 
           // Send notification only to configured admin/owners (no broadcast leak)
-          if (tgBotInstance) {
+          if (tgBotInstance && isApproved === 0) {
             const adminChatIds = new Set();
             if (process.env.ADMIN_CHAT_ID) {
               adminChatIds.add(String(process.env.ADMIN_CHAT_ID).trim());
@@ -320,10 +333,11 @@ const server = http.createServer(async (req, res) => {
             }
           }
 
-          if (requireTrainerApproval) {
+          if (isApproved === 0) {
             return sendJson(res, 201, {
               success: true,
               pendingApproval: true,
+              username: internalUsername,
               message: '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.'
             });
           }
@@ -409,7 +423,7 @@ const server = http.createServer(async (req, res) => {
             const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(user.username.toLowerCase()) ||
               ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.telegram_username || '').replace(/^@/, '').toLowerCase());
             if (requestedRole === 'trainer') {
-              if (isOwnerOrAdmin || process.env.REQUIRE_TRAINER_APPROVAL !== 'true') {
+              if (isOwnerOrAdmin || !isTrainerApprovalRequired()) {
                 db.approveTrainer(user.id);
                 user.is_approved = 1;
               } else {
@@ -422,7 +436,7 @@ const server = http.createServer(async (req, res) => {
         if (user && user.role === 'trainer' && user.is_approved === 0) {
           const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(user.username.toLowerCase()) ||
             ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.telegram_username || '').replace(/^@/, '').toLowerCase());
-          if (isOwnerOrAdmin || process.env.REQUIRE_TRAINER_APPROVAL !== 'true') {
+          if (isOwnerOrAdmin || !isTrainerApprovalRequired()) {
             db.approveTrainer(user.id);
             user.is_approved = 1;
           } else {
@@ -665,8 +679,12 @@ const server = http.createServer(async (req, res) => {
         }
 
         const usernameKey = tgUsername ? `tg_${tgUsername.toLowerCase()}` : `tg_${tgId}`;
-        let user = db.findUserByUsername(usernameKey);
+        let user = db.findUserByUsername(usernameKey) || (tgUsername ? db.findUserByTelegramUsername(tgUsername) : null);
         const role = requestedRole === 'trainer' ? 'trainer' : 'athlete';
+        const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((tgUsername || '').toLowerCase()) ||
+          ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user?.username || '').toLowerCase());
+        const requireTrainerApproval = isTrainerApprovalRequired();
+        const isApproved = (role === 'trainer' && requireTrainerApproval && !isOwnerOrAdmin) ? 0 : 1;
 
         if (!user) {
           const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
@@ -682,14 +700,60 @@ const server = http.createServer(async (req, res) => {
             '', // phone
             pairingCode,
             clientUuid,
-            tgPhotoUrl
+            tgPhotoUrl,
+            isApproved
           );
 
           if (role === 'athlete') {
             cloudSyncService.registerAthletePairing(pairingCode, clientUuid, escapeHtml(fullName), '', '', tgPhotoUrl || '').catch(() => {});
           }
 
+          if (tgUsername) {
+            db.linkTelegram(userId, tgId || '', tgUsername);
+          }
+
           user = db.findUserById(userId);
+
+          if (role === 'trainer' && isApproved === 0) {
+            if (tgBotInstance) {
+              const adminChatIds = new Set();
+              if (process.env.ADMIN_CHAT_ID) adminChatIds.add(String(process.env.ADMIN_CHAT_ID).trim());
+              ['santila213', 'spirit5449'].forEach(adminHandle => {
+                const cId = userTgChatMap.get(adminHandle) || userTgChatMap.get(adminHandle.toLowerCase());
+                if (cId) adminChatIds.add(String(cId));
+              });
+
+              for (const adminChatId of adminChatIds) {
+                try {
+                  await tgBotInstance.api.sendMessage(
+                    adminChatId,
+                    `🔔 <b>НОВАЯ ЗАЯВКА НА АККАУНТ ТРЕНЕРА ЧЕРЕЗ TELEGRAM!</b>\n\n` +
+                    `👤 <b>Имя:</b> ${escapeHtml(fullName)}\n` +
+                    `🏷 <b>Логин:</b> ${user.username}\n` +
+                    `✈ <b>Telegram:</b> @${tgUsername || tgId}\n\n` +
+                    `Нажмите кнопку ниже или отправьте:\n<code>/approve_${userId}</code>`,
+                    {
+                      parse_mode: 'HTML',
+                      reply_markup: {
+                        inline_keyboard: [
+                          [{ text: `✅ Одобрить тренера #${userId}`, callback_data: `approve_${userId}` }]
+                        ]
+                      }
+                    }
+                  );
+                } catch (_) {}
+              }
+            }
+          }
+        }
+
+        if (user.role === 'trainer' && user.is_approved === 0 && !isOwnerOrAdmin) {
+          return sendJson(res, 201, {
+            success: true,
+            pendingApproval: true,
+            username: user.username,
+            message: '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.'
+          });
         }
 
         const token = generateToken(user.id, user.role);
@@ -1053,6 +1117,22 @@ const server = http.createServer(async (req, res) => {
           } catch (_) {}
         }
 
+        const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.username || '').toLowerCase()) ||
+          ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user.telegram_username || cleanUsername || '').toLowerCase());
+        if (user.role === 'trainer' && user.is_approved === 0 && !isOwnerOrAdmin) {
+          if (!isTrainerApprovalRequired()) {
+            db.approveTrainer(user.id);
+            user.is_approved = 1;
+          } else {
+            return sendJson(res, 403, {
+              success: false,
+              pendingApproval: true,
+              username: user.username,
+              error: '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.'
+            });
+          }
+        }
+
         const token = generateToken(user.id, user.role);
         db.createAuthToken(token, user.id);
         return sendJson(res, 200, {
@@ -1108,6 +1188,10 @@ const server = http.createServer(async (req, res) => {
         if (!user && cleanPhone) user = db.findUserByPhone(cleanPhone);
         if (!user) user = db.findUserByFullName(cleanFullName);
 
+        const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(cleanUsername.toLowerCase());
+        const requireTrainerApproval = isTrainerApprovalRequired();
+        const isApproved = (role === 'trainer' && requireTrainerApproval && !isOwnerOrAdmin) ? 0 : 1;
+
         if (user) {
           // Existing user found by phone or full name: link Telegram and update profile
           if (!user.telegram_username && cleanUsername) {
@@ -1118,16 +1202,19 @@ const server = http.createServer(async (req, res) => {
             db.updateProfile(user.id, user.full_name, user.phone, avatarBase64);
             user.avatar_base64 = avatarBase64;
           }
+          if (user.role !== role) {
+            db.updateUserRole(user.id, role);
+            user.role = role;
+            if (role === 'trainer' && !isOwnerOrAdmin && requireTrainerApproval) {
+              user.is_approved = 0;
+            }
+          }
         } else {
           const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
           const escapedFullName = escapeHtml(cleanFullName);
           const escapedPhone = cleanPhone ? escapeHtml(cleanPhone) : '';
           const pairingCode = role === 'athlete' ? db.generateUniquePairingCode() : '';
           const clientUuid = crypto.randomUUID();
-
-          const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes(cleanUsername.toLowerCase());
-          const requireTrainerApproval = (process.env.REQUIRE_TRAINER_APPROVAL === 'true');
-          const isApproved = (role === 'trainer' && requireTrainerApproval && !isOwnerOrAdmin) ? 0 : 1;
 
           const userId = db.createUser(
             usernameKey,
@@ -1149,7 +1236,7 @@ const server = http.createServer(async (req, res) => {
           user = db.findUserById(userId);
 
           if (role === 'trainer') {
-            if (tgBotInstance) {
+            if (tgBotInstance && isApproved === 0) {
               const adminChatIds = new Set();
               if (process.env.ADMIN_CHAT_ID) adminChatIds.add(String(process.env.ADMIN_CHAT_ID).trim());
               ['santila213', 'spirit5449'].forEach(adminHandle => {
@@ -1179,16 +1266,16 @@ const server = http.createServer(async (req, res) => {
                 } catch (_) {}
               }
             }
-
-            if (user.is_approved === 0) {
-              return sendJson(res, 201, {
-                success: true,
-                pendingApproval: true,
-                username: user.username,
-                message: '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжемся если будет необходима дополнительная информация.'
-              });
-            }
           }
+        }
+
+        if (user.role === 'trainer' && user.is_approved === 0 && !isOwnerOrAdmin) {
+          return sendJson(res, 201, {
+            success: true,
+            pendingApproval: true,
+            username: user.username,
+            message: '⏳ ЗАЯВКА НА РАССМОТРЕНИИ\nВаша заявка на создание аккаунта тренера принята!\n\nВ течение 72 часов ваша заявка будет обработана, мы свяжебся если будет необходима дополнительная информация.'
+          });
         }
 
         const token = generateToken(user.id, user.role);
