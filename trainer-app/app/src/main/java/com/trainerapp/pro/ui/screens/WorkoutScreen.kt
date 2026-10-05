@@ -66,7 +66,8 @@ fun WorkoutScreen(
     val activeExerciseTriple = sessionExercises.find { it.first == selectedOrder }
         ?: sessionExercises.firstOrNull()
 
-    var isSetsCollapsed by remember(activeExerciseTriple?.first) { mutableStateOf(false) }
+    val isCurrentExerciseAllDone = activeExerciseTriple?.third?.let { it.isNotEmpty() && it.all { set -> set.isCompleted } } ?: false
+    var isSetsCollapsed by remember(activeExerciseTriple?.first, isCurrentExerciseAllDone) { mutableStateOf(isCurrentExerciseAllDone) }
 
     Scaffold(
         topBar = {

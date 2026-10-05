@@ -1,59 +1,58 @@
-# Project: Fitness Ecosystem Pro (Dynamic PIN, Telegram 2FA, Owner Contacts)
+# Project: Fitness Ecosystem Pro (Auth, Session Persistence, Exercise Catalog & Release Validation)
 
 ## Architecture
-- **Web Portal & Backend**: Node.js 24 + SQLite (`node:sqlite`) + grammY Telegram Bot (long polling in unified host).
-- **Mobile Android**: Jetpack Compose, Room SQLite, Coroutines/Flow, AES-256 Cloud Sync (`CloudSecurityManager.kt`).
+- **Web Portal & Backend**: Node.js 24 + SQLite (`node:sqlite`) + grammY Telegram Bot + HMAC-SHA256 signed stateless session tokens with DB re-hydration.
+- **Mobile Android**: Jetpack Compose, Room SQLite, Coroutines/Flow, standalone Gradle builds for `athlete-app` and `trainer-app`.
 - **Data Flow**:
-  - Athlete creates dynamic 6-digit PIN with 5-minute TTL. PIN synced to DB (Web) and Cloud/Room (Android).
-  - Trainer enters 6-digit PIN. Strict check: not found -> error, >5 min -> 400 error, already used -> 400 error. On success: single-use code consumed.
-  - User binds Telegram via `/start link_<token>`. Bot captures numeric `telegram_id` and `@username`.
-  - On login with 2FA enabled, backend generates 6-digit OTP (5-min TTL, invalidates prior codes) and bot delivers it to `telegram_id`. Login succeeds only after valid OTP verification.
-  - Support/Owner buttons to `@SantiLA213` and `@Spirit5449` displayed across Web (login, athlete, trainer), Android (auth, settings), and Bot (/start, /contacts).
+  - Athlete/Trainer 6-digit PIN & 1-click Telegram deep link (`tg://resolve?domain=fitnessecosystemBOT&start=auth_<sessionId>`) with 2FA OTP gate.
+  - Verification on `/api/auth/telegram/verify-otp` by code alone (`{ code: "123456" }`) without username requirement.
+  - Exercise Catalog: 37+ exercises categorised by muscle group, searchable in real-time without carousel or daily caps.
+  - Sorting: Completed exercises sort to the bottom; pending exercises at top.
+  - Auto-collapse: Completed exercises auto-collapse 1 hour after first exercise of session, with manual toggle.
+  - Background APK updater: Direct socket download to cache and `FileProvider` intent without browser redirect.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Dynamic 5-min PIN (Web) | 6-digit PIN, 5-min TTL, single-use consume, live 05:00 timer, auto-refresh | M1 | R1 |
-| 2 | Telegram Link & 2FA API (Web) | Deep link token, numeric telegram_id bind, 2FA toggle, login OTP challenge | M1 | R2 |
-| 3 | Telegram Bot Integration | grammY bot, deep link handling, OTP delivery via sendMessage, owner contact buttons | M2 | R2, R3 |
-| 4 | Athlete Pro Dynamic PIN (Android) | 5-min countdown StateFlow, 05:00 UI ticker, auto-regeneration, cloud sync | M3 | R1 |
-| 5 | Trainer Pro Strict Validation (Android) | Strict rejection for missing, >5 min expired, or PAIRED/USED codes (no fake client) | M3 | R1 |
-| 6 | Android Telegram Link & 2FA & Contacts | Telegram link button, 2FA toggle & OTP dialog on login, owner contact links | M3 | R2, R3 |
-| 7 | Owner Contact Buttons (All) | Direct Telegram links to @SantiLA213 and @Spirit5449 on all entry & profile screens | M1, M2, M3 | R3 |
-| 8 | Comprehensive E2E & Security Tests | Security test suite (SQLi, XSS, rate limit) + PIN/2FA test suite (TTL, reuse, OTP) + Android tests | M4 | R1, R2, R3 |
+| 1 | Stateless Session Persistence (Web) | HMAC-SHA256 signed tokens (`fit_<payloadB64>_<sig>`) with DB re-hydration on Render restarts | M1 | R1 |
+| 2 | Direct PIN OTP Auth (Web) | `/api/auth/telegram/verify-otp` accepts `{ code: "123456" }` without username | M1 | R1 |
+| 3 | Exercise Catalog Expansion (Web) | Expand `EXERCISE_CATALOG` in `web/src/public/app.js` to 37 exercises (>=35) across muscle groups | M1 | R2 |
+| 4 | Exercise Sorting & 1-Hr Auto-Collapse (Web) | Completed sort to bottom, auto-collapse after 1 hour with toggle button | M1 | R2 |
+| 5 | Exercise Catalog Search & Sorting (Android Trainer) | 37 exercises by muscle group, real-time search, completed sort to bottom | M1 | R2 |
+| 6 | Exercise 1-Hr Auto-Collapse & Toggle Fix (Android Trainer) | Fix toggle UI bug to collapse set rows, implement 1-hr auto-collapse | M1 | R2 |
+| 7 | Exercise Sorting & 1-Hr Auto-Collapse (Android Athlete) | Completed sort to bottom, implement 1-hr auto-collapse with toggle | M1 | R2 |
+| 8 | Mobile Auth Parity (Android Both) | 1-step 6-digit code entry dialog without username, 1-click Telegram deep linking | M1 | R3 |
+| 9 | In-App Direct APK Updater (Android Both) | Direct background download via `HttpURLConnection` and `FileProvider` | M1 | R3 |
+| 10 | Automated Test Suites & Build Assembly | `npm test` (57+ security/sync tests), `./gradlew.bat testDebugUnitTest`, `./gradlew.bat assembleRelease` | M2 | R1, R2, R3 |
+| 11 | Independent Review & Forensic Audit | Zero-Mocks verification, reviewer approvals, challenger stress tests, forensic audit clean | M3 | R1, R2, R3 |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Web & Backend Integration | Dynamic PIN API, Telegram linking API, 2FA OTP auth, Web UI timers & owner links | none | IN_PROGRESS |
-| M2 | Telegram Bot Enhancement | grammY bot deep linking `/start link_<token>`, OTP delivery, owner buttons | M1 | PLANNED |
-| M3 | Android Mobile Apps | Athlete Pro 5-min timer & auto-regen, Trainer Pro strict validation, Auth/Settings UI | none | PLANNED |
-| M4 | E2E & Dual-Track Verification | Comprehensive automated test runs (Web + Android unit tests + 0-mock validation) | M1, M2, M3 | PLANNED |
+| M1 | Remediation & Parity Fixes | Web catalog expansion (37 items), Trainer App collapse UI fix & 1-hr collapse, Athlete App 1-hr collapse | none | IN_PROGRESS |
+| M2 | Test Suites & Release Builds | `npm test`, `./gradlew.bat testDebugUnitTest` for both apps, `assembleRelease` and publish to `releases/` | M1 | PLANNED |
+| M3 | Gate Reviews & Forensic Audit | 2 Reviewers, 2 Challengers, 1 Forensic Auditor (Zero-Mocks, integrity verification) | M2 | PLANNED |
 
 ## Interface Contracts
-### Web Backend ↔ Telegram Bot
-- `db.linkTelegram(userId, telegramId, telegramUsername)`: persists numeric Telegram ID.
-- `telegramLinkTokens`: Map / DB storing `{ token, userId, expiresAt }`.
-- `bot.api.sendMessage(telegramId, text)`: delivers OTP during `POST /api/login`.
-- Owner Links: `https://t.me/SantiLA213`, `https://t.me/Spirit5449`.
+### Auth & Session Contract
+- Signed Token Format: `fit_<base64UrlPayload>_<32charHmacSha256>`
+- Verify OTP Request: `POST /api/auth/telegram/verify-otp` with `{ code: "123456" }` (username optional)
+- Telegram Deep Link: `tg://resolve?domain=fitnessecosystemBOT&start=auth_<sessionId>`
 
-### Athlete ↔ Trainer Pairing Contract
-- PIN: Exactly 6 numeric digits (`^\d{6}$`).
-- Expiry: Strictly 300,000 ms (5 minutes) from creation.
-- State: PENDING -> PAIRED -> CONSUMED.
-- Errors: Missing -> 400 "Код не найден", Expired -> 400 "Срок действия кода истёк (действует 5 минут)", Used -> 400 "Этот код уже был использован".
+### Exercise & Workout Contract
+- Exercise Catalog: >=35 exercises grouped by muscle groups (Грудь, Спина, Ноги, Плечи, Руки, Пресс/Кор).
+- Sorting: `compareBy { isCompleted }.thenBy { order/id }` (0 for incomplete, 1 for complete).
+- Collapse Rule: `isCompleted && (now - sessionStart >= 3600000)`. Manual toggle overrides default state.
 
 ## Code Layout
-- `web/src/server.js`: Web server, auth routes, pairing routes, 2FA endpoints.
-- `web/src/db.js`: SQLite schema, user fields, linkTelegram, consumePairingCode.
-- `web/src/bot.js` (or inline grammY): Telegram bot handler.
-- `web/src/public/index.html` & `app.js`: Web UI SPA, countdown timer, dialogs.
-- `web/tests/`: `security.test.js`, `pin_2fa.test.js`.
-- `athlete-app/app/src/main/java/com/athleteapp/pro/`:
-  - `ui/screens/AthleteSettingsScreen.kt`, `AthleteAuthScreen.kt`
-  - `ui/AthleteViewModel.kt`
-  - `data/sync/GoogleDriveAthleteSyncManager.kt`
+- `web/src/public/app.js`: Web client, `EXERCISE_CATALOG`, sorting and collapse logic.
+- `web/src/server.js`: Web API server, OTP verification route.
+- `web/src/security.js`: HMAC token generation and verification.
+- `web/src/db.js`: SQLite storage, token re-hydration and revocation.
 - `trainer-app/app/src/main/java/com/trainerapp/pro/`:
-  - `ui/screens/HomeScreen.kt`, `SettingsScreen.kt`, `TrainerAuthScreen.kt`
-  - `ui/MainViewModel.kt`
-  - `data/sync/GoogleDriveSyncManager.kt`
+  - `ui/screens/WorkoutScreen.kt`: Trainer workout screen, exercise search, sorting, collapse.
+  - `data/local/TrainerDatabase.kt`: Pre-seeded 37 exercises.
+- `athlete-app/app/src/main/java/com/athleteapp/pro/`:
+  - `ui/screens/AthleteTodayScreen.kt`: Athlete workout screen, sorting, collapse.
+- `releases/`:
+  - `athlete-latest.apk`, `trainer-latest.apk`.
