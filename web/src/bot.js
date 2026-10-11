@@ -14,6 +14,8 @@ const OWNER_LINKS = {
   spirit: 'https://t.me/Spirit5449'
 };
 
+const MINI_APP_URL = process.env.MINI_APP_URL || 'https://fitness-ecosystem-pro.onrender.com';
+
 function isTrainerApprovalRequired() {
   if (process.env.REQUIRE_TRAINER_APPROVAL === 'true') return true;
   if (process.env.REQUIRE_TRAINER_APPROVAL === 'false') return false;
@@ -25,17 +27,19 @@ function isTrainerApprovalRequired() {
  */
 function createMainMenuKeyboard() {
   return new Keyboard()
-    .text('🔑 Код входа').row()
-    .text('🔗 Привязать аккаунт').text('💬 Связь с владельцами').row()
-    .text('❓ Справка')
+    .webApp('🚀 Открыть Fitness Pro', MINI_APP_URL).row()
+    .text('🔑 Код входа').text('🔗 Привязать аккаунт').row()
+    .text('💬 Связь с владельцами').text('❓ Справка')
     .resized();
 }
 
 /**
- * Creates inline keyboard with links to project owners
+ * Creates inline keyboard with links to project owners and Mini App
  */
 function createOwnersKeyboard() {
   return new InlineKeyboard()
+    .webApp('🚀 Открыть приложение (Mini App)', MINI_APP_URL)
+    .row()
     .url('💬 @SantiLA213 (Основатель)', OWNER_LINKS.santi)
     .row()
     .url('💬 @Spirit5449 (Разработчик)', OWNER_LINKS.spirit);
@@ -458,7 +462,9 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
 
       const roleTitle = user.role === 'trainer' ? 'Тренер' : 'Атлет';
       const webAppKeyboard = new InlineKeyboard()
-        .url('🌐 Открыть Fitness Ecosystem', 'https://fitness-ecosystem-pro.onrender.com')
+        .webApp('🚀 Запустить Mini App', MINI_APP_URL)
+        .row()
+        .url('🌐 Открыть в браузере', MINI_APP_URL)
         .row()
         .url('💬 Поддержка создателей', OWNER_LINKS.santi);
 
@@ -604,6 +610,7 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
   bot.hears(['❓ Справка', '/help'], async (ctx) => {
     await ctx.reply(
       `📖 <b>Справка Fitness Ecosystem Pro:</b>\n\n` +
+      `• <b>🚀 Открыть Fitness Pro</b> — Запуск Telegram Mini App внутри мессенджера\n` +
       `• <b>🔑 Код входа</b> — Получить свежий 6-значный одноразовый код\n` +
       `• <b>🔗 Привязать аккаунт</b> — Инструкция по привязке Telegram\n` +
       `• <b>💬 Связь с владельцами</b> — Контакты основателей проекта\n\n` +
@@ -612,6 +619,24 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
       {
         parse_mode: 'HTML',
         reply_markup: createMainMenuKeyboard()
+      }
+    );
+  });
+
+  // /app handler to launch Mini App
+  bot.command('app', async (ctx) => {
+    const inlineAppKeyboard = new InlineKeyboard()
+      .webApp('🚀 Запустить Fitness Pro Mini App', MINI_APP_URL)
+      .row()
+      .url('🌐 Открыть в браузере', MINI_APP_URL);
+
+    await ctx.reply(
+      `🏋️ <b>Fitness Ecosystem Pro Mini App</b>\n\n` +
+      `Тренировки, подопечные, аналитика и таймер отдыха прямо внутри Telegram!\n` +
+      `Нажмите кнопку ниже для запуска:`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: inlineAppKeyboard
       }
     );
   });
@@ -753,12 +778,24 @@ function initTelegramBot({ token, db, telegramOtpStore, telegramSessionStore, us
     // Set menu commands
     bot.api.setMyCommands([
       { command: 'start', description: 'Запуск бота / привязка аккаунта' },
+      { command: 'app', description: '🚀 Открыть Fitness Pro (Mini App)' },
       { command: 'code', description: 'Получить 6-значный 2FA код' },
       { command: 'link', description: 'Привязать аккаунт: /link <токен>' },
       { command: 'contacts', description: 'Связь с создателями (@SantiLA213, @Spirit5449)' },
       { command: 'help', description: 'Справка и безопасность' }
     ]).catch(err => {
       console.warn('[Telegram Bot] Предупреждение setMyCommands:', err.message);
+    });
+
+    // Configure Menu Button in chat to launch Mini App with 1 click
+    bot.api.setChatMenuButton({
+      menu_button: {
+        type: 'web_app',
+        text: 'Открыть Fitness Pro',
+        web_app: { url: MINI_APP_URL }
+      }
+    }).catch(err => {
+      console.warn('[Telegram Bot] Предупреждение setChatMenuButton:', err.message);
     });
 
     bot.start({

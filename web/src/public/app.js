@@ -424,6 +424,34 @@
 
   // --- Auth & Session Lifecycle ---
   async function initAuth() {
+    // 1. Initialize Telegram WebApp environment if opened inside Telegram
+    if (window.Telegram?.WebApp) {
+      try {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+      } catch (_) {}
+    }
+
+    // 2. Seamless auto-login if launched inside Telegram Mini App without saved session
+    if (!state.token && window.Telegram?.WebApp?.initData) {
+      try {
+        const authRes = await api('/api/auth/telegram', {
+          method: 'POST',
+          body: JSON.stringify({ initData: window.Telegram.WebApp.initData })
+        });
+        if (authRes && authRes.token && authRes.user) {
+          state.token = authRes.token;
+          state.user = authRes.user;
+          saveAuthToken(authRes.token, authRes.user);
+          setupAppForRole(authRes.user.role);
+          showToast(`Добро пожаловать, ${authRes.user.fullName || authRes.user.username}!`, 'success');
+          return;
+        }
+      } catch (err) {
+        console.warn('[Fitness Pro] Telegram Mini App auto-auth fallback:', err.message);
+      }
+    }
+
     if (!state.token) {
       showAuthScreen();
       return;
