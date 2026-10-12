@@ -2114,3 +2114,64 @@ input:checked + .slider:before {
   color: #fff;
 }
 
+/* ==========================================================================
+   Mobile & Telegram WebApp Pull-to-Refresh Indicator
+   ========================================================================== */
+.ptr-indicator {
+  position: absolute;
+  top: 56px;
+  left: 0;
+  right: 0;
+  height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 35;
+  pointer-events: none;
+  transition: height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  background: transparent;
+}
+
+.ptr-indicator.active {
+  height: 52px;
+}
+
+.ptr-spinner-box {
+  background: rgba(23, 23, 23, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  transform: translateY(-10px);
+  opacity: 0;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ptr-indicator.active .ptr-spinner-box {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.ptr-icon {
+  font-size: 14px;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.ptr-indicator.refreshing .ptr-icon {
+  animation: spin 0.8s linear infinite;
+}
+
+.ptr-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-lime);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+

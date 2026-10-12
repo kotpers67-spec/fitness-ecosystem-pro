@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <link rel="stylesheet" href="/styles.css?v=2.5.1">
+  <link rel="stylesheet" href="/styles.css?v=2.5.2">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -45,7 +45,14 @@
     </header>
 
     <!-- Main Content Area (Scrollable viewport) -->
-    <main class="app-main-viewport">
+    <main class="app-main-viewport" id="app-main-viewport">
+      <!-- Native Mobile & Telegram WebApp Pull-to-Refresh Indicator -->
+      <div id="ptr-indicator" class="ptr-indicator">
+        <div class="ptr-spinner-box">
+          <span class="ptr-icon">🔄</span>
+          <span class="ptr-label">Потяните для синхронизации</span>
+        </div>
+      </div>
 
       <!-- ================= 1. AUTH SCREEN ================= -->
       <section id="screen-auth" class="screen-container">
@@ -1385,7 +1392,7 @@
   </div>
 
   <script src="/qrcode.min.js"></script>
-  <script src="/qr.js?v=2.5.1"></script>
-  <script src="/app.js?v=2.5.1"></script>
+  <script src="/qr.js?v=2.5.2"></script>
+  <script src="/app.js?v=2.5.2"></script>
 </body>
 </html>

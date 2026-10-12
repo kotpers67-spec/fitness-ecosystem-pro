@@ -4022,6 +4022,85 @@
     if (el.btnSyncAthlete) el.btnSyncAthlete.onclick = triggerCloudSync;
     if (el.btnSyncTrainer) el.btnSyncTrainer.onclick = triggerCloudSync;
 
+    // --- Pull-To-Refresh Swipe Gesture Engine (Mobile & Telegram WebApp) ---
+    const ptrIndicator = document.getElementById('ptr-indicator');
+    const mainViewport = document.getElementById('app-main-viewport') || document.querySelector('.app-main-viewport');
+    let touchStartY = 0;
+    let touchMoveY = 0;
+    let isPulling = false;
+
+    if (mainViewport && ptrIndicator) {
+      mainViewport.addEventListener('touchstart', (e) => {
+        // Only trigger pull-to-refresh if scrolled at the very top
+        if (mainViewport.scrollTop <= 2 && e.touches.length === 1) {
+          touchStartY = e.touches[0].clientY;
+          isPulling = true;
+        } else {
+          isPulling = false;
+        }
+      }, { passive: true });
+
+      mainViewport.addEventListener('touchmove', (e) => {
+        if (!isPulling || isSyncing || mainViewport.scrollTop > 2) return;
+        touchMoveY = e.touches[0].clientY;
+        const pullDistance = touchMoveY - touchStartY;
+
+        if (pullDistance > 15) {
+          ptrIndicator.classList.add('active');
+          const progress = Math.min(pullDistance / 80, 1);
+          const icon = ptrIndicator.querySelector('.ptr-icon');
+          if (icon) icon.style.transform = `rotate(${progress * 360}deg)`;
+          const label = ptrIndicator.querySelector('.ptr-label');
+          if (label) {
+            label.textContent = pullDistance > 70 ? 'Отпустите для синхронизации' : 'Потяните вниз...';
+          }
+        } else {
+          ptrIndicator.classList.remove('active');
+        }
+      }, { passive: true });
+
+      const finishPull = async (e) => {
+        if (!isPulling) return;
+        const pullDistance = touchMoveY - touchStartY;
+        isPulling = false;
+        touchStartY = 0;
+        touchMoveY = 0;
+
+        if (pullDistance > 70 && !isSyncing) {
+          ptrIndicator.classList.add('active', 'refreshing');
+          const label = ptrIndicator.querySelector('.ptr-label');
+          if (label) label.textContent = 'Синхронизация с облаком...';
+
+          // Trigger Telegram Haptic Feedback if running inside Telegram WebApp
+          try {
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+              window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+            }
+          } catch (_) {}
+
+          try {
+            await triggerCloudSync();
+            try {
+              if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+              }
+            } catch (_) {}
+          } finally {
+            ptrIndicator.classList.remove('refreshing');
+            setTimeout(() => {
+              ptrIndicator.classList.remove('active');
+              if (label) label.textContent = 'Потяните для синхронизации';
+            }, 300);
+          }
+        } else {
+          ptrIndicator.classList.remove('active');
+        }
+      };
+
+      mainViewport.addEventListener('touchend', finishPull);
+      mainViewport.addEventListener('touchcancel', finishPull);
+    }
+
     // Rest Timer Action Buttons
     if (el.btnTimerAdd30) el.btnTimerAdd30.onclick = () => addRestTimerSeconds(30);
     if (el.btnTimerCancel) el.btnTimerCancel.onclick = () => stopRestTimer();
