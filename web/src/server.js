@@ -200,6 +200,15 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
+      // HEALTH CHECK & SELF-PING KEEPALIVE
+      if ((pathname === '/api/health' || pathname === '/api/ping') && req.method === 'GET') {
+        return sendJson(res, 200, {
+          status: 'ok',
+          uptime: process.uptime(),
+          timestamp: new Date().toISOString()
+        });
+      }
+
       // REGISTER
       if (pathname === '/api/register' && req.method === 'POST') {
         const body = await parseJsonBody(req);
@@ -2635,9 +2644,39 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// --- 13-Minute Self-Ping Keep-Alive Engine (Anti-Sleep for Render Free Tier) ---
+function startKeepAliveEngine() {
+  const KEEP_ALIVE_INTERVAL_MS = 13 * 60 * 1000; // 13 minutes
+  const targetUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://fitness-ecosystem-pro.onrender.com';
+
+  const ping = async () => {
+    try {
+      const pingUrl = `${targetUrl.replace(/\/$/, '')}/api/health`;
+      const res = await fetch(pingUrl, {
+        headers: { 'User-Agent': 'FitnessPro-KeepAlive/1.0' },
+        signal: AbortSignal.timeout(15000)
+      });
+      console.log(`[KeepAlive] ⏰ Self-ping to ${pingUrl} status: ${res.status} at ${new Date().toLocaleTimeString()}`);
+    } catch (err) {
+      console.warn(`[KeepAlive] ⚠️ Self-ping notice (${targetUrl}):`, err.message);
+    }
+  };
+
+  // Initial ping after 30 seconds to confirm network connectivity
+  const initialTimer = setTimeout(ping, 30000);
+  initialTimer.unref();
+
+  // Periodic ping every 13 minutes
+  const intervalTimer = setInterval(ping, KEEP_ALIVE_INTERVAL_MS);
+  intervalTimer.unref();
+
+  console.log(`[KeepAlive] 🛡️ Anti-sleep engine activated: self-ping every 13 minutes targeting ${targetUrl}`);
+}
+
 if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`[Fitness Ecosystem Web] Server running at http://localhost:${PORT}`);
+    startKeepAliveEngine();
   });
 }
 
