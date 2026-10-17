@@ -153,6 +153,71 @@ function isTrainerApprovalRequired() {
   return process.env.NODE_ENV !== 'test';
 }
 
+function parseClientDeviceInfo(userAgent) {
+  const ua = String(userAgent || '');
+  let browser = 'Unknown Browser';
+  let os = 'Unknown OS';
+
+  // OS Detection
+  if (/windows phone/i.test(ua)) os = 'Windows Phone';
+  else if (/win(dows|98|nt|2000|xp|vista|7|8|10|11)/i.test(ua)) os = 'Windows';
+  else if (/android/i.test(ua)) os = 'Android';
+  else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
+  else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
+  else if (/linux/i.test(ua)) os = 'Linux';
+
+  // Browser Detection
+  if (/edg\//i.test(ua)) {
+    const m = ua.match(/edg\/([\d.]+)/i);
+    browser = `Edge ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/chrome|crios/i.test(ua) && !/opr|opera/i.test(ua)) {
+    const m = ua.match(/(?:chrome|crios)\/([\d.]+)/i);
+    browser = `Chrome ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/firefox|fxios/i.test(ua)) {
+    const m = ua.match(/(?:firefox|fxios)\/([\d.]+)/i);
+    browser = `Firefox ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) {
+    const m = ua.match(/version\/([\d.]+)/i);
+    browser = `Safari ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/telegram/i.test(ua)) {
+    browser = 'Telegram WebApp';
+  }
+
+  return `${browser} on ${os}`;
+}
+
+async function sendLoginSecurityAlert(bot, telegramId, { siteName, botUsername, clientIp, userAgent, token }) {
+  if (!bot || !bot.api || !telegramId) return;
+  const device = parseClientDeviceInfo(userAgent);
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const targetBot = botUsername ? `@${botUsername}` : '@fitnessecosystemBOT';
+  const siteDomain = siteName || 'fitness-ecosystem-pro.onrender.com';
+
+  const alertMessage = 
+    `🔔 <b>[${dateStr} ${timeStr}] Telegram Security Alert</b>\n\n` +
+    `You have successfully logged in on <b>${siteDomain}</b> via <b>${targetBot}</b>. The website received your name, username and profile photo.\n\n` +
+    `💻 <b>Browser:</b> ${escapeHtml(device)}\n` +
+    `🌐 <b>IP:</b> <code>${escapeHtml(clientIp || '127.0.0.1')}</code>\n\n` +
+    `<i>If you did not initiate this login, tap the button below to immediately terminate the session.</i>`;
+
+  const inlineKeyboard = {
+    inline_keyboard: [
+      token ? [{ text: '⛔ Terminate session (Завершить сессию)', callback_data: `terminate_${token.slice(0, 16)}` }] : []
+    ].filter(r => r.length > 0)
+  };
+
+  try {
+    await bot.api.sendMessage(telegramId, alertMessage, {
+      parse_mode: 'HTML',
+      reply_markup: inlineKeyboard
+    });
+  } catch (err) {
+    console.warn('[Security Alert] Failed to send login notification to Telegram:', err.message);
+  }
+}
+
 function getAuthUser(req) {
   let token = null;
   const authHeader = req.headers['authorization'];
@@ -768,6 +833,16 @@ const server = http.createServer(async (req, res) => {
         const token = generateToken(user.id, user.role);
         db.createAuthToken(token, user.id);
 
+        if (tgBotInstance && user.telegram_id) {
+          sendLoginSecurityAlert(tgBotInstance, user.telegram_id, {
+            siteName: req.headers.host || 'fitness-ecosystem-pro.onrender.com',
+            botUsername: activeBotUsername,
+            clientIp,
+            userAgent: req.headers['user-agent'] || '',
+            token
+          }).catch(() => {});
+        }
+
         return sendJson(res, 200, {
           success: true,
           authProvider: 'telegram',
@@ -820,13 +895,16 @@ const server = http.createServer(async (req, res) => {
 
         const sessionId = 'auth_' + crypto.randomBytes(16).toString('hex');
         const expiresAt = Date.now() + 5 * 60 * 1000;
+        const userAgent = req.headers['user-agent'] || '';
         telegramSessionStore.set(sessionId, {
           status: 'PENDING',
           createdAt: Date.now(),
           expiresAt,
           token: null,
           user: null,
-          requestedRole
+          requestedRole,
+          clientIp,
+          userAgent
         });
 
         const botName = activeBotUsername || 'fitnessecosystemBOT';
@@ -1144,6 +1222,16 @@ const server = http.createServer(async (req, res) => {
 
         const token = generateToken(user.id, user.role);
         db.createAuthToken(token, user.id);
+
+        if (tgBotInstance && user.telegram_id) {
+          sendLoginSecurityAlert(tgBotInstance, user.telegram_id, {
+            siteName: req.headers.host || 'fitness-ecosystem-pro.onrender.com',
+            botUsername: activeBotUsername,
+            clientIp,
+            userAgent: req.headers['user-agent'] || '',
+            token
+          }).catch(() => {});
+        }
         return sendJson(res, 200, {
           success: true,
           isNewUser: false,

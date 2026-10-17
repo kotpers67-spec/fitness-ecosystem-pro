@@ -22,6 +22,37 @@ function isTrainerApprovalRequired() {
   return process.env.NODE_ENV !== 'test';
 }
 
+function parseClientDeviceInfo(userAgent) {
+  const ua = String(userAgent || '');
+  let browser = 'Unknown Browser';
+  let os = 'Unknown OS';
+
+  if (/windows phone/i.test(ua)) os = 'Windows Phone';
+  else if (/win(dows|98|nt|2000|xp|vista|7|8|10|11)/i.test(ua)) os = 'Windows';
+  else if (/android/i.test(ua)) os = 'Android';
+  else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
+  else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
+  else if (/linux/i.test(ua)) os = 'Linux';
+
+  if (/edg\//i.test(ua)) {
+    const m = ua.match(/edg\/([\d.]+)/i);
+    browser = `Edge ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/chrome|crios/i.test(ua) && !/opr|opera/i.test(ua)) {
+    const m = ua.match(/(?:chrome|crios)\/([\d.]+)/i);
+    browser = `Chrome ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/firefox|fxios/i.test(ua)) {
+    const m = ua.match(/(?:firefox|fxios)\/([\d.]+)/i);
+    browser = `Firefox ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) {
+    const m = ua.match(/version\/([\d.]+)/i);
+    browser = `Safari ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/telegram/i.test(ua)) {
+    browser = 'Telegram WebApp';
+  }
+
+  return `${browser} on ${os}`;
+}
+
 /**
  * Creates persistent menu reply keyboard with main buttons
  */
@@ -461,19 +492,26 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
       };
 
       const roleTitle = user.role === 'trainer' ? 'Тренер' : 'Атлет';
+      const device = parseClientDeviceInfo(session.userAgent);
+      const nowDate = new Date();
+      const dateStr = nowDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const timeStr = nowDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      const siteDomain = 'fitness-ecosystem-pro.onrender.com';
+      const botTag = ctx.me?.username ? `@${ctx.me.username}` : '@fitnessecosystemBOT';
+
       const webAppKeyboard = new InlineKeyboard()
         .webApp('🚀 Запустить Mini App', MINI_APP_URL)
         .row()
-        .url('🌐 Открыть в браузере', MINI_APP_URL)
+        .url('🌐 Открыть сайт', MINI_APP_URL)
         .row()
-        .url('💬 Поддержка создателей', OWNER_LINKS.santi);
+        .text('⛔ Terminate session (Завершить сессию)', `terminate_${token.slice(0, 16)}`);
 
       await ctx.reply(
-        `⚡ <b>Вход в Fitness Ecosystem Pro выполнен в 1 клик!</b>\n\n` +
-        `👤 Профиль: <b>${user.full_name || fullName}</b>\n` +
-        `🏷 Роль: <b>${roleTitle}</b>\n\n` +
-        `🚀 В браузере или мобильном приложении вход произошёл автоматически!\n` +
-        `Вы можете вернуться в открытое окно.`,
+        `🔔 <b>[${dateStr} ${timeStr}] Telegram:</b> You have successfully logged in on <b>${siteDomain}</b> via <b>${botTag}</b>. The website received your name, username and profile photo.\n\n` +
+        `👤 <b>Account:</b> ${escapeHtml(user.full_name || fullName)} (${roleTitle})\n` +
+        `💻 <b>Browser:</b> ${escapeHtml(device)}\n` +
+        `🌐 <b>IP:</b> <code>${escapeHtml(session.clientIp || '127.0.0.1')}</code>\n\n` +
+        `You can press 'Terminate session' to terminate this session at any time.`,
         {
           parse_mode: 'HTML',
           reply_markup: webAppKeyboard
@@ -668,6 +706,21 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
           { parse_mode: 'HTML' }
         );
       }
+    });
+
+    // Callback query to immediately terminate session
+    bot.callbackQuery(/^terminate_([a-zA-Z0-9_-]+)$/, async (ctx) => {
+      const tokenPrefix = ctx.match[1];
+      if (tokenPrefix && typeof db.revokeTokenByPrefix === 'function') {
+        db.revokeTokenByPrefix(tokenPrefix);
+      }
+      await ctx.answerCallbackQuery({ text: '⛔ Сессия успешно завершена на сайте!', show_alert: true });
+      await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: [] } }).catch(() => {});
+      await ctx.reply(
+        `⛔ <b>Сессия авторизации завершена.</b>\n` +
+        `Доступ с устройства был немедленно отозван в целях безопасности.`,
+        { parse_mode: 'HTML' }
+      );
     });
   }
 

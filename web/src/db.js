@@ -892,6 +892,21 @@ class AppDatabase {
     } catch (_) {}
   }
 
+  revokeTokenByPrefix(tokenPrefix) {
+    if (!tokenPrefix || typeof tokenPrefix !== 'string') return false;
+    try {
+      const rows = this.db.prepare('SELECT token FROM auth_tokens WHERE token LIKE ?').all(`${tokenPrefix}%`);
+      const now = Date.now();
+      for (const row of rows) {
+        this.db.prepare('DELETE FROM auth_tokens WHERE token = ?').run(row.token);
+        this.db.prepare('INSERT OR REPLACE INTO revoked_tokens (token, revoked_at) VALUES (?, ?)').run(row.token, now);
+      }
+      return rows.length > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   getWorkoutSets(athleteId, date) {
     const session = this.getWorkoutSessionWithSets(athleteId, date);
     return session ? session.sets : [];
