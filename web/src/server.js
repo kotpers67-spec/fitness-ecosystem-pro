@@ -186,7 +186,7 @@ function parseClientDeviceInfo(userAgent) {
   return `${browser} on ${os}`;
 }
 
-async function sendLoginSecurityAlert(bot, telegramId, { siteName, botUsername, clientIp, userAgent, token }) {
+async function sendLoginSecurityAlert(bot, telegramId, { siteName, botUsername, clientIp, userAgent, token, role, fullName }) {
   if (!bot || !bot.api || !telegramId) return;
   const device = parseClientDeviceInfo(userAgent);
   const now = new Date();
@@ -194,17 +194,20 @@ async function sendLoginSecurityAlert(bot, telegramId, { siteName, botUsername, 
   const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   const targetBot = botUsername ? `@${botUsername}` : '@fitnessecosystemBOT';
   const siteDomain = siteName || 'fitness-ecosystem-pro.onrender.com';
+  const roleName = role === 'trainer' ? 'Тренер' : 'Атлет';
 
   const alertMessage = 
-    `🔔 <b>[${dateStr} ${timeStr}] Telegram Security Alert</b>\n\n` +
-    `You have successfully logged in on <b>${siteDomain}</b> via <b>${targetBot}</b>. The website received your name, username and profile photo.\n\n` +
-    `💻 <b>Browser:</b> ${escapeHtml(device)}\n` +
-    `🌐 <b>IP:</b> <code>${escapeHtml(clientIp || '127.0.0.1')}</code>\n\n` +
-    `<i>If you did not initiate this login, tap the button below to immediately terminate the session.</i>`;
+    `🔔 <b>[${dateStr} ${timeStr}] Уведомление безопасности Telegram</b>\n\n` +
+    `Вы успешно вошли на сайт <b>${siteDomain}</b> через <b>${targetBot}</b>.\n` +
+    `Сайт получил ваше имя, логин и фото профиля.\n\n` +
+    `👤 <b>Роль:</b> <b>${roleName}</b>${fullName ? ` (${escapeHtml(fullName)})` : ''}\n` +
+    `💻 <b>Устройство / Браузер:</b> ${escapeHtml(device)}\n` +
+    `🌐 <b>IP-адрес:</b> <code>${escapeHtml(clientIp || '127.0.0.1')}</code>\n\n` +
+    `<i>Если вы не совершали этот вход, нажмите кнопку ниже, чтобы немедленно завершить сессию.</i>`;
 
   const inlineKeyboard = {
     inline_keyboard: [
-      token ? [{ text: '⛔ Terminate session (Завершить сессию)', callback_data: `terminate_${token.slice(0, 16)}` }] : []
+      token ? [{ text: '⛔ Завершить сессию (Terminate session)', callback_data: `terminate_${token.slice(0, 16)}` }] : []
     ].filter(r => r.length > 0)
   };
 
@@ -839,7 +842,9 @@ const server = http.createServer(async (req, res) => {
             botUsername: activeBotUsername,
             clientIp,
             userAgent: req.headers['user-agent'] || '',
-            token
+            token,
+            role: user.role,
+            fullName: user.full_name
           }).catch(() => {});
         }
 
@@ -1229,7 +1234,9 @@ const server = http.createServer(async (req, res) => {
             botUsername: activeBotUsername,
             clientIp,
             userAgent: req.headers['user-agent'] || '',
-            token
+            token,
+            role: user.role,
+            fullName: user.full_name
           }).catch(() => {});
         }
         return sendJson(res, 200, {

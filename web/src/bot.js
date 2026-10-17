@@ -504,14 +504,16 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
         .row()
         .url('🌐 Открыть сайт', MINI_APP_URL)
         .row()
-        .text('⛔ Terminate session (Завершить сессию)', `terminate_${token.slice(0, 16)}`);
+        .text('⛔ Завершить сессию (Terminate session)', `terminate_${token.slice(0, 16)}`);
 
       await ctx.reply(
-        `🔔 <b>[${dateStr} ${timeStr}] Telegram:</b> You have successfully logged in on <b>${siteDomain}</b> via <b>${botTag}</b>. The website received your name, username and profile photo.\n\n` +
-        `👤 <b>Account:</b> ${escapeHtml(user.full_name || fullName)} (${roleTitle})\n` +
-        `💻 <b>Browser:</b> ${escapeHtml(device)}\n` +
-        `🌐 <b>IP:</b> <code>${escapeHtml(session.clientIp || '127.0.0.1')}</code>\n\n` +
-        `You can press 'Terminate session' to terminate this session at any time.`,
+        `🔔 <b>[${dateStr} ${timeStr}] Уведомление безопасности Telegram</b>\n\n` +
+        `Вы успешно вошли на сайт <b>${siteDomain}</b> через <b>${botTag}</b>.\n` +
+        `Сайт получил ваше имя, логин и фото профиля.\n\n` +
+        `👤 <b>Роль:</b> <b>${roleTitle}</b> (${escapeHtml(user.full_name || fullName)})\n` +
+        `💻 <b>Устройство / Браузер:</b> ${escapeHtml(device)}\n` +
+        `🌐 <b>IP-адрес:</b> <code>${escapeHtml(session.clientIp || '127.0.0.1')}</code>\n\n` +
+        `<i>Если вы не совершали этот вход, нажмите кнопку ниже, чтобы немедленно завершить сессию.</i>`,
         {
           parse_mode: 'HTML',
           reply_markup: webAppKeyboard
