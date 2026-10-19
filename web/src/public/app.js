@@ -2853,10 +2853,64 @@
                 };
               }
               startOneClickPolling(res.sessionId);
+              renderTelegramLoginWidget(res.botUsername || 'fitnessecosystemBOT');
             }
           } catch (_) {
             showToast('Не удалось инициализировать сессию входа. Используйте ручной ввод.', 'error');
           }
+        }
+
+        // Official Telegram Login Widget Injector
+        function renderTelegramLoginWidget(botUsername) {
+          const container = document.getElementById('tg-widget-container');
+          if (!container) return;
+          container.innerHTML = '';
+
+          // Define global widget callback handler
+          window.onTelegramAuth = async function(telegramUser) {
+            const chosenRole = document.querySelector('input[name="tg-auth-role"]:checked')?.value || 'athlete';
+            showToast('Авторизация через Telegram Login Widget...', 'info');
+            try {
+              const data = await api('/api/auth/telegram', {
+                method: 'POST',
+                body: JSON.stringify({
+                  telegramUser,
+                  requestedRole: chosenRole
+                })
+              });
+
+              if (data.pendingApproval) {
+                showToast(data.message || 'Заявка тренера на рассмотрении', 'info');
+                el.dialogTelegramAuth?.close();
+                return;
+              }
+
+              if (data.token && data.user) {
+                if (state.tgSessionPollInterval) {
+                  clearInterval(state.tgSessionPollInterval);
+                  state.tgSessionPollInterval = null;
+                }
+                el.dialogTelegramAuth?.close();
+                state.token = data.token;
+                state.user = data.user;
+                saveAuthToken(data.token, data.user);
+                setupAppForRole(data.user.role);
+                showToast(`Вход выполнен: ${data.user.fullName || data.user.username}!`, 'success');
+              }
+            } catch (err) {
+              showToast(err.message || 'Ошибка входа через Telegram Widget', 'error');
+            }
+          };
+
+          const script = document.createElement('script');
+          script.async = true;
+          script.src = 'https://telegram.org/js/telegram-widget.js?22';
+          script.setAttribute('data-telegram-login', botUsername);
+          script.setAttribute('data-size', 'large');
+          script.setAttribute('data-radius', '12');
+          script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+          script.setAttribute('data-request-access', 'write');
+          container.appendChild(script);
         }
 
         // Get currently selected role
