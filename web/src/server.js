@@ -687,11 +687,19 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      // TELEGRAM AUTHENTICATION (Mini App initData, Widget or Telegram Username)
+      // TELEGRAM AUTHENTICATION (Mini App initData or Official Login Widget)
       if (pathname === '/api/auth/telegram' && req.method === 'POST') {
+        if (authLimiter.isRateLimited(clientIp)) {
+          return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
+        }
+
         const body = await parseJsonBody(req);
         const { initData, telegramUser, requestedRole } = body;
         const botToken = process.env.BOT_TOKEN || '';
+
+        if (!botToken && process.env.NODE_ENV !== 'test') {
+          return sendError(res, 500, 'Сервер Telegram бота не настроен (отсутствует BOT_TOKEN)');
+        }
 
         let tgId = null;
         let tgUsername = '';
@@ -702,7 +710,11 @@ const server = http.createServer(async (req, res) => {
         if (initData) {
           const params = new URLSearchParams(initData);
           const hash = params.get('hash');
-          if (botToken && hash) {
+          if (!hash) {
+            return sendError(res, 401, 'Отсутствует криптографическая подпись Telegram HMAC');
+          }
+
+          if (botToken) {
             params.delete('hash');
             const dataCheckString = Array.from(params.entries())
               .map(([k, v]) => `${k}=${v}`)
@@ -714,19 +726,35 @@ const server = http.createServer(async (req, res) => {
               return sendError(res, 401, 'Недействительная подпись Telegram HMAC');
             }
           }
+
+          // Anti-Replay: check auth_date (maximum 24 hours old)
+          const authDateStr = params.get('auth_date');
+          const authDate = parseInt(authDateStr, 10);
+          if (!authDate || (Math.floor(Date.now() / 1000) - authDate) > 86400) {
+            return sendError(res, 401, 'Срок действия данных авторизации Telegram истёк');
+          }
+
           const userJson = params.get('user');
-          if (userJson) {
-            try {
-              const u = JSON.parse(userJson);
-              tgId = u.id;
-              tgUsername = u.username || '';
-              tgFirstName = u.first_name || '';
-              tgLastName = u.last_name || '';
-              tgPhotoUrl = u.photo_url || '';
-            } catch (_) {}
+          if (!userJson) {
+            return sendError(res, 400, 'Отсутствуют данные профиля Telegram');
+          }
+          try {
+            const u = JSON.parse(userJson);
+            if (!u.id) return sendError(res, 400, 'Отсутствует ID пользователя Telegram');
+            tgId = String(u.id);
+            tgUsername = u.username ? String(u.username).replace(/^@/, '').trim() : '';
+            tgFirstName = u.first_name || '';
+            tgLastName = u.last_name || '';
+            tgPhotoUrl = u.photo_url || '';
+          } catch (_) {
+            return sendError(res, 400, 'Ошибка разбора данных профиля Telegram');
           }
         } else if (telegramUser) {
-          if (botToken && telegramUser.hash) {
+          if (!telegramUser.hash) {
+            return sendError(res, 401, 'Отсутствует подпись виджета Telegram');
+          }
+
+          if (botToken) {
             const { hash, ...data } = telegramUser;
             const dataCheckString = Object.keys(data)
               .sort()
@@ -738,25 +766,31 @@ const server = http.createServer(async (req, res) => {
               return sendError(res, 401, 'Недействительная подпись виджета Telegram');
             }
           }
-          tgId = telegramUser.id || ('tg_' + Date.now());
-          tgUsername = telegramUser.username || '';
+
+          // Anti-Replay: check auth_date (maximum 24 hours old)
+          const authDate = parseInt(telegramUser.auth_date, 10);
+          if (!authDate || (Math.floor(Date.now() / 1000) - authDate) > 86400) {
+            return sendError(res, 401, 'Срок действия авторизации виджета Telegram истёк');
+          }
+
+          if (!telegramUser.id) {
+            return sendError(res, 400, 'Отсутствует ID пользователя Telegram');
+          }
+
+          tgId = String(telegramUser.id);
+          tgUsername = telegramUser.username ? String(telegramUser.username).replace(/^@/, '').trim() : '';
           tgFirstName = telegramUser.first_name || '';
           tgLastName = telegramUser.last_name || '';
           tgPhotoUrl = telegramUser.photo_url || '';
-        } else if (body.username) {
-          const clean = String(body.username).replace(/^@/, '').trim();
-          if (!clean || hasSqlInjectionVector(clean)) {
-            return sendError(res, 400, 'Некорректный логин Telegram');
-          }
-          tgUsername = clean;
-          tgFirstName = clean;
-          tgId = 'usr_' + clean.toLowerCase();
         } else {
-          return sendError(res, 400, 'Не переданы данные для входа через Telegram');
+          return sendError(res, 400, 'Не переданы данные для криптографически защищённого входа');
         }
 
         const usernameKey = tgUsername ? `tg_${tgUsername.toLowerCase()}` : `tg_${tgId}`;
-        let user = db.findUserByUsername(usernameKey) || (tgUsername ? db.findUserByTelegramUsername(tgUsername) : null);
+        let user = db.findUserByTelegramId(tgId);
+        if (!user && tgUsername) {
+          user = db.findUserByTelegramUsername(tgUsername) || db.findUserByUsername(`tg_${tgUsername.toLowerCase()}`);
+        }
         const role = requestedRole === 'trainer' ? 'trainer' : 'athlete';
         const isOwnerOrAdmin = ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((tgUsername || '').toLowerCase()) ||
           ['santila213', 'spirit5449', 'kotpers67', 'kotpers76'].includes((user?.username || '').toLowerCase());
@@ -1000,10 +1034,12 @@ const server = http.createServer(async (req, res) => {
         }
 
         let user = db.findUserByTelegramUsername(cleanUsername);
-        if (!user) user = db.findUserByUsername(cleanUsername);
         if (!user) user = db.findUserByUsername(`tg_${cleanUsername}`);
         if (!user && cleanUsername.replace(/\D/g, '').length >= 7) {
-          user = db.findUserByPhone(cleanUsername.replace(/\D/g, ''));
+          const byPhone = db.findUserByPhone(cleanUsername.replace(/\D/g, ''));
+          if (byPhone && (byPhone.telegram_id || byPhone.telegram_username)) {
+            user = byPhone;
+          }
         }
         const PAIRING_TTL = 5 * 60 * 1000;
         const now = Date.now();
@@ -1077,105 +1113,72 @@ const server = http.createServer(async (req, res) => {
 
       // TELEGRAM OTP: 2. Verify 6-digit Code
       if (pathname === '/api/auth/telegram/verify-otp' && req.method === 'POST') {
+        if (authLimiter.isRateLimited(clientIp)) {
+          return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
+        }
+
         const body = await parseJsonBody(req);
         const { username, code } = body;
         const cleanUsername = String(username || '').replace(/^@/, '').trim().toLowerCase();
         const cleanCode = String(code || '').replace(/\D/g, '').trim();
+
+        if (!cleanUsername) {
+          return sendError(res, 400, 'Укажите ваш логин Telegram');
+        }
 
         if (!cleanCode || cleanCode.length !== 6) {
           return sendError(res, 400, 'Введите корректный 6-значный код');
         }
 
         const now = Date.now();
-        let matchedOtpRecord = null;
-        let matchedOtpKey = null;
-
-        if (cleanUsername) {
-          const record = telegramOtpStore.get(cleanUsername) || telegramOtpStore.get(`id_${cleanUsername}`);
-          if (record) {
-            if (now > record.expiresAt) {
-              telegramOtpStore.delete(cleanUsername);
-              return sendError(res, 400, 'Срок действия кода истек (5 минут). Запросите новый код.');
-            }
-
-            if (record.attempts >= 5) {
-              telegramOtpStore.delete(cleanUsername);
-              return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
-            }
-
-            if (record.code !== cleanCode) {
-              record.attempts = (record.attempts || 0) + 1;
-              if (record.attempts >= 5) {
-                telegramOtpStore.delete(cleanUsername);
-                return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
-              }
-              return sendError(res, 400, 'Неверный код из Telegram');
-            }
-
-            matchedOtpRecord = record;
-            matchedOtpKey = cleanUsername;
-          }
+        const record = telegramOtpStore.get(cleanUsername) || telegramOtpStore.get(`id_${cleanUsername}`);
+        if (!record) {
+          return sendError(res, 400, 'Код для этого пользователя не запрашивался или срок действия (5 минут) истёк');
         }
 
-        if (!matchedOtpRecord) {
-          // If username not provided or not matched in direct store entry:
-          // Search unexpired entries in telegramOtpStore
-          for (const [key, entry] of telegramOtpStore.entries()) {
-            if (entry && entry.code === cleanCode && entry.expiresAt > now) {
-              if (entry.attempts >= 5) continue;
-              matchedOtpRecord = entry;
-              matchedOtpKey = key;
-              break;
-            }
-          }
+        if (now > record.expiresAt) {
+          telegramOtpStore.delete(cleanUsername);
+          return sendError(res, 400, 'Срок действия кода истёк (5 минут). Запросите новый код.');
         }
+
+        if (record.attempts >= 5) {
+          telegramOtpStore.delete(cleanUsername);
+          return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
+        }
+
+        if (record.code !== cleanCode) {
+          record.attempts = (record.attempts || 0) + 1;
+          if (record.attempts >= 5) {
+            telegramOtpStore.delete(cleanUsername);
+            return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
+          }
+          return sendError(res, 400, 'Неверный код из Telegram');
+        }
+
+        // Successfully matched — single-use: invalidate OTP
+        telegramOtpStore.delete(cleanUsername);
+        if (record.username) telegramOtpStore.delete(record.username);
+        if (record.tgId) telegramOtpStore.delete(`id_${record.tgId}`);
 
         let user = null;
-
-        if (matchedOtpRecord) {
-          if (matchedOtpKey) telegramOtpStore.delete(matchedOtpKey);
-          if (cleanUsername) telegramOtpStore.delete(cleanUsername);
-          if (matchedOtpRecord.username) telegramOtpStore.delete(matchedOtpRecord.username);
-          if (matchedOtpRecord.tgId) telegramOtpStore.delete(`id_${matchedOtpRecord.tgId}`);
-
-          if (matchedOtpRecord.userId) {
-            user = db.findUserById(matchedOtpRecord.userId);
-          }
-          if (!user && matchedOtpRecord.tgId) {
-            user = db.findUserByTelegramId(String(matchedOtpRecord.tgId));
-          }
-          if (!user && matchedOtpRecord.username) {
-            user = db.findUserByTelegramUsername(matchedOtpRecord.username) ||
-                   db.findUserByUsername(matchedOtpRecord.username) ||
-                   db.findUserByUsername(`tg_${matchedOtpRecord.username}`);
-          }
-          if (!user && cleanUsername) {
-            user = db.findUserByUsername(cleanUsername) ||
-                   db.findUserByUsername(`tg_${cleanUsername}`) ||
-                   db.findUserByTelegramUsername(cleanUsername);
-          }
+        if (record.userId) {
+          user = db.findUserById(record.userId);
         }
-
-        // If not matched or no user resolved from OTP store, match against athlete pairing PIN in SQLite
+        if (!user && record.tgId) {
+          user = db.findUserByTelegramId(String(record.tgId));
+        }
         if (!user) {
-          const PAIRING_TTL = 5 * 60 * 1000;
-          const candidate = db.findUserByPairingCode(cleanCode);
-          if (candidate && candidate.pairing_code_created_at && (now - candidate.pairing_code_created_at < PAIRING_TTL)) {
-            user = db.findUserById(candidate.id) || candidate;
-          }
+          const uname = record.username || cleanUsername;
+          user = db.findUserByTelegramUsername(uname) || db.findUserByUsername(`tg_${uname}`);
         }
 
         // If OTP was valid but it belongs to a brand-new Telegram user without DB account yet
-        if (!user && matchedOtpRecord) {
+        if (!user) {
           return sendJson(res, 200, {
             success: true,
             isNewUser: true,
-            telegramUsername: matchedOtpRecord.username || cleanUsername || ''
+            telegramUsername: record.username || cleanUsername || ''
           });
-        }
-
-        if (!user) {
-          return sendError(res, 400, 'Неверный или истекший 6-значный код');
         }
 
         if (!user.telegram_username && cleanUsername) {

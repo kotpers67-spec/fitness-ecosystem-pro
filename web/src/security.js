@@ -57,13 +57,20 @@ function verifyPassword(password, storedHash) {
 }
 
 // 4. Cryptographic Secure Token & PIN Generation with Stateless HMAC Fallback
-const TOKEN_SECRET = process.env.SESSION_SECRET || 'fitness_ecosystem_pro_super_secret_signing_key_2026';
+let _runtimeDynamicSecret = null;
+function getTokenSecret() {
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  if (!_runtimeDynamicSecret) {
+    _runtimeDynamicSecret = crypto.randomBytes(32).toString('hex');
+  }
+  return _runtimeDynamicSecret;
+}
 
 function generateSignedToken(userId, role = 'athlete', ttlMs = 86400000 * 365) {
   const expiresAt = Date.now() + ttlMs;
   const rawPayload = `${userId}:${role}:${expiresAt}:${crypto.randomBytes(8).toString('hex')}`;
   const payloadB64 = Buffer.from(rawPayload).toString('base64url');
-  const signature = crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest('hex').slice(0, 32);
+  const signature = crypto.createHmac('sha256', getTokenSecret()).update(payloadB64).digest('hex').slice(0, 32);
   return `fit_${payloadB64}_${signature}`;
 }
 
@@ -74,7 +81,7 @@ function verifySignedToken(token) {
   const payloadB64 = parts[1];
   const signature = parts.slice(2).join('_');
 
-  const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest('hex').slice(0, 32);
+  const expectedSig = crypto.createHmac('sha256', getTokenSecret()).update(payloadB64).digest('hex').slice(0, 32);
   if (signature !== expectedSig) return null;
 
   try {

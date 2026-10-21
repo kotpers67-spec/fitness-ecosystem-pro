@@ -281,7 +281,6 @@ function setupBotHandlers(bot, { db, telegramOtpStore, telegramSessionStore, use
       let user = null;
       if (tgId) user = db.findUserByTelegramId(tgId);
       if (!user && username) user = db.findUserByTelegramUsername(username);
-      if (!user && username) user = db.findUserByUsername(username);
       if (!user && username) user = db.findUserByUsername(`tg_${username}`);
 
       const requestedRole = session.requestedRole || 'athlete';

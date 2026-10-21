@@ -211,12 +211,11 @@ class AppDatabase {
       FROM users 
       WHERE username = ? 
          OR LOWER(username) = LOWER(?) 
-         OR LOWER(full_name) = LOWER(?) 
          OR LOWER(telegram_username) = LOWER(?)
          OR telegram_username = ?
          OR (phone != '' AND phone = ?)
     `);
-    let user = stmt.get(clean, clean, clean, cleanNoAt, cleanNoAt, cleanDigits || clean);
+    let user = stmt.get(clean, clean, cleanNoAt, cleanNoAt, cleanDigits || clean);
     if (!user && cleanDigits && cleanDigits.length >= 7) {
       user = this.findUserByPhone(cleanDigits);
     }
