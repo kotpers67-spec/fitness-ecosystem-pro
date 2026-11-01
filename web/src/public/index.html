@@ -62,11 +62,6 @@
           <p class="auth-subtitle">Экосистема для атлетов и персональных тренеров</p>
         </div>
 
-        <!-- Android APK Download Shortcut Button -->
-        <button type="button" class="btn-open-download-modal app-btn btn-secondary" style="margin-bottom: 12px; width: 100%; border: 1px solid var(--border-lime);">
-          ⚡ Скачать Android APK приложения
-        </button>
-
         <div class="auth-card">
           <!-- Fast Telegram Authentication -->
           <div class="telegram-auth-box">
@@ -531,14 +526,6 @@
           </button>
         </div>
 
-        <!-- Mobile Apps & PWA Card (Only inside Profile / Settings after Auth) -->
-        <div class="app-card">
-          <div class="card-title">МОБИЛЬНЫЕ ПРИЛОЖЕНИЯ И PWA</div>
-          <p class="card-desc">Скачайте официальные Android APK или установите на экран «Домой»</p>
-          <button type="button" class="btn-open-download-modal app-btn btn-secondary" style="margin-top: 8px; width: 100%;">
-            📱 Скачать APK / Установить PWA
-          </button>
-        </div>
 
         <!-- Owners Contact Card -->
         <div class="app-card">
@@ -634,14 +621,6 @@
           </div>
         </div>
 
-        <!-- Mobile Apps & PWA Card (Only inside Profile / Settings after Auth) -->
-        <div class="app-card" style="margin-top: 12px;">
-          <div class="card-title">МОБИЛЬНЫЕ ПРИЛОЖЕНИЯ И PWA</div>
-          <p class="card-desc">Скачайте официальные Android APK или установите на экран «Домой»</p>
-          <button type="button" class="btn-open-download-modal app-btn btn-secondary" style="margin-top: 8px; width: 100%;">
-            📱 Скачать APK / Установить PWA
-          </button>
-        </div>
       </section>
 
       <!-- Trainer Screen 2: ТРЕНИРОВКА (Workout Assignment) -->
@@ -1171,69 +1150,6 @@
               <button type="submit" class="app-btn btn-primary">Сохранить</button>
             </div>
           </form>
-        </div>
-      </dialog>
-
-      <!-- DIALOG: Скачать мобильные приложения (Android APK & iOS PWA Guide) -->
-      <dialog id="dialog-download-app" class="app-dialog">
-        <div class="dialog-content">
-          <div class="dialog-header">
-            <h3 class="dialog-title">Мобильные приложения</h3>
-            <button type="button" class="dialog-close-btn" id="btn-close-download-dialog" aria-label="Закрыть">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-          <p class="card-desc">Установите на смартфон официальное приложение с офлайн-доступом и мгновенной синхронизацией:</p>
-
-          <div class="download-cards-container">
-            <!-- Athlete Pro Card -->
-            <div class="download-apk-card">
-              <div class="apk-card-header">
-                <span class="apk-badge">АТЛЕТ</span>
-                <span class="apk-version">v2.0.1 (Latest)</span>
-              </div>
-              <h4 class="apk-title">Athlete Pro для Android</h4>
-              <p class="apk-desc">Дневник тренировок, замеры веса, QR/PIN привязка к тренеру и таблица рекордов.</p>
-              <a href="https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v2.0.1/athlete-pro-v2.0.1.apk" class="app-btn btn-primary" download style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none;">
-                <span>⬇ Скачать Athlete Pro APK (v2.0.1)</span>
-              </a>
-            </div>
-
-            <!-- Trainer Pro Card -->
-            <div class="download-apk-card" style="margin-top: 12px;">
-              <div class="apk-card-header">
-                <span class="apk-badge" style="background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald);">ТРЕНЕР</span>
-                <span class="apk-version">v2.0.1 (Latest)</span>
-              </div>
-              <h4 class="apk-title">Trainer Pro для Android</h4>
-              <p class="apk-desc">Управление подопечными, назначение программ тренировок, сканер QR и мгновенная синхронизация.</p>
-              <a href="https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/v2.0.1/trainer-pro-v2.0.1.apk" class="app-btn btn-secondary" download style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none;">
-                <span>⬇ Скачать Trainer Pro APK (v2.0.1)</span>
-              </a>
-            </div>
-
-            <!-- iOS & Web App Guide Card -->
-            <div class="download-apk-card" style="margin-top: 12px; background: rgba(255, 255, 255, 0.03);">
-              <div class="apk-card-header">
-                <span class="apk-badge" style="background: rgba(255, 255, 255, 0.1); color: var(--text-primary);">IPHONE / ANDROID</span>
-                <span class="apk-version">PWA</span>
-              </div>
-              <h4 class="apk-title">Установка как Веб-приложение (PWA)</h4>
-              <p class="apk-desc">
-                • <b>iOS (Safari):</b> Нажмите кнопку «Поделиться» (иконка квадрата со стрелкой) ➔ выберите <b>«На экран "Домой"»</b>.<br>
-                • <b>Android (Chrome):</b> Нажмите меню (три точки) ➔ <b>«Установить приложение»</b>.
-              </p>
-              <button type="button" id="btn-trigger-pwa-install-dialog" class="app-btn btn-telegram" style="width: 100%;">
-                📲 Установить на это устройство
-              </button>
-            </div>
-          </div>
-          <div class="dialog-actions" style="margin-top: 16px;">
-            <button type="button" class="app-btn btn-secondary" id="btn-close-download-dialog" style="width: 100%;">Закрыть</button>
-          </div>
         </div>
       </dialog>
 
