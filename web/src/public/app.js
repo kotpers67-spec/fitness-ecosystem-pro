@@ -3967,29 +3967,136 @@
       };
     }
 
-    // --- PWA Installation & APK Download Modals ---
-    function openDownloadDialog() {
-      if (!el.dialogDownloadApp) return;
-      if (typeof el.dialogDownloadApp.showModal === 'function') {
-        el.dialogDownloadApp.showModal();
-      } else {
-        el.dialogDownloadApp.style.display = 'block';
+    
+    // --- PWA Installation & Dialog Logic (Zero APK Parity) ---
+    function isStandalonePwa() {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+             window.navigator.standalone === true;
+    }
+
+    function updatePwaInstallUi() {
+      const isStandalone = isStandalonePwa();
+      const headerBtn = document.getElementById('btn-pwa-install-header');
+      if (headerBtn) headerBtn.style.display = isStandalone ? 'none' : 'inline-flex';
+      const nativeBox = document.getElementById('pwa-native-box');
+      if (nativeBox) {
+        nativeBox.style.display = state.deferredInstallPrompt ? 'block' : 'none';
       }
     }
 
-    function closeDownloadDialog() {
-      if (!el.dialogDownloadApp) return;
-      if (typeof el.dialogDownloadApp.close === 'function') {
-        el.dialogDownloadApp.close();
-      } else {
-        el.dialogDownloadApp.style.display = 'none';
+    function selectPwaTab(tabKey) {
+      const tabs = document.querySelectorAll('.pwa-tab-btn');
+      const panels = {
+        ios: document.getElementById('pwa-tab-ios'),
+        android: document.getElementById('pwa-tab-android'),
+        desktop: document.getElementById('pwa-tab-desktop')
+      };
+
+      tabs.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.pwaTab === tabKey);
+      });
+
+      Object.entries(panels).forEach(([key, panel]) => {
+        if (panel) {
+          panel.style.display = (key === tabKey) ? 'block' : 'none';
+          panel.classList.toggle('active', key === tabKey);
+        }
+      });
+    }
+
+    function openPwaInstallDialog() {
+      const ua = (navigator.userAgent || '').toLowerCase();
+      const isIOS = /iphone|ipad|ipod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isAndroid = /android/.test(ua);
+
+      let targetTab = 'desktop';
+      if (isIOS) targetTab = 'ios';
+      else if (isAndroid) targetTab = 'android';
+
+      selectPwaTab(targetTab);
+
+      const dlg = document.getElementById('dialog-download-app');
+      if (dlg) {
+        if (typeof dlg.showModal === 'function') dlg.showModal();
+        else dlg.style.display = 'block';
       }
     }
 
-    document.querySelectorAll('.btn-open-download-modal, #btn-open-download-modal').forEach(btn => {
-      btn.onclick = openDownloadDialog;
+    function closePwaInstallDialog() {
+      const dlg = document.getElementById('dialog-download-app');
+      if (dlg) {
+        if (typeof dlg.close === 'function') dlg.close();
+        else dlg.style.display = 'none';
+      }
+    }
+
+    async function handlePwaInstall() {
+      if (isStandalonePwa()) {
+        showToast('✓ Приложение уже установлено!', 'info');
+        return;
+      }
+
+      if (state.deferredInstallPrompt) {
+        try {
+          state.deferredInstallPrompt.prompt();
+          const choice = await state.deferredInstallPrompt.userChoice;
+          if (choice && choice.outcome === 'accepted') {
+            showToast('✓ Веб-версия Fitness Pro успешно установлена!', 'success');
+            state.deferredInstallPrompt = null;
+            updatePwaInstallUi();
+            closePwaInstallDialog();
+          }
+          return;
+        } catch (err) {
+          console.warn('Native PWA install prompt error:', err);
+        }
+      }
+
+      openPwaInstallDialog();
+    }
+
+    // Attach PWA Listeners
+    document.querySelectorAll('.btn-open-download-modal, #btn-pwa-install-header, #btn-pwa-install-auth, #btn-pwa-install-athlete, #btn-pwa-install-trainer').forEach(btn => {
+      btn.onclick = handlePwaInstall;
     });
-    if (el.btnCloseDownloadDialog) el.btnCloseDownloadDialog.onclick = closeDownloadDialog;
+
+    const btnTriggerPwa = document.getElementById('btn-trigger-pwa-install-dialog');
+    if (btnTriggerPwa) btnTriggerPwa.onclick = handlePwaInstall;
+
+    const btnClosePwa = document.getElementById('btn-close-download-dialog');
+    if (btnClosePwa) btnClosePwa.onclick = closePwaInstallDialog;
+    const btnClosePwaFooter = document.getElementById('btn-close-download-dialog-footer');
+    if (btnClosePwaFooter) btnClosePwaFooter.onclick = closePwaInstallDialog;
+
+    // Tabs inside dialog
+    document.querySelectorAll('.pwa-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectPwaTab(btn.dataset.pwaTab);
+      });
+    });
+
+    // Close on backdrop click
+    const pwaDlg = document.getElementById('dialog-download-app');
+    if (pwaDlg) {
+      pwaDlg.addEventListener('click', (e) => {
+        if (e.target === pwaDlg) closePwaInstallDialog();
+      });
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      state.deferredInstallPrompt = e;
+      updatePwaInstallUi();
+    });
+
+    window.addEventListener('appinstalled', () => {
+      state.deferredInstallPrompt = null;
+      showToast('✓ Веб-версия Fitness Pro успешно установлена!', 'success');
+      updatePwaInstallUi();
+    });
+
+    updatePwaInstallUi();
+
 
     // Trigger PWA Installation Prompt
     async function triggerPwaInstall() {

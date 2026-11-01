@@ -2175,3 +2175,221 @@ input:checked + .slider:before {
   text-transform: uppercase;
 }
 
+
+
+/* ==========================================================================
+   Whimsy & Motion: Swiss Clean UI, Spring Physics & PWA Controls
+   ========================================================================== */
+
+/* 1. Плавные экранные переходы */
+.screen-container {
+  will-change: transform, opacity;
+  animation: screenFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.screen-container.slide-from-right {
+  animation: slideFromRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.screen-container.slide-from-left {
+  animation: slideFromLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes slideFromRight {
+  0% { opacity: 0; transform: translate3d(14px, 0, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes slideFromLeft {
+  0% { opacity: 0; transform: translate3d(-14px, 0, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes screenFadeIn {
+  0% { opacity: 0; transform: scale(0.985); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* 2. Модальные окна: плавное открытие и закрытие */
+.app-dialog[open] {
+  animation: modalEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.app-dialog[open]::backdrop {
+  animation: backdropEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes backdropEnter {
+  from { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+  to { opacity: 1; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+}
+
+/* 3. Тактильный отклик кнопок */
+.app-btn, .btn-action-pill, .chip-pill, .app-chip, .btn-icon-sm {
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  user-select: none;
+}
+.app-btn:hover, .btn-action-pill:hover, .chip-pill:hover, .btn-icon-sm:hover {
+  transform: translateY(-1px);
+}
+.app-btn:active, .btn-action-pill:active, .chip-pill:active, .btn-icon-sm:active {
+  transform: scale(0.97);
+}
+
+/* 4. Аккордеон сетов */
+.exercise-group-card .sets-table {
+  transition: max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease, transform 0.22s ease;
+  will-change: max-height, opacity;
+}
+.exercise-group-card.collapsed > .sets-table {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  margin-top: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+/* 5. Скелетоны / Шиммеры */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-radius: var(--radius-xs);
+  display: block;
+}
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 6. PWA Controls & Dialog */
+.pwa-install-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--accent-lime);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.pwa-install-header-btn:hover {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: var(--accent-lime);
+}
+@media (max-width: 380px) {
+  .pwa-install-header-btn .pwa-btn-label {
+    display: none;
+  }
+}
+
+.pwa-dialog-badge {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--accent-lime);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.pwa-tabs-row {
+  display: flex;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+}
+.pwa-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 4px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.pwa-tab-btn.active {
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.pwa-steps-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+}
+.pwa-steps-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--accent-lime);
+  color: var(--accent-lime);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.step-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.step-text b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.pwa-features-pill {
+  margin-top: 14px;
+  padding: 8px 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #34d399;
+}
+.pwa-check-icon {
+  font-weight: 900;
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

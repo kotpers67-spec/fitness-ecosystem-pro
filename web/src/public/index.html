@@ -31,6 +31,14 @@
         </div>
       </div>
       <div class="topbar-right" id="topbar-actions">
+        <button type="button" id="btn-pwa-install-header" class="icon-btn pwa-install-header-btn" title="Установить веб-версию">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span class="pwa-btn-label">Установить</span>
+        </button>
         <button type="button" id="btn-sync-header" class="icon-btn" title="Синхронизировать с облаком" style="display: none; align-items: center; justify-content: center; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 800; gap: 4px; border: 1px solid rgba(59, 130, 246, 0.3); cursor: pointer;">
           <span class="sync-icon">🔄</span>
           <span>Синхронизация</span>
@@ -61,6 +69,16 @@
           <h1 class="auth-title">FITNESS ECOSYSTEM</h1>
           <p class="auth-subtitle">Экосистема для атлетов и персональных тренеров</p>
         </div>
+
+        <!-- PWA Web App Install Shortcut Button -->
+        <button type="button" id="btn-pwa-install-auth" class="btn-open-download-modal app-btn btn-secondary" style="margin-bottom: 12px; width: 100%; border: 1px solid var(--border-lime); display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>⚡ Установить веб-версию (PWA)</span>
+        </button>
 
         <div class="auth-card">
           <!-- Fast Telegram Authentication -->
@@ -527,6 +545,20 @@
         </div>
 
 
+        <!-- PWA Web App Card -->
+        <div class="app-card" id="card-pwa-install-athlete">
+          <div class="card-title">ВЕБ-ПРИЛОЖЕНИЕ И PWA</div>
+          <p class="card-desc">Установите веб-версию на экран «Домой» смартфона или ПК для быстрого запуска и работы офлайн</p>
+          <button type="button" id="btn-pwa-install-athlete" class="btn-open-download-modal app-btn btn-secondary" style="margin-top: 8px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>📱 Установить веб-версию</span>
+          </button>
+        </div>
+
         <!-- Owners Contact Card -->
         <div class="app-card">
           <div class="card-title">СВЯЗЬ С ВЛАДЕЛЬЦАМИ</div>
@@ -893,7 +925,21 @@
           </div>
         </div>
 
-        <!-- Owners Contact Card -->
+                <!-- PWA Web App Card -->
+        <div class="app-card" id="card-pwa-install-trainer" style="margin-top: 12px;">
+          <div class="card-title">ВЕБ-ПРИЛОЖЕНИЕ И PWA</div>
+          <p class="card-desc">Установите веб-версию на экран «Домой» или ПК для мгновенного доступа к подопечным</p>
+          <button type="button" id="btn-pwa-install-trainer" class="btn-open-download-modal app-btn btn-secondary" style="margin-top: 8px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>📱 Установить веб-версию</span>
+          </button>
+        </div>
+
+<!-- Owners Contact Card -->
         <div class="app-card">
           <div class="card-title">СВЯЗЬ С ВЛАДЕЛЬЦАМИ</div>
           <p class="card-desc">Вопросы по экосистеме или предложения по развитию:</p>
@@ -1281,6 +1327,104 @@
               <button type="submit" class="app-btn btn-danger" id="btn-submit-unpair-confirm">Разорвать связь</button>
             </div>
           </form>
+        </div>
+      </dialog>
+    
+      <!-- DIALOG: Пошаговая инструкция установки PWA (Strictly Zero APK!) -->
+      <dialog id="dialog-download-app" class="app-dialog pwa-install-dialog">
+        <div class="dialog-content">
+          <div class="dialog-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pwa-dialog-badge">PWA</span>
+              <h3 class="dialog-title" style="margin: 0; font-size: 16px;">Установка веб-версии</h3>
+            </div>
+            <button type="button" class="dialog-close-btn" id="btn-close-download-dialog" aria-label="Закрыть">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <p class="card-desc" style="margin: 6px 0 14px; line-height: 1.45;">
+            Fitness Pro работает прямо из браузера как нативное приложение — без загрузки файлов, с мгновенным обновлением и поддержкой офлайн-режима.
+          </p>
+
+          <div id="pwa-native-box" style="display: none; background: rgba(34, 197, 94, 0.08); border: 1px solid var(--border-lime); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 700; color: var(--accent-lime); margin-bottom: 4px;">Доступна быстрая установка</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;">Браузер готов добавить Fitness Pro на главный экран в один клик.</div>
+            <button type="button" id="btn-trigger-pwa-install-dialog" class="app-btn btn-primary" style="width: 100%;">
+              Установить на это устройство
+            </button>
+          </div>
+
+          <div class="pwa-tabs-row" id="pwa-dialog-tabs">
+            <button type="button" class="pwa-tab-btn active" data-pwa-tab="ios">iOS Safari</button>
+            <button type="button" class="pwa-tab-btn" data-pwa-tab="android">Android Chrome</button>
+            <button type="button" class="pwa-tab-btn" data-pwa-tab="desktop">Компьютер</button>
+          </div>
+
+          <div class="pwa-instruction-tab active" id="pwa-tab-ios">
+            <ol class="pwa-steps-list">
+              <li>
+                <div class="step-num tabular-nums">1</div>
+                <div class="step-text">В нижней панели Safari нажмите значок <b>«Поделиться»</b> (квадрат со стрелкой вверх ⎋).</div>
+              </li>
+              <li>
+                <div class="step-num tabular-nums">2</div>
+                <div class="step-text">В открывшемся меню выберите <b>«На экран „Домой“»</b> (значок с плюсом).</div>
+              </li>
+              <li>
+                <div class="step-num tabular-nums">3</div>
+                <div class="step-text">В правом верхнем углу нажмите <b>«Добавить»</b>. Иконка появится на рабочем столе.</div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="pwa-instruction-tab" id="pwa-tab-android" style="display: none;">
+            <ol class="pwa-steps-list">
+              <li>
+                <div class="step-num tabular-nums">1</div>
+                <div class="step-text">В правом верхнем углу браузера Chrome нажмите <b>меню (три точки ⋮)</b>.</div>
+              </li>
+              <li>
+                <div class="step-num tabular-nums">2</div>
+                <div class="step-text">Выберите пункт <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</div>
+              </li>
+              <li>
+                <div class="step-num tabular-nums">3</div>
+                <div class="step-text">Подтвердите действие кнопкой <b>«Установить»</b> во всплывающем окне.</div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="pwa-instruction-tab" id="pwa-tab-desktop" style="display: none;">
+            <ol class="pwa-steps-list">
+              <li>
+                <div class="step-num tabular-nums">1</div>
+                <div class="step-text">В адресной строке Chrome/Edge нажмите иконку <b>«Установить»</b> (монитор со стрелкой).</div>
+              </li>
+              <li>
+                <div class="step-num tabular-nums">2</div>
+                <div class="step-text">Или откройте меню браузера (⋮) → <b>«Установить приложение Fitness Pro»</b>.</div>
+              </li>
+              <li>
+                <div class="step-num tabular-nums">3</div>
+                <div class="step-text">Приложение откроется в отдельном окне и появится в меню «Пуск» или на панели задач.</div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="pwa-features-pill" style="margin-top: 14px;">
+            <span class="pwa-check-icon">✓</span>
+            <span>Полноэкранный режим, офлайн-доступ и безопасность данных</span>
+          </div>
+
+          <div class="dialog-actions" style="margin-top: 14px;">
+            <button type="button" class="app-btn btn-secondary" id="btn-close-download-dialog-footer" style="width: 100%;">
+              Понятно
+            </button>
+          </div>
         </div>
       </dialog>
     </main>
