@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: render-auth-bot
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: BOT_TOKEN
+        sync: false
