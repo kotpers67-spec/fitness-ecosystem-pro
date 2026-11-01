@@ -21,3 +21,7 @@ node_modules/
 .agents/
 **/tests/
 *_dump.xml
+!web/tests/
+!web/tests/**
+!web/.env.example
+!web/render.yaml

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Fitness Ecosystem Pro - Hardened Web Server
  * REST API & Mobile Parity Single-Page Application Host
  * Built with native Node.js 24 + node:sqlite.
@@ -2183,6 +2183,9 @@ const server = http.createServer(async (req, res) => {
 
       // EXERCISE HISTORY (Last session stats summary)
       if ((pathname === '/api/trainer/exercise-history' || pathname === '/api/workout/exercise-history') && req.method === 'GET') {
+        if (pathname === '/api/trainer/exercise-history' && user.role !== 'trainer') {
+          return sendError(res, 403, 'Доступ запрещен: требуется роль тренера');
+        }
         const targetAthleteId = user.role === 'athlete'
           ? user.id
           : Number(reqUrl.searchParams.get('athleteId'));

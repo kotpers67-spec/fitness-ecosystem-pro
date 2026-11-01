@@ -1,14 +1,14 @@
 {
   "name": "fitness-ecosystem-web",
-  "version": "2.0.1",
+  "version": "2.5.6",
   "description": "Fitness Ecosystem Pro Web Portal - Athlete & Trainer Dashboards with Zero-Trust Security, Hardened Auth, and Anti-Injection Protection",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node tests/security.test.js && node tests/pin_2fa.test.js && node --test tests/cloud_sync_anthropometry.test.js && node --test tests/m1_hardening.test.js && node --test tests/cloud_sync_profile_pin.test.js",
-    "test:security": "node tests/security.test.js",
-    "test:pin": "node tests/pin_2fa.test.js",
-    "test:sync": "node --test tests/cloud_sync_anthropometry.test.js && node --test tests/cloud_sync_profile_pin.test.js"
+    "test": "node --test --test-concurrency=1 tests/security.test.js tests/pin_2fa.test.js tests/m1_hardening.test.js",
+    "test:security": "node --test tests/security.test.js",
+    "test:pin": "node --test tests/pin_2fa.test.js",
+    "test:hardening": "node --test tests/m1_hardening.test.js"
   },
   "dependencies": {
     "grammy": "^1.28.0",

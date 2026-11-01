@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: fitness-ecosystem-pro
+    env: node
+    rootDir: web
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: BOT_TOKEN
+        sync: false
