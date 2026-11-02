@@ -2382,6 +2382,37 @@
       } catch {}
     };
 
+    // Quick Demo Login buttons for local testing
+    const btnQuickAthlete = document.getElementById('btn-quick-login-athlete');
+    if (btnQuickAthlete) {
+      btnQuickAthlete.onclick = async () => {
+        el.loginUsername.value = 'demo_athlete';
+        el.loginPassword.value = 'athlete123';
+        const athleteRadio = document.querySelector('input[name="login-role"][value="athlete"]');
+        if (athleteRadio) {
+          athleteRadio.checked = true;
+          document.querySelectorAll('.role-selector-cards .role-card').forEach(c => c.classList.remove('selected'));
+          athleteRadio.closest('.role-card')?.classList.add('selected');
+        }
+        el.formLogin.requestSubmit();
+      };
+    }
+
+    const btnQuickTrainer = document.getElementById('btn-quick-login-trainer');
+    if (btnQuickTrainer) {
+      btnQuickTrainer.onclick = async () => {
+        el.loginUsername.value = 'demo_trainer';
+        el.loginPassword.value = 'trainer123';
+        const trainerRadio = document.querySelector('input[name="login-role"][value="trainer"]');
+        if (trainerRadio) {
+          trainerRadio.checked = true;
+          document.querySelectorAll('.role-selector-cards .role-card').forEach(c => c.classList.remove('selected'));
+          trainerRadio.closest('.role-card')?.classList.add('selected');
+        }
+        el.formLogin.requestSubmit();
+      };
+    };
+
     // 2FA Verification Modal Handlers
     function open2FALoginModal(durationSeconds = 300) {
       if (el.login2faInputCode) el.login2faInputCode.value = '';

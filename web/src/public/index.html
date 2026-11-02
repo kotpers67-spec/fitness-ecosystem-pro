@@ -154,6 +154,22 @@
               </div>
             </div>
             <button type="submit" class="app-btn btn-primary" id="btn-submit-login">Войти в аккаунт</button>
+
+            <!-- Быстрый демо-вход для локального тестирования -->
+            <div class="quick-demo-block" style="margin-top: 14px; padding: 12px; background: var(--bg-surface-elevated); border: 1px dashed var(--border-subtle); border-radius: var(--radius-sm);">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted);">Быстрый демо-вход</span>
+                <span class="role-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase;">Локальный тест</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button type="button" id="btn-quick-login-athlete" class="app-btn btn-secondary" style="height: 38px; font-size: 12px; font-weight: 700;">
+                  Войти как Атлет
+                </button>
+                <button type="button" id="btn-quick-login-trainer" class="app-btn btn-secondary" style="height: 38px; font-size: 12px; font-weight: 700;">
+                  Войти как Тренер
+                </button>
+              </div>
+            </div>
           </form>
 
           <!-- Form: Register -->
