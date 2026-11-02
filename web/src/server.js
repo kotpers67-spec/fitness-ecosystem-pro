@@ -24,7 +24,8 @@ const {
   SECURITY_HEADERS
 } = require('./security');
 
-const PORT = process.env.PORT || 3000;
+const cliPortArg = process.argv.slice(2).find(arg => /^\d+$/.test(arg) || arg.startsWith('--port='))?.replace('--port=', '');
+const PORT = parseInt(process.env.PORT || cliPortArg || '3001', 10);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const db = new AppDatabase();
 const authLimiter = new RateLimiter(60000, 15); // Max 15 auth attempts/min per IP
