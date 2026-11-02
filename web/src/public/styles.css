@@ -5,7 +5,8 @@
    ========================================================================== */
 
 :root {
-  --bg-primary: #0d0d0d;
+  --bg-primary: #09090b;
+  --bg-app: #0d0d0d;
   --bg-black: #0d0d0d;
   --bg-surface: #171717;
   --bg-surface-elevated: #222222;
@@ -1542,11 +1543,6 @@ input:checked + .slider:before {
   justify-content: space-between;
   gap: 12px;
 }
-.app-install-banner.native-banner {
-  background: linear-gradient(135deg, rgba(30, 30, 30, 0.9) 0%, rgba(18, 18, 18, 0.95) 100%);
-  border-color: var(--border-strong);
-  margin-top: 8px;
-}
 .install-banner-left {
   display: flex;
   align-items: center;
@@ -1722,54 +1718,6 @@ input:checked + .slider:before {
 .line-weight { background-color: var(--accent-lime); }
 .line-sets { background-color: #38bdf8; }
 .line-reps { background-color: #f43f5e; }
-
-/* ==========================================================================
-   Download APK Modal Cards
-   ========================================================================== */
-.download-cards-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-.download-apk-card {
-  background: #171717;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-}
-.apk-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.apk-badge {
-  font-size: 10px;
-  font-weight: 900;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-lime-dim);
-  color: var(--accent-lime);
-  letter-spacing: 0.05em;
-}
-.apk-version {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-.apk-title {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-.apk-desc {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  line-height: 1.35;
-  margin-bottom: 12px;
-}
 
 .sync-icon {
   display: inline-block;

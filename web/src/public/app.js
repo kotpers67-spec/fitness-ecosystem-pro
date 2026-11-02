@@ -320,7 +320,7 @@
     btnTrainerToggleMetricSets: document.getElementById('btn-trainer-toggle-metric-sets'),
     btnTrainerToggleMetricReps: document.getElementById('btn-trainer-toggle-metric-reps'),
 
-    // PWA & Mobile App Download
+    // PWA & Mobile App
     pwaInstallBanner: document.getElementById('pwa-install-banner'),
     btnPwaInstall: document.getElementById('btn-pwa-install'),
     btnPwaDismiss: document.getElementById('btn-pwa-dismiss'),

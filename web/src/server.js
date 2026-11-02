@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Fitness Ecosystem Pro - Hardened Web Server
  * REST API & Mobile Parity Single-Page Application Host
  * Built with native Node.js 24 + node:sqlite.
@@ -92,10 +92,6 @@ let tgBotInstance = initTelegramBot({
   cloudSyncService
 });
 
-const RELEASES_DIR = fs.existsSync(path.resolve(__dirname, '../releases'))
-  ? path.resolve(__dirname, '../releases')
-  : path.resolve(__dirname, '../../releases');
-
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -103,7 +99,6 @@ const MIME_TYPES = {
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
-  '.apk': 'application/vnd.android.package-archive',
   '.webmanifest': 'application/manifest+json'
 };
 
@@ -1425,21 +1420,17 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // VERSION CHECK: GET /api/version — mobile apps auto-update (Public)
+      // VERSION CHECK: GET /api/version — PWA version info (Public)
       if (pathname === '/api/version' && req.method === 'GET') {
-        const LATEST_VERSION = '2.0.1';
-        const BASE_URL = process.env.RENDER_EXTERNAL_URL || 'https://fitness-ecosystem-pro.onrender.com';
+        const LATEST_VERSION = '2.6.0';
         return sendJson(res, 200, {
           latest: LATEST_VERSION,
-          athlete: {
+          pwa: {
+            enabled: true,
             version: LATEST_VERSION,
-            url: `${BASE_URL}/releases/athlete-pro-v${LATEST_VERSION}.apk`,
-            changelog: 'Версия 2.0.1: Pull-to-Refresh обновление как в браузере, таймер отдыха, редактирование подходов на сайте, синхронизация профиля, Telegram авторизация, 2FA защита'
-          },
-          trainer: {
-            version: LATEST_VERSION,
-            url: `${BASE_URL}/releases/trainer-pro-v${LATEST_VERSION}.apk`,
-            changelog: 'Версия 2.0.1: Pull-to-Refresh обновление как в браузере, мгновенная синхронизация, Telegram авторизация, 2FA защита, управление подходами'
+            type: 'standalone-web',
+            manifest: '/manifest.json',
+            changelog: 'Версия 2.6.0: PWA веб-приложение, мгновенная синхронизация, офлайн-режим, Telegram 2FA авторизация'
           }
         });
       }
@@ -2679,32 +2670,6 @@ const server = http.createServer(async (req, res) => {
     if (safePathname.endsWith('.sqlite') || safePathname.endsWith('.db')) {
       res.writeHead(403);
       return res.end('Access Denied');
-    }
-
-    // Serve official Android APK downloads from releases directory (with GitHub fallback)
-    if (safePathname.startsWith('/releases/') || safePathname.startsWith('releases/')) {
-      const fileName = path.basename(safePathname);
-      if (fileName.endsWith('.apk')) {
-        const apkPath = path.resolve(RELEASES_DIR, fileName);
-        if (apkPath.startsWith(RELEASES_DIR) && fs.existsSync(apkPath) && fs.statSync(apkPath).isFile()) {
-          res.writeHead(200, {
-            'Content-Type': 'application/vnd.android.package-archive',
-            'Content-Disposition': `attachment; filename="${fileName}"`,
-            'Content-Length': fs.statSync(apkPath).size
-          });
-          return fs.createReadStream(apkPath).pipe(res);
-        } else {
-          // Fallback: Redirect to GitHub Releases
-          const match = fileName.match(/v\d+\.\d+\.\d+/);
-          const tag = match ? match[0] : 'v2.0.0';
-          res.writeHead(302, {
-            'Location': `https://github.com/kotpers67-spec/fitness-ecosystem-pro/releases/download/${tag}/${fileName}`
-          });
-          return res.end();
-        }
-      }
-      res.writeHead(404);
-      return res.end('Release APK Not Found');
     }
 
     let relPath = safePathname.replace(/^\/+/, '');
