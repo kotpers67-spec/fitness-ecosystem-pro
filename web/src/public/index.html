@@ -13,6 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="stylesheet" href="/styles.css?v=2.5.6">
+  <script>(function(){try{var t=localStorage.getItem("fit_theme")||(window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(_){}})();</script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -32,6 +33,17 @@
         </div>
       </div>
       <div class="topbar-right" id="topbar-actions">
+        <button type="button" id="btn-theme-toggle" class="icon-btn theme-toggle-btn" title="Переключить тему (Светлая / Темная)" aria-label="Переключить тему">
+          <svg class="theme-icon-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+          </svg>
+          <svg class="theme-icon-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
+            <path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+          </svg>
+        </button>
+
         <button type="button" id="btn-pwa-install-header" class="icon-btn pwa-install-header-btn" title="Установить веб-версию">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -41,7 +53,7 @@
           <span class="pwa-btn-label">Установить</span>
         </button>
         <button type="button" id="btn-sync-header" class="icon-btn" title="Синхронизировать с облаком" style="display: none; align-items: center; justify-content: center; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 800; gap: 4px; border: 1px solid rgba(59, 130, 246, 0.3); cursor: pointer;">
-          <span class="sync-icon">🔄</span>
+          <span class="sync-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></span>
           <span>Синхронизация</span>
         </button>
         <span class="role-badge" id="topbar-role-badge"></span>
@@ -58,7 +70,7 @@
       <!-- Native Mobile & Telegram WebApp Pull-to-Refresh Indicator -->
       <div id="ptr-indicator" class="ptr-indicator">
         <div class="ptr-spinner-box">
-          <span class="ptr-icon">🔄</span>
+          <span class="ptr-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></span>
           <span class="ptr-label">Потяните для синхронизации</span>
         </div>
       </div>
@@ -205,10 +217,10 @@
             <span class="auth-owners-title">СВЯЗЬ С ВЛАДЕЛЬЦАМИ</span>
             <div class="owners-links-row">
               <a href="https://t.me/SantiLA213" target="_blank" rel="noopener noreferrer" class="owner-chip">
-                <span>💬 @SantiLA213</span>
+                <span>@SantiLA213</span>
               </a>
               <a href="https://t.me/Spirit5449" target="_blank" rel="noopener noreferrer" class="owner-chip">
-                <span>💬 @Spirit5449</span>
+                <span>@Spirit5449</span>
               </a>
             </div>
           </div>
@@ -231,7 +243,7 @@
 
         <!-- Coach Assignment Notice -->
         <div class="app-card notice-card" id="athlete-assignment-notice">
-          <div class="notice-icon">📋</div>
+          <div class="notice-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div>
           <div>
             <div class="notice-title" id="athlete-assignment-title">ТРЕНИРОВОЧНЫЙ ПЛАН</div>
             <div class="notice-desc" id="athlete-assignment-desc">Упражнения назначаются тренером. Вы отмечаете выполнение подходов галочкой.</div>
@@ -285,7 +297,7 @@
         <div class="app-card" id="card-athlete-bodyweight">
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 18px;">⚖️</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></svg>
               <div class="card-title" style="margin: 0;">ВЕС ТЕЛА</div>
             </div>
             <button type="button" class="app-btn btn-secondary" id="btn-open-add-weight" style="font-size: 11px; padding: 4px 10px;">
@@ -316,7 +328,7 @@
         <!-- 2. Exercise Strength Curve Card + 3 Scales (Вес, Подходы, Повторения) -->
         <div class="app-card" id="card-athlete-exercise-progress">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <span style="font-size: 18px;">📈</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
             <div class="card-title" style="margin: 0;">ПРОГРЕСС В УПРАЖНЕНИИ</div>
           </div>
 
@@ -421,7 +433,7 @@
               <span class="profile-sub" id="profile-phone">+7 999 000-00-00</span>
               <div id="profile-restrictions-badge-row" style="margin-top: 6px; display: none;">
                 <span class="role-card-tag" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); font-size: 11px; padding: 3px 8px; border-radius: 6px; display: inline-block;">
-                  ⚠️ Травмы: <span id="profile-restrictions-display" style="font-weight: normal; color: var(--text-primary);"></span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ограничения: <span id="profile-restrictions-display" style="font-weight: normal; color: var(--text-primary);"></span>
                 </span>
               </div>
             </div>
@@ -430,7 +442,7 @@
           <!-- Edit Profile Form -->
           <div class="profile-edit-section">
             <label class="file-upload-btn" style="margin-bottom: 10px;">
-              <span>📷 Изменить фото профиля</span>
+              <span>Изменить фото</span>
               <input type="file" id="athlete-avatar-input" accept="image/*" style="display: none;">
             </label>
             <div class="form-group" style="margin-bottom: 8px;">
@@ -485,7 +497,7 @@
           </div>
           <div id="athlete-tg-action-box" style="margin-top: 6px;">
             <button type="button" id="btn-link-tg-athlete" class="app-btn btn-telegram">
-              ✈ Привязать Telegram
+              Привязать Telegram
             </button>
           </div>
           <div class="privacy-row" style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
@@ -523,7 +535,7 @@
             <span class="status-text" id="athlete-sync-status-text">Готово к синхронизации</span>
           </div>
           <button type="button" id="btn-sync-athlete" class="app-btn btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span class="sync-icon">🔄</span>
+            <span class="sync-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></span>
             <span>Синхронизировать сейчас</span>
           </button>
         </div>
@@ -539,7 +551,7 @@
             </div>
           </div>
           <a id="btn-call-coach" class="app-btn btn-secondary" style="margin-top: 12px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;">
-            📞 Позвонить тренеру
+            Позвонить тренеру
           </a>
           <button id="btn-unpair-coach" class="app-btn btn-danger" style="margin-top: 8px;">
             Отвязаться от тренера
@@ -567,10 +579,10 @@
           <p class="card-desc">Вопросы по экосистеме или предложения по развитию:</p>
           <div class="owners-links-row" style="margin-top: 4px;">
             <a href="https://t.me/SantiLA213" target="_blank" rel="noopener noreferrer" class="owner-chip">
-              <span>💬 @SantiLA213</span>
+              <span>@SantiLA213</span>
             </a>
             <a href="https://t.me/Spirit5449" target="_blank" rel="noopener noreferrer" class="owner-chip">
-              <span>💬 @Spirit5449</span>
+              <span>@Spirit5449</span>
             </a>
           </div>
         </div>
@@ -633,7 +645,7 @@
 
             <div class="pair-actions-row">
               <label class="file-upload-btn">
-                <span>📷 QR из фото</span>
+                <span>QR из фото</span>
                 <input type="file" id="input-qr-file" accept="image/*" style="display: none;">
               </label>
               <button type="submit" class="app-btn btn-primary" style="flex: 1;">Связать</button>
@@ -648,7 +660,7 @@
             <span class="role-card-tag" id="trainer-clients-count-badge" style="background: rgba(200, 255, 0, 0.12); color: var(--accent-lime); border: 1px solid rgba(200, 255, 0, 0.3); font-size: 11px; padding: 2px 8px; border-radius: 6px;">0</span>
           </div>
           <div style="margin: 4px 0 6px;">
-            <input type="text" id="trainer-clients-search" class="app-input" placeholder="🔍 Поиск подопечного по имени или телефону..." style="padding: 9px 12px; font-size: 13px;">
+            <input type="text" id="trainer-clients-search" class="app-input" placeholder="Поиск подопечного по имени или телефону..." style="padding: 9px 12px; font-size: 13px;">
           </div>
           <div class="clients-list" id="trainer-clients-list">
             <!-- Dynamic client items -->
@@ -738,7 +750,7 @@
         <div class="app-card" id="card-trainer-client-bodyweight">
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 18px;">⚖️</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></svg>
               <div class="card-title" style="margin: 0;">ВЕС ТЕЛА ПОДОПЕЧНОГО</div>
             </div>
             <button type="button" class="app-btn btn-secondary" id="btn-trainer-add-weight" style="font-size: 11px; padding: 4px 10px;">
@@ -768,7 +780,7 @@
         <!-- Trainer Client Exercise Progress with 3 Scales -->
         <div class="app-card" id="card-trainer-exercise-progress">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <span style="font-size: 18px;">📈</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
             <div class="card-title" style="margin: 0;">ПРОГРЕСС В УПРАЖНЕНИИ</div>
           </div>
 
@@ -846,7 +858,7 @@
           <!-- Edit Profile Form -->
           <div class="profile-edit-section">
             <label class="file-upload-btn" style="margin-bottom: 10px;">
-              <span>📷 Изменить фото профиля</span>
+              <span>Изменить фото</span>
               <input type="file" id="trainer-avatar-input" accept="image/*" style="display: none;">
             </label>
             <div class="form-group" style="margin-bottom: 8px;">
@@ -870,7 +882,7 @@
             <span class="status-text" id="trainer-sync-status-text">Синхронизация с облаком и смартфонами активна</span>
           </div>
           <button type="button" id="btn-sync-trainer" class="app-btn btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span class="sync-icon">🔄</span>
+            <span class="sync-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></span>
             <span>Синхронизировать сейчас</span>
           </button>
         </div>
@@ -879,17 +891,17 @@
         <div class="app-card" id="card-trainer-exercises-catalog">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 18px;">🏋️</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
               <div class="card-title" id="trainer-catalog-title" style="margin: 0;">КАТАЛОГ УПРАЖНЕНИЙ (0)</div>
             </div>
             <button type="button" class="btn-action-pill btn-action-primary" id="btn-open-add-exercise" style="padding: 8px 14px; font-size: 12px;">
-              <span>➕ Добавить упражнение</span>
+              <span>Добавить упражнение</span>
             </button>
           </div>
           <p class="card-desc">Управление упражнениями для назначения подопечным (добавление, редактирование, удаление).</p>
 
           <div style="margin: 10px 0 8px;">
-            <input type="text" id="trainer-catalog-search" class="app-input" placeholder="🔍 Поиск упражнения..." style="padding: 8px 12px; font-size: 13px;">
+            <input type="text" id="trainer-catalog-search" class="app-input" placeholder="Поиск упражнения..." style="padding: 8px 12px; font-size: 13px;">
           </div>
 
           <!-- Dynamic Muscle Group Filter Chips (Rendered dynamically when exercises exist) -->
@@ -912,7 +924,7 @@
           </div>
           <div id="trainer-tg-action-box" style="margin-top: 6px;">
             <button type="button" id="btn-link-tg-trainer" class="app-btn btn-telegram">
-              ✈ Привязать Telegram
+              Привязать Telegram
             </button>
           </div>
           <div class="privacy-row" style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
@@ -947,10 +959,10 @@
           <p class="card-desc">Вопросы по экосистеме или предложения по развитию:</p>
           <div class="owners-links-row" style="margin-top: 4px;">
             <a href="https://t.me/SantiLA213" target="_blank" rel="noopener noreferrer" class="owner-chip">
-              <span>💬 @SantiLA213</span>
+              <span>@SantiLA213</span>
             </a>
             <a href="https://t.me/Spirit5449" target="_blank" rel="noopener noreferrer" class="owner-chip">
-              <span>💬 @Spirit5449</span>
+              <span>@Spirit5449</span>
             </a>
           </div>
         </div>
@@ -1007,7 +1019,7 @@
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
                 </svg>
-                <span>⚡ Открыть Telegram и войти</span>
+                <span>Войти через Telegram</span>
               </a>
             </div>
 
@@ -1024,7 +1036,7 @@
             </div>
 
             <button type="button" id="btn-toggle-tg-manual-code" class="app-btn btn-secondary" style="font-size: 12px; width: 100%; border: 1px solid var(--border-color);">
-              🔑 Войти по 6-значному коду
+              Войти по 6-значному коду
             </button>
             <button type="button" class="app-btn btn-secondary btn-close-tg" style="width: 100%; margin-top: 8px;">Отмена</button>
           </div>
@@ -1141,7 +1153,7 @@
                 <input type="text" id="link-tg-input-username" class="app-input" placeholder="@username" required>
               </div>
               <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
-                📌 После отправки перейдите в бота, нажмите <b>START</b> и введите полученный 6-значный код.
+                После отправки перейдите в бота, нажмите <b>START</b> и введите полученный 6-значный код.
               </div>
               <div class="dialog-actions">
                 <button type="button" class="app-btn btn-secondary btn-close-link-tg">Отмена</button>
@@ -1154,7 +1166,7 @@
             <div class="tg-timer-badge" id="link-tg-timer-display">⏱ Действует: 05:00</div>
             <div style="margin: 12px 0;">
               <a id="btn-open-tg-bot-link" href="#" target="_blank" class="app-btn btn-telegram" style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                <span>🤖 Открыть бота и нажать START</span>
+                <span>Открыть бота и нажать Старт</span>
               </a>
             </div>
             <form id="form-link-tg-confirm">
@@ -1206,7 +1218,7 @@
         <div class="dialog-content">
           <div class="dialog-header">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 18px;">📊</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
               <h3 class="dialog-title" id="exercise-history-dialog-title">Статистика упражнения</h3>
             </div>
             <button type="button" class="dialog-close-btn" id="btn-close-exercise-history" aria-label="Закрыть">
@@ -1230,7 +1242,7 @@
         <div class="dialog-content">
           <div class="dialog-header">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 18px;">➕</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
               <h3 class="dialog-title" id="add-set-dialog-title">Добавить подход</h3>
             </div>
             <button type="button" class="dialog-close-btn" id="btn-close-add-set-dialog" aria-label="Закрыть">

@@ -88,6 +88,7 @@
   const el = {
     topbarAvatar: document.getElementById('topbar-avatar'),
     topbarTitle: document.getElementById('topbar-title'),
+    btnThemeToggle: document.getElementById('btn-theme-toggle'),
     topbarUserName: document.getElementById('topbar-user-name'),
     topbarRoleBadge: document.getElementById('topbar-role-badge'),
     btnSyncHeader: document.getElementById('btn-sync-header'),
@@ -2295,9 +2296,34 @@
     if (nameEl) setTimeout(() => nameEl.focus(), 50);
   }
 
+
+  // --- Dual-Theme System (Swiss Precision Dark / Light) ---
+  function applyTheme(theme) {
+    const isLight = theme === 'light';
+    document.documentElement.setAttribute('data-theme', isLight ? 'light' : 'dark');
+    if (isLight) {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+    localStorage.setItem('fit_theme', theme);
+  }
+
+  function initTheme() {
+    const saved = localStorage.getItem('fit_theme');
+    const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    applyTheme(saved || (prefersLight ? 'light' : 'dark'));
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  }
+
   // --- Event Listeners Setup ---
   function setupEvents() {
     // Topbar & Logout
+    if (el.btnThemeToggle) el.btnThemeToggle.onclick = toggleTheme;
     el.btnLogoutHeader.onclick = () => logout(true);
     el.btnLogoutAthlete.onclick = () => logout(true);
     el.btnLogoutTrainer.onclick = () => logout(true);
@@ -4328,6 +4354,7 @@
   }
 
   // --- Bootstrap ---
+  initTheme();
   setupEvents();
   initAuth();
 
