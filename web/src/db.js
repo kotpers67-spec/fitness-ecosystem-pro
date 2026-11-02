@@ -140,6 +140,8 @@ class AppDatabase {
     safeAddColumn('users', "two_factor_enabled INTEGER DEFAULT 0");
     safeAddColumn('users', "is_approved INTEGER DEFAULT 1");
     safeAddColumn('users', "restrictions TEXT DEFAULT ''");
+    safeAddColumn('users', "last_seen_at INTEGER DEFAULT 0");
+    safeAddColumn('users', "is_guest INTEGER DEFAULT 0");
 
     // Table to prevent immediate auto re-pairing (blocks re-pairing for 1 day)
     this.db.exec(`
@@ -201,13 +203,33 @@ class AppDatabase {
     return stmt.run(restrictions, athleteId);
   }
 
+  updateUserLastSeen(userId, timestamp = Date.now()) {
+    try {
+      this.db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(timestamp, userId);
+    } catch (_) {}
+  }
+
+  createGuestUser(username, fullName) {
+    const initialUsername = String(username || '').trim() || `anon_${Date.now()}`;
+    const initialFullName = String(fullName || '').trim() || 'Атлет';
+    const randomPassHash = 'guest_no_pwd';
+    const now = Date.now();
+    const stmt = this.db.prepare(`
+      INSERT INTO users (username, password_hash, role, full_name, is_approved, is_guest, last_seen_at)
+      VALUES (?, ?, 'athlete', ?, 1, 1, ?)
+    `);
+    const result = stmt.run(initialUsername, randomPassHash, initialFullName, now);
+    const userId = Number(result.lastInsertRowid);
+    return userId;
+  }
+
   findUserByUsername(username) {
     const clean = String(username || '').trim();
     if (!clean) return null;
     const cleanNoAt = clean.replace(/^@/, '');
     const cleanDigits = clean.replace(/\D/g, '');
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions, last_seen_at, is_guest
       FROM users 
       WHERE username = ? 
          OR LOWER(username) = LOWER(?) 
@@ -228,7 +250,7 @@ class AppDatabase {
     if (!digits || digits.length < 7) return null;
     const last10 = digits.slice(-10);
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions, last_seen_at, is_guest
       FROM users
       WHERE phone = ? OR phone LIKE ?
     `);
@@ -239,7 +261,7 @@ class AppDatabase {
     const clean = String(fullName || '').trim().toLowerCase();
     if (!clean) return null;
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions, last_seen_at, is_guest
       FROM users
       WHERE LOWER(full_name) = ?
     `);
@@ -248,7 +270,7 @@ class AppDatabase {
 
   findUserById(id) {
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions, last_seen_at, is_guest
       FROM users WHERE id = ?
     `);
     return stmt.get(id) || null;
@@ -256,7 +278,7 @@ class AppDatabase {
 
   findUserByClientUuid(clientUuid) {
     const stmt = this.db.prepare(`
-      SELECT id, username, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private
+      SELECT id, username, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, is_private, last_seen_at, is_guest
       FROM users WHERE client_uuid = ?
     `);
     return stmt.get(clientUuid) || null;
@@ -266,7 +288,7 @@ class AppDatabase {
     const cleanCode = String(code || '').trim();
     if (!cleanCode) return null;
     const stmt = this.db.prepare(`
-      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions
+      SELECT id, username, password_hash, role, full_name, phone, avatar_base64, client_uuid, coach_name, coach_phone, pairing_code, pairing_code_created_at, is_private, telegram_id, telegram_username, two_factor_enabled, created_at, is_approved, restrictions, last_seen_at, is_guest
       FROM users WHERE pairing_code = ? AND role = 'athlete'
     `);
     return stmt.get(cleanCode) || null;
@@ -851,6 +873,19 @@ class AppDatabase {
     stmt.run(token, userId, expiresAt);
   }
 
+  extendAuthToken(token, additionalTtlMs = 86400000 * 30) {
+    if (!token || typeof token !== 'string') return false;
+    try {
+      const row = this.db.prepare('SELECT expires_at FROM auth_tokens WHERE token = ?').get(token);
+      if (!row) return false;
+      const newExpiresAt = Math.max(row.expires_at, Date.now()) + additionalTtlMs;
+      this.db.prepare('UPDATE auth_tokens SET expires_at = ? WHERE token = ?').run(newExpiresAt, token);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   getUserByToken(token) {
     if (!token || typeof token !== 'string') return null;
     try {
@@ -860,7 +895,7 @@ class AppDatabase {
 
     const now = Date.now();
     const stmt = this.db.prepare(`
-      SELECT u.id, u.username, u.role, u.is_approved, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.coach_name, u.coach_phone, u.pairing_code, u.pairing_code_created_at, u.is_private, u.telegram_id, u.telegram_username, u.two_factor_enabled, u.restrictions
+      SELECT u.id, u.username, u.role, u.is_approved, u.full_name, u.phone, u.avatar_base64, u.client_uuid, u.coach_name, u.coach_phone, u.pairing_code, u.pairing_code_created_at, u.is_private, u.telegram_id, u.telegram_username, u.two_factor_enabled, u.restrictions, u.last_seen_at, u.is_guest
       FROM auth_tokens t
       JOIN users u ON t.user_id = u.id
       WHERE t.token = ? AND t.expires_at > ?

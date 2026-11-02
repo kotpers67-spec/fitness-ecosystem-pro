@@ -5,7 +5,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node -r ./tests/setup.js --test --test-concurrency=1 tests/e2e_frontend_suite.test.js tests/smoke_pwa_dom.test.js tests/security.test.js tests/pin_2fa.test.js tests/m1_hardening.test.js",
+    "test": "node -r ./tests/setup.js --test --test-concurrency=1 tests/auth_dispatcher.test.js tests/e2e_frontend_suite.test.js tests/smoke_pwa_dom.test.js tests/security.test.js tests/pin_2fa.test.js tests/m1_hardening.test.js",
+    "test:auth": "node -r ./tests/setup.js --test tests/auth_dispatcher.test.js",
     "test:e2e": "node -r ./tests/setup.js --test tests/e2e_frontend_suite.test.js",
     "test:smoke": "node --test tests/smoke_pwa_dom.test.js",
     "test:security": "node -r ./tests/setup.js --test tests/security.test.js",

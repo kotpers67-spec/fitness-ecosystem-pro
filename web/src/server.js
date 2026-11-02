@@ -23,6 +23,16 @@ const {
   RateLimiter,
   SECURITY_HEADERS
 } = require('./security');
+const {
+  dispatchAuth,
+  setAuthCookie,
+  clearAuthCookie,
+  ruToEn,
+  validateLoginPolicy,
+  validatePasswordPolicy,
+  parseSecret,
+  normalizeUserProfile
+} = require('./services/authDispatcher');
 
 const cliPortArg = process.argv.slice(2).find(arg => /^\d+$/.test(arg) || arg.startsWith('--port='))?.replace('--port=', '');
 const PORT = parseInt(process.env.PORT || cliPortArg || '3453', 10);
@@ -111,8 +121,7 @@ function sendJson(res, statusCode, data) {
   const existingCookie = res.getHeader('Set-Cookie');
   if (existingCookie) {
     headers['Set-Cookie'] = existingCookie;
-  }
-  if (data && data.token) {
+  } else if (data && data.token) {
     headers['Set-Cookie'] = `fit_token=${data.token}; Path=/; Max-Age=31536000; SameSite=Lax`;
   }
   res.writeHead(statusCode, headers);
@@ -234,6 +243,7 @@ function getAuthUser(req) {
   if (user.role === 'trainer' && user.is_approved === 0 && !isOwnerOrAdmin && isTrainerApprovalRequired()) {
     return null;
   }
+  db.updateUserLastSeen(user.id);
   return user;
 }
 
@@ -254,7 +264,12 @@ const server = http.createServer(async (req, res) => {
       // Rate Limit Auth Endpoints (OWASP Brute-Force & Credential Stuffing Defense)
       if (
         pathname === '/api/login' ||
+        pathname === '/api/auth/login' ||
+        pathname === '/api/auth' ||
+        pathname === '/api/auth/token' ||
+        pathname === '/api/auth/guest-login' ||
         pathname === '/api/register' ||
+        pathname === '/api/auth/register' ||
         pathname === '/api/auth/telegram' ||
         pathname === '/api/auth/telegram/request-otp' ||
         pathname === '/api/user/telegram/link-request'
@@ -274,7 +289,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       // REGISTER
-      if (pathname === '/api/register' && req.method === 'POST') {
+      if ((pathname === '/api/register' || pathname === '/api/auth/register') && req.method === 'POST') {
         const body = await parseJsonBody(req);
         const { username, password, role, fullName, phone, avatarBase64, telegram } = body;
         const cleanUsername = String(username || '').trim();
@@ -454,10 +469,87 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      // LOGIN
-      if (pathname === '/api/login' && req.method === 'POST') {
+      // TOKEN SILENT AUTHENTICATION (scheme: token)
+      if (pathname === '/api/auth/token' && req.method === 'POST') {
         const body = await parseJsonBody(req);
-        const { username, password, role: requestedRole } = body;
+        let token = body.token;
+        if (!token && req.headers['authorization']) {
+          token = req.headers['authorization'].replace(/^Bearer\s+/i, '').trim();
+        }
+        if (!token && req.headers['cookie']) {
+          const match = req.headers['cookie'].match(/(?:^|;\s*)fit_token=([^;]+)/);
+          if (match) token = match[1];
+        }
+        const authContext = {
+          db,
+          cloudSyncService,
+          tgBotInstance,
+          isTrainerApprovalRequired,
+          send2FAOtp,
+          generateSecureOtpWithRetry,
+          telegramOtpStore
+        };
+        const result = await dispatchAuth({ scheme: 'token', token, persist: body.persist }, authContext);
+        if (result.token) {
+          setAuthCookie(res, result.token, result.persist);
+        }
+        return sendJson(res, result.status, result.data);
+      }
+
+      // ANONYMOUS GUEST AUTHENTICATION (scheme: anonymous / anon)
+      if (pathname === '/api/auth/guest-login' && req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const authContext = {
+          db,
+          cloudSyncService,
+          tgBotInstance,
+          isTrainerApprovalRequired,
+          send2FAOtp,
+          generateSecureOtpWithRetry,
+          telegramOtpStore
+        };
+        const result = await dispatchAuth({ scheme: 'anonymous', desiredName: body.desiredName, persist: body.persist }, authContext);
+        if (result.token) {
+          setAuthCookie(res, result.token, result.persist);
+        }
+        return sendJson(res, result.status, result.data);
+      }
+
+      // LOGIN & MULTI-SCHEME AUTH DISPATCHER (basic / token / anonymous)
+      if ((pathname === '/api/login' || pathname === '/api/auth/login' || pathname === '/api/auth') && req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const scheme = String(body.scheme || 'basic').toLowerCase().trim();
+
+        // Delegate to anonymous or token if requested via POST /api/auth
+        if (scheme === 'anonymous' || scheme === 'anon' || scheme === 'token') {
+          const authContext = {
+            db,
+            cloudSyncService,
+            tgBotInstance,
+            isTrainerApprovalRequired,
+            send2FAOtp,
+            generateSecureOtpWithRetry,
+            telegramOtpStore
+          };
+          const result = await dispatchAuth(body, authContext);
+          if (result.token) {
+            setAuthCookie(res, result.token, result.persist);
+          }
+          return sendJson(res, result.status, result.data);
+        }
+
+        // Scheme: basic (credentials or secret username:password / Base64)
+        let username = body.username;
+        let password = body.password;
+        if (body.secret) {
+          const parsed = parseSecret(body.secret);
+          if (parsed) {
+            username = parsed.username;
+            password = parsed.password;
+          }
+        }
+        const requestedRole = body.role;
+        const persist = Boolean(body.persist);
         const cleanUsername = String(username || '').trim();
 
         if (!cleanUsername || !password) {
@@ -466,8 +558,20 @@ const server = http.createServer(async (req, res) => {
         if (hasSqlInjectionVector(cleanUsername)) {
           return sendError(res, 400, 'Некорректный логин');
         }
+        if (cleanUsername.length < 3 || cleanUsername.length > 30) {
+          return sendError(res, 400, 'Логин должен содержать от 3 до 30 символов');
+        }
+        if (typeof password === 'string' && password.length < 6) {
+          return sendError(res, 400, 'Пароль должен содержать минимум 6 символов');
+        }
 
-        const user = db.findUserByUsername(cleanUsername);
+        let user = db.findUserByUsername(cleanUsername);
+        if (!user) {
+          const converted = ruToEn(cleanUsername);
+          if (converted && converted !== cleanUsername) {
+            user = db.findUserByUsername(converted);
+          }
+        }
 
         if (!user) {
           return sendJson(res, 401, {
@@ -573,11 +677,15 @@ const server = http.createServer(async (req, res) => {
           } catch (_) {}
         }
 
+        const ttlMs = persist ? (30 * 86400 * 1000) : (7 * 86400 * 1000);
         const token = generateToken(user.id, user.role);
-        db.createAuthToken(token, user.id);
+        db.createAuthToken(token, user.id, ttlMs);
+        db.updateUserLastSeen(user.id);
+        setAuthCookie(res, token, persist);
 
         return sendJson(res, 200, {
           success: true,
+          scheme: 'basic',
           token,
           user: {
             id: user.id,
@@ -598,7 +706,11 @@ const server = http.createServer(async (req, res) => {
             telegram_username: user.telegram_username || '',
             telegramUsername: user.telegram_username || '',
             two_factor_enabled: Number(user.two_factor_enabled) || 0,
-            twoFactorEnabled: Boolean(user.two_factor_enabled)
+            twoFactorEnabled: Boolean(user.two_factor_enabled),
+            last_seen_at: Number(user.last_seen_at) || 0,
+            lastSeenAt: Number(user.last_seen_at) || 0,
+            is_guest: Number(user.is_guest) || 0,
+            isGuest: Boolean(user.is_guest)
           }
         });
       }
@@ -1443,7 +1555,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       // CURRENT USER PROFILE
-      if (pathname === '/api/me' && req.method === 'GET') {
+      if ((pathname === '/api/me' || pathname === '/api/auth/me') && req.method === 'GET') {
         let pairedCoach = null;
         if (user.role === 'athlete') {
           try {
@@ -1586,7 +1698,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       // LOGOUT
-      if (pathname === '/api/logout' && req.method === 'POST') {
+      if ((pathname === '/api/logout' || pathname === '/api/auth/logout') && req.method === 'POST') {
         let token = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
         if (!token && req.headers['cookie']) {
           const match = req.headers['cookie'].match(/(?:^|;\s*)fit_token=([^;]+)/);
