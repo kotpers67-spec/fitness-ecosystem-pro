@@ -11,6 +11,7 @@ const { URL } = require('node:url');
 const crypto = require('node:crypto');
 const QRCode = require('qrcode');
 const AppDatabase = require('./db');
+const AvatarModule = require('./public/avatars');
 const { cloudSyncService } = require('./cloudSync');
 const {
   escapeHtml,
@@ -301,8 +302,17 @@ const server = http.createServer(async (req, res) => {
         if (!cleanUsername || !password || !role) {
           return sendError(res, 400, 'Заполните все обязательные поля');
         }
-        if (avatarBase64 && avatarBase64.length > 30000) {
-          return sendError(res, 400, 'Аватар слишком большой (максимум 30 КБ)');
+        if (avatarBase64) {
+          if (avatarBase64.length > 30000) {
+            return sendError(res, 400, 'Аватар слишком большой (максимум 30 КБ)');
+          }
+          if (!AvatarModule.isValidAvatarPayload(avatarBase64)) {
+            return sendError(res, 400, 'Загрузка собственных фото отключена. Выберите аватар из каталога дефолтных аватаров.');
+          }
+          if (!avatarBase64.startsWith('data:image')) {
+            const av = AvatarModule.getAvatarById(avatarBase64);
+            avatarBase64 = av.dataUri;
+          }
         }
         if (hasSqlInjectionVector(cleanUsername) || hasSqlInjectionVector(cleanFullName)) {
           return sendError(res, 400, 'Обнаружены недопустимые символы или попытка инъекции.');
@@ -1641,9 +1651,18 @@ const server = http.createServer(async (req, res) => {
       // UPDATE PROFILE (Name, Phone, Photo/Avatar, Restrictions, ClientUUID)
       if ((pathname === '/api/user/profile' || pathname === '/api/profile') && (req.method === 'PUT' || req.method === 'POST')) {
         const body = await parseJsonBody(req);
-        const { fullName, phone, avatarBase64, restrictions, clientUuid } = body;
-        if (avatarBase64 && avatarBase64.length > 30000) {
-          return sendError(res, 400, 'Аватар слишком большой (максимум 30 КБ)');
+        let { fullName, phone, avatarBase64, restrictions, clientUuid } = body;
+        if (avatarBase64 !== undefined && avatarBase64 !== null && avatarBase64 !== '') {
+          if (avatarBase64.length > 30000) {
+            return sendError(res, 400, 'Аватар слишком большой (максимум 30 КБ)');
+          }
+          if (!AvatarModule.isValidAvatarPayload(avatarBase64)) {
+            return sendError(res, 400, 'Загрузка собственных фото отключена. Выберите аватар из каталога дефолтных аватаров.');
+          }
+          if (!avatarBase64.startsWith('data:image')) {
+            const av = AvatarModule.getAvatarById(avatarBase64);
+            avatarBase64 = av.dataUri;
+          }
         }
         const cleanName = String(fullName || user.full_name).trim();
         const cleanPhone = phone !== undefined ? String(phone).trim() : user.phone;

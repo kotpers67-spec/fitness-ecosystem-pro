@@ -64,6 +64,9 @@
     leaderboard: [],
     athleteAvatarBase64: null,
     trainerAvatarBase64: null,
+    selectedAvatarId: 'male-athlete',
+    avatarTargetRole: 'athlete',
+    avatarCategory: 'all',
     pinTimerInterval: null,
     pending2FAUserId: null,
     login2faTimerInterval: null,
@@ -232,6 +235,15 @@
     trainerEditPhone: document.getElementById('trainer-edit-phone'),
     btnSaveTrainerProfile: document.getElementById('btn-save-trainer-profile'),
     btnLogoutTrainer: document.getElementById('btn-logout-trainer'),
+
+    // Avatar Catalog Picker Elements
+    dialogAvatarPicker: document.getElementById('dialog-avatar-picker'),
+    avatarCatalogGrid: document.getElementById('avatar-catalog-grid'),
+    btnOpenAthleteAvatarPicker: document.getElementById('btn-open-athlete-avatar-picker'),
+    btnOpenTrainerAvatarPicker: document.getElementById('btn-open-trainer-avatar-picker'),
+    btnCloseAvatarDialog: document.getElementById('btn-close-avatar-dialog'),
+    btnCancelAvatar: document.getElementById('btn-cancel-avatar'),
+    btnConfirmAvatar: document.getElementById('btn-confirm-avatar'),
 
     // Trainer Exercises Catalog Elements (Mobile Parity CRUD)
     trainerCatalogTitle: document.getElementById('trainer-catalog-title'),
@@ -2320,6 +2332,118 @@
     applyTheme(current === 'dark' ? 'light' : 'dark');
   }
 
+
+  // --- Avatar Catalog Module (Default SVGs, No Custom File Uploads) ---
+  function getCatalog() {
+    return (window.AvatarModule && window.AvatarModule.AVATAR_CATALOG) || [];
+  }
+
+  function renderAvatarGrid(category = 'all') {
+    state.avatarCategory = category;
+    if (!el.avatarCatalogGrid) return;
+    const catalog = getCatalog();
+    const filtered = category === 'all' ? catalog : catalog.filter(a => a.category === category);
+    el.avatarCatalogGrid.innerHTML = filtered.map(item => {
+      const isSelected = item.id === state.selectedAvatarId;
+      return `
+        <button type="button" class="avatar-card ${isSelected ? 'selected' : ''}" data-avatar-id="${item.id}" title="${escapeHtml(item.title)}">
+          <div class="avatar-check-badge">✓</div>
+          <div class="avatar-image-wrapper">
+            ${item.svg}
+          </div>
+          <div class="avatar-label">${escapeHtml(item.title)}</div>
+        </button>
+      `;
+    }).join('');
+
+    // Attach click events
+    el.avatarCatalogGrid.querySelectorAll('.avatar-card').forEach(btn => {
+      btn.onclick = () => {
+        state.selectedAvatarId = btn.dataset.avatarId;
+        el.avatarCatalogGrid.querySelectorAll('.avatar-card').forEach(b => {
+          b.classList.toggle('selected', b.dataset.avatarId === state.selectedAvatarId);
+        });
+      };
+    });
+  }
+
+  function openAvatarPicker(role) {
+    state.avatarTargetRole = role;
+    const currentAvatar = state.user?.avatar_base64 || state.user?.avatarBase64 || '';
+    const catalog = getCatalog();
+    const found = catalog.find(a => a.dataUri === currentAvatar);
+    state.selectedAvatarId = found ? found.id : (role === 'trainer' ? 'male-coach' : 'male-athlete');
+
+    document.querySelectorAll('.avatar-picker-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.category === 'all');
+    });
+
+    renderAvatarGrid('all');
+    if (el.dialogAvatarPicker) {
+      if (typeof el.dialogAvatarPicker.showModal === 'function') {
+        el.dialogAvatarPicker.showModal();
+      } else {
+        el.dialogAvatarPicker.setAttribute('open', '');
+      }
+    }
+  }
+
+  function closeAvatarPicker() {
+    if (el.dialogAvatarPicker) {
+      if (typeof el.dialogAvatarPicker.close === 'function') {
+        el.dialogAvatarPicker.close();
+      } else {
+        el.dialogAvatarPicker.removeAttribute('open');
+      }
+    }
+  }
+
+  async function confirmAvatarSelection() {
+    const catalog = getCatalog();
+    const chosen = catalog.find(a => a.id === state.selectedAvatarId) || catalog[0];
+    if (!chosen) return;
+
+    const dataUri = chosen.dataUri;
+    const role = state.avatarTargetRole || (state.user?.role || 'athlete');
+
+    if (role === 'athlete') {
+      state.athleteAvatarBase64 = dataUri;
+      if (el.athleteAvatarPreview) {
+        el.athleteAvatarPreview.innerHTML = `<img src="${dataUri}" alt="Avatar">`;
+      }
+    } else {
+      state.trainerAvatarBase64 = dataUri;
+      if (el.trainerAvatarPreview) {
+        el.trainerAvatarPreview.innerHTML = `<img src="${dataUri}" alt="Avatar">`;
+      }
+    }
+
+    if (el.topbarAvatar) {
+      el.topbarAvatar.innerHTML = `<img src="${dataUri}" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;">`;
+    }
+
+    try {
+      const res = await api('/api/user/profile', {
+        method: 'POST',
+        body: JSON.stringify({
+          fullName: state.user?.full_name || state.user?.fullName || '',
+          phone: state.user?.phone || '',
+          restrictions: state.user?.restrictions || '',
+          clientUuid: state.user?.client_uuid || state.user?.clientUuid || '',
+          avatarBase64: dataUri
+        })
+      });
+      if (res && res.user) {
+        state.user = res.user;
+      }
+      showToast('Аватар успешно установлен!', 'success');
+    } catch (err) {
+      showToast('Ошибка при сохранении аватара', 'error');
+    }
+
+    closeAvatarPicker();
+  }
+
   // --- Event Listeners Setup ---
   function setupEvents() {
     // Topbar & Logout
@@ -3271,21 +3395,9 @@
       } catch {}
     };
 
-    // Athlete Profile Photo Selection
-    if (el.athleteAvatarInput) {
-      el.athleteAvatarInput.onchange = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-          state.athleteAvatarBase64 = await resizeImageFile(file, 128, 128);
-          if (el.athleteAvatarPreview) {
-            el.athleteAvatarPreview.innerHTML = `<img src="${state.athleteAvatarBase64}" alt="Avatar">`;
-          }
-          showToast('Фото выбрано. Нажмите «Сохранить изменения»', 'info');
-        } catch (_) {
-          showToast('Не удалось обработать фото', 'error');
-        }
-      };
+    // Athlete Avatar Catalog Picker (No file upload)
+    if (el.btnOpenAthleteAvatarPicker) {
+      el.btnOpenAthleteAvatarPicker.onclick = () => openAvatarPicker('athlete');
     }
 
     // Athlete Profile Save
@@ -3581,22 +3693,23 @@
       }
     });
 
-    // Trainer Profile Photo Selection
-    if (el.trainerAvatarInput) {
-      el.trainerAvatarInput.onchange = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-          state.trainerAvatarBase64 = await resizeImageFile(file, 128, 128);
-          if (el.trainerAvatarPreview) {
-            el.trainerAvatarPreview.innerHTML = `<img src="${state.trainerAvatarBase64}" alt="Avatar">`;
-          }
-          showToast('Фото выбрано. Нажмите «Сохранить изменения»', 'info');
-        } catch (_) {
-          showToast('Не удалось обработать фото', 'error');
-        }
-      };
+    // Trainer Avatar Catalog Picker (No file upload)
+    if (el.btnOpenTrainerAvatarPicker) {
+      el.btnOpenTrainerAvatarPicker.onclick = () => openAvatarPicker('trainer');
     }
+
+    // Avatar Catalog Dialog Events
+    document.querySelectorAll('.avatar-picker-tab').forEach(tab => {
+      tab.onclick = () => {
+        document.querySelectorAll('.avatar-picker-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        renderAvatarGrid(tab.dataset.category);
+      };
+    });
+
+    if (el.btnCloseAvatarDialog) el.btnCloseAvatarDialog.onclick = closeAvatarPicker;
+    if (el.btnCancelAvatar) el.btnCancelAvatar.onclick = closeAvatarPicker;
+    if (el.btnConfirmAvatar) el.btnConfirmAvatar.onclick = confirmAvatarSelection;
 
     // Trainer Profile Save
     if (el.btnSaveTrainerProfile) {

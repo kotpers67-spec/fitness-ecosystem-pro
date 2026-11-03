@@ -457,10 +457,15 @@
 
           <!-- Edit Profile Form -->
           <div class="profile-edit-section">
-            <label class="file-upload-btn" style="margin-bottom: 10px;">
-              <span>Изменить фото</span>
-              <input type="file" id="athlete-avatar-input" accept="image/*" style="display: none;">
-            </label>
+            <button type="button" class="app-btn btn-secondary" id="btn-open-athlete-avatar-picker" style="margin-bottom: 10px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+              <span>Выбрать аватар из каталога</span>
+            </button>
             <div class="form-group" style="margin-bottom: 8px;">
               <label class="field-label">ФИО атлета</label>
               <input type="text" id="athlete-edit-name" class="app-input" placeholder="Ваше имя">
@@ -873,10 +878,15 @@
 
           <!-- Edit Profile Form -->
           <div class="profile-edit-section">
-            <label class="file-upload-btn" style="margin-bottom: 10px;">
-              <span>Изменить фото</span>
-              <input type="file" id="trainer-avatar-input" accept="image/*" style="display: none;">
-            </label>
+            <button type="button" class="app-btn btn-secondary" id="btn-open-trainer-avatar-picker" style="margin-bottom: 10px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+              <span>Выбрать аватар из каталога</span>
+            </button>
             <div class="form-group" style="margin-bottom: 8px;">
               <label class="field-label">ФИО тренера</label>
               <input type="text" id="trainer-edit-name" class="app-input" placeholder="Ваше имя">
@@ -1457,6 +1467,35 @@
           </div>
         </div>
       </dialog>
+
+      <!-- Dialog: Default Avatar Catalog Picker (No custom file uploads) -->
+      <dialog id="dialog-avatar-picker" class="app-dialog avatar-picker-dialog">
+        <div class="dialog-content">
+          <div class="dialog-header">
+            <div>
+              <h3 class="dialog-title" id="avatarPickerTitle">КАТАЛОГ АВАТАРОВ</h3>
+              <p class="dialog-subtitle" style="margin-bottom: 0;">12 фирменных стилей персонажей и экипировки</p>
+            </div>
+            <button type="button" class="dialog-close-btn" id="btn-close-avatar-dialog" aria-label="Закрыть">✕</button>
+          </div>
+
+          <!-- Вкладки категорий -->
+          <div class="avatar-picker-tabs">
+            <button type="button" class="avatar-picker-tab active" data-category="all">Все (12)</button>
+            <button type="button" class="avatar-picker-tab" data-category="character">Персонажи (6)</button>
+            <button type="button" class="avatar-picker-tab" data-category="equipment">Экипировка (6)</button>
+          </div>
+
+          <!-- Сетка карточек аватаров -->
+          <div class="avatar-picker-grid" id="avatar-catalog-grid"></div>
+
+          <!-- Кнопки управления -->
+          <div class="dialog-actions" style="margin-top: 14px;">
+            <button type="button" class="app-btn btn-secondary" id="btn-cancel-avatar" style="flex: 1;">Отмена</button>
+            <button type="button" class="app-btn btn-primary" id="btn-confirm-avatar" style="flex: 2;">Сохранить аватар</button>
+          </div>
+        </div>
+      </dialog>
     </main>
 
     <!-- Floating Rest Timer Banner (Athlete Pro Parity) -->
@@ -1486,6 +1525,7 @@
 
   <script src="/qrcode.min.js"></script>
   <script src="/qr.js?v=2.5.6"></script>
+  <script src="/avatars.js?v=2.6.0"></script>
   <script src="/app.js?v=2.5.6"></script>
 </body>
 </html>
