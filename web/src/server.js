@@ -1137,18 +1137,20 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      // TELEGRAM OTP: 1. Request One-Time 6-digit Code (Valid 5 minutes)
+      // TELEGRAM OTP: 1. Request One-Time 6-digit Code (Phone or Username)
       if (pathname === '/api/auth/telegram/request-otp' && req.method === 'POST') {
         if (authLimiter.isRateLimited(clientIp)) {
           return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
         }
 
         const body = await parseJsonBody(req);
-        const { username } = body;
-        const cleanUsername = String(username || '').replace(/^@/, '').trim().toLowerCase();
+        const rawInput = String(body.phone || body.username || '').trim();
+        const digitsOnly = rawInput.replace(/\D/g, '');
+        const isPhone = digitsOnly.length >= 10;
+        const cleanUsername = isPhone ? digitsOnly : rawInput.replace(/^@/, '').toLowerCase();
 
         if (!cleanUsername || hasSqlInjectionVector(cleanUsername)) {
-          return sendError(res, 400, 'Укажите корректный Telegram логин');
+          return sendError(res, 400, 'Укажите корректный номер телефона или Telegram @username');
         }
 
         let user = db.findUserByTelegramUsername(cleanUsername);
@@ -1187,16 +1189,26 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        telegramOtpStore.set(cleanUsername, {
+        const otpRecord = {
           code,
           expiresAt,
+          userId: user?.id || null,
+          role: user?.role || 'athlete',
+          username: cleanUsername,
+          phone: isPhone ? digitsOnly : (user?.phone || ''),
           attempts: 0
-        });
+        };
+        telegramOtpStore.set(cleanUsername, otpRecord);
+        telegramOtpStore.set(`code_${code}`, otpRecord);
+        if (isPhone) {
+          telegramOtpStore.set(digitsOnly, otpRecord);
+          telegramOtpStore.set(`phone_${digitsOnly}`, otpRecord);
+        }
         if (user && user.telegram_id) {
-          telegramOtpStore.set(`id_${user.telegram_id}`, { code, expiresAt, attempts: 0 });
+          telegramOtpStore.set(`id_${user.telegram_id}`, otpRecord);
         }
         if (user && user.username) {
-          telegramOtpStore.set(user.username, { code, expiresAt, attempts: 0 });
+          telegramOtpStore.set(user.username, otpRecord);
         }
 
         let delivered = false;
