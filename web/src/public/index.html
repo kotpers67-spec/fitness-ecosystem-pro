@@ -1039,28 +1039,13 @@
             </form>
           </div>
 
-          <!-- ВКЛАДКА 3: Официальный виджет Telegram Login (как https://telegram.org/blog/login) -->
+          <!-- Официальный виджет Telegram Login -->
           <div id="panel-tg-widget" class="tg-tab-pane" style="display: none;">
-            <p class="dialog-subtitle" style="font-size: 13px; margin-bottom: 12px;">
-              Официальный Telegram Login Widget. Нажмите кнопку Telegram для входа:
+            <p class="dialog-subtitle" style="font-size: 13px; margin-bottom: 14px; text-align: center;">
+              Нажмите кнопку ниже для быстрой авторизации через Telegram:
             </p>
 
-            <div id="tg-widget-container" style="display: flex; justify-content: center; align-items: center; margin: 12px 0 14px; min-height: 48px;"></div>
-
-            <div class="tg-status-box" style="margin-bottom: 12px; padding: 10px 14px; background: rgba(0, 136, 204, 0.08); border: 1px dashed rgba(0, 136, 204, 0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <span class="tg-pulse-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #0088cc; box-shadow: 0 0 8px #0088cc;"></span>
-              <span id="tg-oneclick-status-text" style="font-size: 12px; color: var(--text-primary);">Ожидание авторизации Telegram...</span>
-            </div>
-
-            <!-- Подсказка по настройке домена в BotFather -->
-            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; background: var(--bg-tertiary); padding: 10px; border-radius: 8px; border: 1px solid var(--border-subtle);">
-              💡 <b>Если кнопка виджета не появилась:</b><br>
-              Telegram требует один раз привязать домен в <b>@BotFather</b>:<br>
-              1. Откройте <b>@BotFather</b> ➔ <code>/mybots</code> ➔ выберите бота.<br>
-              2. Нажмите <b>Bot Settings</b> ➔ <b>Domain</b>.<br>
-              3. Отправьте: <code>fitness-ecosystem-pro.onrender.com</code>.<br>
-              <i>Либо используйте вкладку <b>«Код из бота»</b> — она работает сразу и без настроек!</i>
-            </div>
+            <div id="tg-widget-container" style="display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; margin: 12px 0 16px; min-height: 48px;"></div>
           </div>
 
           <button type="button" class="app-btn btn-secondary btn-close-tg" style="width: 100%; margin-top: 14px;">Отмена</button>

@@ -149,7 +149,7 @@ class RateLimiter {
 
 // 6. Security Response Headers
 const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' https:;",
+  'Content-Security-Policy': "default-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' https:; frame-src 'self' https://oauth.telegram.org https://telegram.org;",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'X-XSS-Protection': '1; mode=block',
