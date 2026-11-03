@@ -999,73 +999,62 @@
       </section>
 
       <!-- Dialog: Telegram OTP Auth Modal (5-minute one-time code + profile completion) -->
-      <!-- DIALOG: Вход через Telegram (1-Click & OTP) -->
+      <!-- DIALOG: Вход через Telegram (Выбор: Код из бота или Официальный виджет) -->
       <dialog id="dialog-telegram-auth" class="app-dialog">
         <div class="dialog-content">
-          
-          <!-- STEP 0: 1-Click Instant Login (Default) -->
-          <div id="tg-step-oneclick">
-            <div class="dialog-title">ВХОД ЧЕРЕЗ TELEGRAM</div>
-            <p class="dialog-subtitle">Выберите вашу роль и войдите через бота <b>@fitnessecosystemBOT</b>:</p>
+          <div class="dialog-title" style="text-align: center; margin-bottom: 4px;">ВХОД ЧЕРЕЗ TELEGRAM</div>
+          <p class="dialog-subtitle" style="text-align: center; margin-bottom: 14px;">Выберите удобный способ авторизации:</p>
 
-            <!-- Role choice for Telegram Auth -->
-            <div class="form-group" style="margin-bottom: 14px;">
-              <div class="role-selector-cards">
-                <label class="role-card selected" data-tg-role="athlete" style="padding: 10px;">
-                  <input type="radio" name="tg-auth-role" value="athlete" checked>
-                  <div class="role-card-header" style="margin-bottom: 4px;">
-                    <div class="role-card-icon athlete-icon" style="width: 28px; height: 28px;">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M2 11v2M22 11v2M12 4v16"/>
-                      </svg>
-                    </div>
-                  </div>
-                  <div class="role-card-title" style="font-size: 13px;">АТЛЕТ</div>
-                  <div class="role-card-desc" style="font-size: 10px;">Дневник, замеры, рейтинг</div>
-                </label>
+          <!-- Две вкладки переключения режима -->
+          <div class="tg-auth-tabs" style="display: flex; gap: 6px; margin-bottom: 16px; background: var(--bg-tertiary); padding: 4px; border-radius: 10px; border: 1px solid var(--border-subtle);">
+            <button type="button" id="tab-tg-code" class="tg-auth-tab active" style="flex: 1; padding: 8px 12px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; transition: all 0.2s;">
+              🔢 Код из бота
+            </button>
+            <button type="button" id="tab-tg-widget" class="tg-auth-tab" style="flex: 1; padding: 8px 12px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">
+              🌐 Виджет Telegram
+            </button>
+          </div>
 
-                <label class="role-card" data-tg-role="trainer" style="padding: 10px;">
-                  <input type="radio" name="tg-auth-role" value="trainer">
-                  <div class="role-card-header" style="margin-bottom: 4px;">
-                    <div class="role-card-icon trainer-icon" style="width: 28px; height: 28px;">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm13 0l-3.5 3.5L17 13"/>
-                      </svg>
-                    </div>
-                    <span class="role-card-tag approval-tag" style="font-size: 9px; padding: 2px 4px;">72 ЧАСА</span>
-                  </div>
-                  <div class="role-card-title" style="font-size: 13px;">ТРЕНЕР</div>
-                  <div class="role-card-desc" style="font-size: 10px;">Подопечные, заявка 72ч</div>
-                </label>
+          <!-- ВКЛАДКА 1: Вход по 6-значному коду из бота (Один шаг, без логина) -->
+          <div id="panel-tg-code">
+            <p class="dialog-subtitle" style="font-size: 13px; margin-bottom: 12px;">
+              Откройте бота <b>@fitnessecosystemBOT</b>, нажмите <b>START</b> и введите полученный 6-значный код:
+            </p>
+
+            <a id="btn-open-bot-code" href="https://t.me/fitnessecosystemBOT?start=login" target="_blank" class="app-btn btn-telegram" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 700; padding: 12px; text-decoration: none; width: 100%; margin-bottom: 14px; box-shadow: 0 4px 16px rgba(0, 136, 204, 0.3);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+              </svg>
+              <span>Открыть бота @fitnessecosystemBOT</span>
+            </a>
+
+            <form id="form-tg-single-code">
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label class="field-label" style="text-align: center; display: block; font-size: 13px; font-weight: 600;">6-ЗНАЧНЫЙ КОД ИЗ БОТА</label>
+                <input type="text" id="tg-single-code-input" class="app-input pin-input-field tabular-nums" placeholder="123456" maxlength="6" inputmode="numeric" required autocomplete="one-time-code" style="font-size: 26px; text-align: center; letter-spacing: 8px; font-weight: 700; height: 52px;">
               </div>
-            </div>
+              <button type="submit" class="app-btn btn-primary" id="btn-submit-single-code" style="width: 100%; font-size: 15px; font-weight: 700; padding: 13px;">
+                Войти по коду
+              </button>
+            </form>
+          </div>
 
-            <div style="margin: 12px 0 12px;">
-              <a id="btn-tg-oneclick-open" href="#" target="_blank" class="app-btn btn-telegram" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 700; padding: 14px; text-decoration: none; width: 100%; box-shadow: 0 4px 18px rgba(0, 136, 204, 0.35);">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
-                </svg>
-                <span>Войти через Telegram</span>
-              </a>
-            </div>
+          <!-- ВКЛАДКА 2: Официальный виджет Telegram Login (как https://telegram.org/blog/login) -->
+          <div id="panel-tg-widget" style="display: none;">
+            <p class="dialog-subtitle" style="font-size: 13px; margin-bottom: 14px;">
+              Официальный Telegram Login Widget. Нажмите кнопку Telegram для входа:
+            </p>
 
-            <!-- Official Telegram Login Widget Container -->
-            <div id="tg-widget-container" style="display: flex; justify-content: center; align-items: center; margin: 10px 0 12px; min-height: 44px;"></div>
+            <div id="tg-widget-container" style="display: flex; justify-content: center; align-items: center; margin: 14px 0 16px; min-height: 48px;"></div>
 
             <div class="tg-status-box" style="margin-bottom: 14px; padding: 10px 14px; background: rgba(0, 136, 204, 0.08); border: 1px dashed rgba(0, 136, 204, 0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
               <span class="tg-pulse-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #0088cc; box-shadow: 0 0 8px #0088cc;"></span>
-              <span id="tg-oneclick-status-text" style="font-size: 13px; color: var(--text-primary);">Ожидание перехода в Telegram...</span>
+              <span id="tg-oneclick-status-text" style="font-size: 13px; color: var(--text-primary);">Ожидание авторизации Telegram...</span>
             </div>
-
-            <div class="auth-divider" style="margin: 12px 0 8px;">
-              <span>или</span>
-            </div>
-
-            <button type="button" id="btn-toggle-tg-manual-code" class="app-btn btn-secondary" style="font-size: 12px; width: 100%; border: 1px solid var(--border-subtle);">
-              Войти по 6-значному коду
-            </button>
-            <button type="button" class="app-btn btn-secondary btn-close-tg" style="width: 100%; margin-top: 8px;">Отмена</button>
           </div>
+
+          <button type="button" class="app-btn btn-secondary btn-close-tg" style="width: 100%; margin-top: 14px;">Отмена</button>
+        </div>
 
           <!-- STEP 1: Request Code Manually (Fallback) -->
           <div id="tg-step-request" style="display: none;">

@@ -2658,3 +2658,63 @@ body.light-theme .toast.success {
     height: 46px;
   }
 }
+
+
+/* --- Telegram Auth Modal Tabs & Code Input (Swiss Clean UI) --- */
+.tg-auth-tabs-row {
+  display: flex;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm, 10px);
+  padding: 4px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-subtle);
+  gap: 4px;
+}
+
+.tg-auth-tab {
+  flex: 1;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: var(--radius-xs, 8px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.tg-auth-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tg-auth-tab.active {
+  background: var(--bg-secondary);
+  color: var(--accent-primary, #10b981);
+  border-color: var(--border-subtle);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] .tg-auth-tab.active,
+body.light-theme .tg-auth-tab.active {
+  background: #ffffff;
+  color: #059669;
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tg-tab-pane {
+  animation: framerScreenTransition 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tg-single-code-input {
+  text-align: center;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  font-family: var(--font-mono);
+  height: 50px;
+}

@@ -1585,7 +1585,7 @@
 
     if (toggleEl) {
       toggleEl.checked = Boolean(state.user.two_factor_enabled);
-      toggleEl.disabled = !isTgLinked;
+      toggleEl.disabled = false;
     }
   }
 
@@ -2719,8 +2719,21 @@
       };
     }
 
-    // 2FA Toggle Switch Handlers
+    // 2FA Toggle Switch Handlers: Instant toggle if linked, prompt to link if not
     const handle2faToggle = async (toggleEl) => {
+      const isTgLinked = Boolean(
+        state.user.telegram_username ||
+        state.user.telegram_id ||
+        (state.user.username && state.user.username.startsWith('tg_'))
+      );
+
+      if (!isTgLinked) {
+        toggleEl.checked = false;
+        showToast('Для включения 2FA привяжите Telegram аккаунт', 'info');
+        openLinkTelegramModal();
+        return;
+      }
+
       const enabled = toggleEl.checked;
       try {
         const res = await api('/api/user/2fa', {
@@ -2728,15 +2741,98 @@
           body: JSON.stringify({ enabled })
         });
         state.user.two_factor_enabled = res.twoFactorEnabled ? 1 : 0;
-        state.user.twoFactorEnabled = res.twoFactorEnabled;
+        state.user.twoFactorEnabled = Boolean(res.twoFactorEnabled);
         showToast(res.twoFactorEnabled ? '2FA включена! Все входы требуют код из Telegram' : '2FA выключена', 'info');
       } catch (err) {
         toggleEl.checked = !enabled; // Revert switch on error
+        showToast(err.message || 'Ошибка включения 2FA', 'error');
+        if (err.details && err.details.requireTelegramLink) {
+          openLinkTelegramModal();
+        }
       }
     };
 
     if (el.athlete2faToggle) el.athlete2faToggle.onchange = () => handle2faToggle(el.athlete2faToggle);
     if (el.trainer2faToggle) el.trainer2faToggle.onchange = () => handle2faToggle(el.trainer2faToggle);
+
+    
+    // --- Dual-Tab Telegram Modal Controls (Code vs Official Widget) ---
+    const tabTgCode = document.getElementById('tab-tg-code');
+    const tabTgWidget = document.getElementById('tab-tg-widget');
+    const panelTgCode = document.getElementById('panel-tg-code');
+    const panelTgWidget = document.getElementById('panel-tg-widget');
+    const formTgSingleCode = document.getElementById('form-tg-single-code');
+    const inputTgSingleCode = document.getElementById('tg-single-code-input');
+
+    function switchTgTab(activeTab) {
+      if (activeTab === 'code') {
+        if (tabTgCode) {
+          tabTgCode.classList.add('active');
+          tabTgCode.style.background = 'var(--bg-secondary)';
+          tabTgCode.style.color = 'var(--text-primary)';
+        }
+        if (tabTgWidget) {
+          tabTgWidget.classList.remove('active');
+          tabTgWidget.style.background = 'transparent';
+          tabTgWidget.style.color = 'var(--text-secondary)';
+        }
+        if (panelTgCode) panelTgCode.style.display = 'block';
+        if (panelTgWidget) panelTgWidget.style.display = 'none';
+        inputTgSingleCode?.focus();
+      } else {
+        if (tabTgWidget) {
+          tabTgWidget.classList.add('active');
+          tabTgWidget.style.background = 'var(--bg-secondary)';
+          tabTgWidget.style.color = 'var(--text-primary)';
+        }
+        if (tabTgCode) {
+          tabTgCode.classList.remove('active');
+          tabTgCode.style.background = 'transparent';
+          tabTgCode.style.color = 'var(--text-secondary)';
+        }
+        if (panelTgCode) panelTgCode.style.display = 'none';
+        if (panelTgWidget) panelTgWidget.style.display = 'block';
+        renderTelegramLoginWidget('fitnessecosystemBOT');
+      }
+    }
+
+    if (tabTgCode) tabTgCode.onclick = () => switchTgTab('code');
+    if (tabTgWidget) tabTgWidget.onclick = () => switchTgTab('widget');
+
+    // Single-step 6-digit code verification (No username needed!)
+    if (formTgSingleCode) {
+      formTgSingleCode.onsubmit = async (e) => {
+        e.preventDefault();
+        const code = inputTgSingleCode ? inputTgSingleCode.value.trim() : '';
+        if (!code || code.length !== 6) {
+          showToast('Введите 6-значный код из Telegram бота', 'error');
+          return;
+        }
+
+        const btnSubmit = document.getElementById('btn-submit-single-code');
+        if (btnSubmit) btnSubmit.disabled = true;
+
+        try {
+          const res = await api('/api/auth/telegram/verify-code', {
+            method: 'POST',
+            body: JSON.stringify({ code })
+          });
+
+          if (res.token && res.user) {
+            el.dialogTelegramAuth?.close();
+            state.token = res.token;
+            state.user = normalizeUser(res.user);
+            saveAuthToken(res.token, state.user);
+            setupAppForRole(state.user.role);
+            showToast(`Добро пожаловать, ${state.user.fullName || state.user.username}!`, 'success');
+          }
+        } catch (err) {
+          showToast(err.message || 'Неверный код из Telegram', 'error');
+        } finally {
+          if (btnSubmit) btnSubmit.disabled = false;
+        }
+      };
+    }
 
     el.formRegister.onsubmit = async (e) => {
       e.preventDefault();

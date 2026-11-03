@@ -1229,6 +1229,100 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      
+      // TELEGRAM CODE AUTH: Direct 1-Step 6-Digit Code Login without username
+      if (pathname === '/api/auth/telegram/verify-code' && req.method === 'POST') {
+        if (authLimiter.isRateLimited(clientIp)) {
+          return sendError(res, 429, 'Слишком много попыток. Попробуйте через минуту.');
+        }
+
+        const body = await parseJsonBody(req);
+        const { code, persist } = body;
+        const cleanCode = String(code || '').replace(/\D/g, '').trim();
+
+        if (!cleanCode || cleanCode.length !== 6) {
+          return sendError(res, 400, 'Введите 6-значный цифровой код из Telegram');
+        }
+
+        const now = Date.now();
+        const codeKey = `code_${cleanCode}`;
+        const record = telegramOtpStore.get(codeKey);
+
+        let user = null;
+        if (record) {
+          if (now > record.expiresAt) {
+            telegramOtpStore.delete(codeKey);
+            return sendError(res, 400, 'Срок действия кода истёк (5 минут). Получите новый код в боте.');
+          }
+
+          if (record.attempts >= 5) {
+            telegramOtpStore.delete(codeKey);
+            return sendError(res, 429, 'Превышено количество попыток. Запросите код заново.');
+          }
+
+          // Single use: invalidate
+          telegramOtpStore.delete(codeKey);
+          if (record.username) telegramOtpStore.delete(record.username);
+          if (record.tgId) telegramOtpStore.delete(`id_${record.tgId}`);
+
+          if (record.userId) user = db.findUserById(record.userId);
+          if (!user && record.tgId) user = db.findUserByTelegramId(String(record.tgId));
+          if (!user && record.username) user = db.findUserByTelegramUsername(record.username) || db.findUserByUsername(`tg_${record.username}`);
+
+          // Brand-new Telegram user who just tapped /start in bot
+          if (!user && (record.tgId || record.username)) {
+            const cleanUsername = record.username ? `tg_${record.username}` : `tg_${record.tgId}`;
+            const randomPass = hashPassword(crypto.randomBytes(24).toString('hex'));
+            const pCode = db.generateUniquePairingCode();
+            const cUuid = crypto.randomUUID();
+            const role = record.role || 'athlete';
+            const fullName = record.username ? `@${record.username}` : 'Атлет Telegram';
+            const userId = db.createUser(cleanUsername, randomPass, role, fullName, '', pCode, cUuid, '', 1);
+            db.linkTelegram(userId, record.tgId || '', record.username || '');
+            user = db.findUserById(userId);
+          }
+        } else {
+          // Check athlete pairing code in SQLite
+          const athleteUser = db.findUserByPairingCode(cleanCode);
+          if (athleteUser && (now - (athleteUser.pairing_code_created_at || 0) < 5 * 60 * 1000)) {
+            user = athleteUser;
+          }
+        }
+
+        if (!user) {
+          return sendError(res, 400, 'Неверный или устаревший код из Telegram. Откройте бота и запросите свежий код.');
+        }
+
+        // Invalidate single-use code in SQLite pairing_code
+        if (user.role === 'athlete' && user.pairing_code === cleanCode && typeof db.consumePairingCode === 'function') {
+          db.consumePairingCode(user.id);
+          user.pairing_code = '';
+          user.pairing_code_created_at = 0;
+        }
+
+        const token = generateToken(user.id, user.role);
+        db.createAuthToken(token, user.id);
+        setAuthCookie(res, token, Boolean(persist));
+
+        if (tgBotInstance && user.telegram_id) {
+          sendLoginSecurityAlert(tgBotInstance, user.telegram_id, {
+            siteName: req.headers.host || 'fitness-ecosystem-pro.onrender.com',
+            botUsername: activeBotUsername,
+            clientIp,
+            userAgent: req.headers['user-agent'] || '',
+            token,
+            role: user.role,
+            fullName: user.full_name
+          }).catch(() => {});
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          token,
+          user: normalizeUserProfile(user)
+        });
+      }
+
       // TELEGRAM OTP: 2. Verify 6-digit Code
       if (pathname === '/api/auth/telegram/verify-otp' && req.method === 'POST') {
         if (authLimiter.isRateLimited(clientIp)) {
@@ -1932,18 +2026,34 @@ const server = http.createServer(async (req, res) => {
       // 2FA: Toggle Two-Factor Authentication
       if (pathname === '/api/user/2fa' && req.method === 'POST') {
         const body = await parseJsonBody(req);
-        const isEnable = Boolean(body.enabled);
+        const rawVal = body.enabled !== undefined ? body.enabled : body.twoFactorEnabled;
+        const isEnable = (rawVal === true || rawVal === 'true' || rawVal === 1 || rawVal === '1');
 
         if (isEnable) {
           const freshUser = db.findUserById(user.id);
-          const hasTg = Boolean(freshUser.telegram_id || freshUser.telegram_username || freshUser.username.startsWith('tg_'));
+          if (!freshUser) {
+            return sendError(res, 404, 'Пользователь не найден');
+          }
+          const hasTg = Boolean(
+            freshUser.telegram_id || 
+            freshUser.telegram_username || 
+            (freshUser.username && freshUser.username.startsWith('tg_'))
+          );
           if (!hasTg) {
-            return sendError(res, 400, 'Сначала привяжите Telegram аккаунт для включения 2FA');
+            return sendError(res, 400, 'Сначала привяжите Telegram аккаунт для включения 2FA', { requireTelegramLink: true });
+          }
+        } else {
+          if (telegramOtpStore) {
+            telegramOtpStore.delete(`2fa_${user.id}`);
           }
         }
 
         db.setTwoFactorEnabled(user.id, isEnable ? 1 : 0);
-        return sendJson(res, 200, { success: true, twoFactorEnabled: isEnable });
+        return sendJson(res, 200, {
+          success: true,
+          twoFactorEnabled: isEnable,
+          two_factor_enabled: isEnable ? 1 : 0
+        });
       }
 
       // UPDATE PRIVACY (Athlete)
