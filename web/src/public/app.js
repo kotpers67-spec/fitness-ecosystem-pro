@@ -2756,32 +2756,17 @@
     if (el.trainer2faToggle) el.trainer2faToggle.onchange = () => handle2faToggle(el.trainer2faToggle);
 
     
-    // --- 3-Tab Telegram Modal Controls (Phone vs Code vs Widget) ---
-    const tabTgPhone = document.getElementById('tab-tg-phone');
+    // --- 2-Mode Telegram Modal Controls (Code vs Widget) ---
     const tabTgCode = document.getElementById('tab-tg-code');
     const tabTgWidget = document.getElementById('tab-tg-widget');
-    const panelTgPhone = document.getElementById('panel-tg-phone');
     const panelTgCode = document.getElementById('panel-tg-code');
     const panelTgWidget = document.getElementById('panel-tg-widget');
-
-    const formTgPhoneReq = document.getElementById('form-tg-phone-request');
-    const inputTgPhone = document.getElementById('tg-phone-input');
-    const formTgPhoneVer = document.getElementById('form-tg-phone-verify');
-    const inputTgPhoneCode = document.getElementById('tg-phone-code-input');
-    const tgPhoneStep1 = document.getElementById('tg-phone-step-1');
-    const tgPhoneStep2 = document.getElementById('tg-phone-step-2');
-    const btnTgPhoneBack = document.getElementById('btn-tg-phone-back');
-    const tgPhoneTimerDisp = document.getElementById('tg-phone-timer-display');
 
     const formTgSingleCode = document.getElementById('form-tg-single-code');
     const inputTgSingleCode = document.getElementById('tg-single-code-input');
 
-    let currentTgPhone = '';
-    let tgPhoneTimer = null;
-
     function switchTgTab(activeTab) {
       const tabs = [
-        { id: 'phone', btn: tabTgPhone, panel: panelTgPhone },
         { id: 'code', btn: tabTgCode, panel: panelTgCode },
         { id: 'widget', btn: tabTgWidget, panel: panelTgWidget }
       ];
@@ -2793,118 +2778,15 @@
         t.panel.style.display = isActive ? 'block' : 'none';
       });
 
-      if (activeTab === 'phone') {
-        inputTgPhone?.focus();
-      } else if (activeTab === 'code') {
+      if (activeTab === 'code') {
         inputTgSingleCode?.focus();
       } else if (activeTab === 'widget') {
         renderTelegramLoginWidget('fitnessecosystemBOT');
       }
     }
 
-    if (tabTgPhone) tabTgPhone.onclick = () => switchTgTab('phone');
     if (tabTgCode) tabTgCode.onclick = () => switchTgTab('code');
     if (tabTgWidget) tabTgWidget.onclick = () => switchTgTab('widget');
-
-    // Phone Step 1: Request Code
-    if (formTgPhoneReq) {
-      formTgPhoneReq.onsubmit = async (e) => {
-        e.preventDefault();
-        const rawPhone = inputTgPhone ? inputTgPhone.value.trim() : '';
-        if (!rawPhone || rawPhone.length < 3) {
-          showToast('Введите номер телефона или логин', 'error');
-          return;
-        }
-
-        const btnSend = document.getElementById('btn-tg-phone-send');
-        if (btnSend) btnSend.disabled = true;
-
-        showToast('Отправка кода в Telegram...', 'info');
-        try {
-          const res = await api('/api/auth/telegram/request-otp', {
-            method: 'POST',
-            body: JSON.stringify({ phone: rawPhone, username: rawPhone })
-          });
-
-          currentTgPhone = rawPhone;
-          if (tgPhoneStep1) tgPhoneStep1.style.display = 'none';
-          if (tgPhoneStep2) tgPhoneStep2.style.display = 'block';
-          if (inputTgPhoneCode) {
-            inputTgPhoneCode.value = '';
-            inputTgPhoneCode.focus();
-          }
-
-          // Запуск 5-минутного таймера
-          if (tgPhoneTimer) clearInterval(tgPhoneTimer);
-          let timeLeft = 300;
-          const updateTimer = () => {
-            const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-            const s = (timeLeft % 60).toString().padStart(2, '0');
-            if (tgPhoneTimerDisp) tgPhoneTimerDisp.textContent = `⏱ Действует: ${m}:${s}`;
-            if (timeLeft <= 0) {
-              clearInterval(tgPhoneTimer);
-              if (tgPhoneTimerDisp) tgPhoneTimerDisp.textContent = '❌ Срок действия кода истёк';
-            }
-            timeLeft--;
-          };
-          updateTimer();
-          tgPhoneTimer = setInterval(updateTimer, 1000);
-
-          showToast(res.message || 'Код отправлен в Telegram', 'success');
-        } catch (err) {
-          showToast(err.message || 'Ошибка запроса кода', 'error');
-        } finally {
-          if (btnSend) btnSend.disabled = false;
-        }
-      };
-    }
-
-    // Phone Step 2: Verify Code
-    if (formTgPhoneVer) {
-      formTgPhoneVer.onsubmit = async (e) => {
-        e.preventDefault();
-        const code = inputTgPhoneCode ? inputTgPhoneCode.value.replace(/\D/g, '').trim() : '';
-        if (!code || code.length !== 6) {
-          showToast('Введите 6-значный цифровой код', 'error');
-          return;
-        }
-
-        const btnVerify = document.getElementById('btn-tg-phone-verify');
-        if (btnVerify) btnVerify.disabled = true;
-
-        showToast('Проверка кода...', 'info');
-        try {
-          const res = await api('/api/auth/telegram/verify-code', {
-            method: 'POST',
-            body: JSON.stringify({ code })
-          });
-
-          if (res.token && res.user) {
-            if (tgPhoneTimer) clearInterval(tgPhoneTimer);
-            el.dialogTelegramAuth?.close();
-            state.token = res.token;
-            state.user = normalizeUser(res.user);
-            saveAuthToken(res.token, state.user);
-            setupAppForRole(state.user.role);
-            showToast(`Вход выполнен: ${state.user.fullName || state.user.username}!`, 'success');
-          }
-        } catch (err) {
-          showToast(err.message || 'Неверный код из Telegram', 'error');
-        } finally {
-          if (btnVerify) btnVerify.disabled = false;
-        }
-      };
-    }
-
-    // Phone Back button
-    if (btnTgPhoneBack) {
-      btnTgPhoneBack.onclick = () => {
-        if (tgPhoneTimer) clearInterval(tgPhoneTimer);
-        if (tgPhoneStep2) tgPhoneStep2.style.display = 'none';
-        if (tgPhoneStep1) tgPhoneStep1.style.display = 'block';
-        inputTgPhone?.focus();
-      };
-    }
 
     // Single-step 6-digit code verification (No username needed!)
     if (formTgSingleCode) {
@@ -3043,6 +2925,8 @@
 
     // Telegram 1-Click & 3-Step OTP Authentication Flow
     function resetTgAuthModal() {
+      if (inputTgSingleCode) inputTgSingleCode.value = '';
+      switchTgTab('code');
       if (state.tgTimerInterval) {
         clearInterval(state.tgTimerInterval);
         state.tgTimerInterval = null;

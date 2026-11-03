@@ -1005,12 +1005,9 @@
           <div class="dialog-title" style="text-align: center; margin-bottom: 4px;">ВХОД ЧЕРЕЗ TELEGRAM</div>
           <p class="dialog-subtitle" style="text-align: center; margin-bottom: 14px;">Выберите удобный способ авторизации:</p>
 
-          <!-- 3 Вкладки переключения режима -->
+          <!-- 2 Способа входа: Код из бота и Официальный виджет -->
           <div class="tg-auth-tabs-row" id="tg-auth-tabs">
-            <button type="button" id="tab-tg-phone" class="tg-auth-tab active" data-tg-tab="phone">
-              📱 По телефону
-            </button>
-            <button type="button" id="tab-tg-code" class="tg-auth-tab" data-tg-tab="code">
+            <button type="button" id="tab-tg-code" class="tg-auth-tab active" data-tg-tab="code">
               🔢 Код из бота
             </button>
             <button type="button" id="tab-tg-widget" class="tg-auth-tab" data-tg-tab="widget">
@@ -1018,44 +1015,8 @@
             </button>
           </div>
 
-          <!-- ВКЛАДКА 1: Вход по номеру телефона (Классический Telegram Login) -->
-          <div id="panel-tg-phone" class="tg-tab-pane">
-            <div id="tg-phone-step-1">
-              <p class="dialog-subtitle" style="font-size: 13px; margin-bottom: 12px;">
-                Введите ваш номер телефона (или @username). Мы отправим 6-значный проверочный код в Telegram:
-              </p>
-              <form id="form-tg-phone-request">
-                <div class="form-group" style="margin-bottom: 14px;">
-                  <label for="tg-phone-input" class="field-label">Номер телефона или Telegram @username</label>
-                  <input type="tel" id="tg-phone-input" class="app-input" placeholder="+7 999 123-45-67 или @username" required autocomplete="tel">
-                </div>
-                <button type="submit" class="app-btn btn-telegram" id="btn-tg-phone-send" style="width: 100%; font-weight: 700; padding: 12px;">
-                  Получить код в Telegram
-                </button>
-              </form>
-            </div>
-
-            <div id="tg-phone-step-2" style="display: none;">
-              <p class="dialog-subtitle" style="font-size: 13px; margin-bottom: 8px;">
-                Код подтверждения отправлен! Введите 6 цифр из Telegram:
-              </p>
-              <div class="tg-timer-badge" id="tg-phone-timer-display" style="text-align: center; margin-bottom: 12px; font-weight: 700; color: var(--accent-primary);">⏱ Действует: 05:00</div>
-              <form id="form-tg-phone-verify">
-                <div class="form-group" style="margin-bottom: 14px;">
-                  <input type="text" id="tg-phone-code-input" class="app-input pin-input-field tabular-nums tg-single-code-input" placeholder="123456" maxlength="6" inputmode="numeric" required autocomplete="one-time-code">
-                </div>
-                <button type="submit" class="app-btn btn-primary" id="btn-tg-phone-verify" style="width: 100%; font-weight: 700; padding: 12px; margin-bottom: 8px;">
-                  Подтвердить и войти
-                </button>
-                <button type="button" class="app-btn btn-secondary" id="btn-tg-phone-back" style="width: 100%; font-size: 12px;">
-                  ← Изменить номер
-                </button>
-              </form>
-            </div>
-          </div>
-
-          <!-- ВКЛАДКА 2: Вход по 6-значному коду из бота (Один шаг, без логина) -->
-          <div id="panel-tg-code" class="tg-tab-pane" style="display: none;">
+          <!-- Вход по 6-значному коду из бота (Один шаг, без логина) -->
+          <div id="panel-tg-code" class="tg-tab-pane">
             <p class="dialog-subtitle" style="font-size: 13px; margin-bottom: 12px;">
               Откройте бота <b>@fitnessecosystemBOT</b>, нажмите <b>START</b> и введите полученный 6-значный код:
             </p>
@@ -1098,7 +1059,7 @@
               1. Откройте <b>@BotFather</b> ➔ <code>/mybots</code> ➔ выберите бота.<br>
               2. Нажмите <b>Bot Settings</b> ➔ <b>Domain</b>.<br>
               3. Отправьте: <code>fitness-ecosystem-pro.onrender.com</code>.<br>
-              <i>Либо используйте вкладку <b>«По телефону»</b> — она работает без настройки!</i>
+              <i>Либо используйте вкладку <b>«Код из бота»</b> — она работает сразу и без настроек!</i>
             </div>
           </div>
 
